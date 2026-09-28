@@ -332,14 +332,30 @@ class OpticalDisturbanceEngine:
     # =========================================================================
 
     def compute_atmospheric_effects(
-        self, beacon_intensity: float, depth_m: float = 1000.0
+        self, beacon_intensity: float, depth_m: float = 1000.0, atmosphere_path_frac: float = 1.0
     ) -> Tuple[float, float, float, float]:
         """
         Calculates physical Beer-Lambert atmospheric transmittance, contrast factor,
         path radiance wash, and modified beacon peak radiant intensity.
+        Per Part 3: Scales in proportion to atmosphere_path_frac (fraction 0 means none/vacuum).
         Returns:
             (transmittance, contrast_scale, path_radiance, effective_intensity)
         """
+        # Vacuum case: If no atmosphere on path, zero atmospheric degradation
+        if atmosphere_path_frac <= 1e-6:
+            snr_att = 1.0
+            if self.config.snr_reduction_db > 0.0:
+                snr_att = 10.0 ** (-self.config.snr_reduction_db / 20.0)
+            transmittance = snr_att if not self.is_occluded else 0.0
+            contrast_scale = 1.0
+            path_radiance = 0.0
+            amb_factor = 1.0
+            self.last_transmittance = transmittance
+            self.last_amb_factor = amb_factor
+            self.last_vis_km = 999.0
+            eff_intensity = float(np.clip(beacon_intensity * transmittance * amb_factor, 0.0, 255.0))
+            return transmittance, contrast_scale, path_radiance, eff_intensity
+
         cond = self.config.atmospheric_condition
         range_km = max(0.1, depth_m / 1000.0)
 
@@ -381,6 +397,13 @@ class OpticalDisturbanceEngine:
             path_radiance = 0.0
             amb_factor = 1.0
 
+        # Scale effects linearly with atmosphere path fraction
+        frac = min(1.0, max(0.0, atmosphere_path_frac))
+        beta = beta * frac
+        contrast_scale = 1.0 - (1.0 - contrast_scale) * frac
+        path_radiance = path_radiance * frac
+        amb_factor = 1.0 - (1.0 - amb_factor) * frac
+
         # Beer-Lambert transmission: T = exp(-beta * R)
         transmittance = float(np.clip(math.exp(-beta * range_km), 0.02, 1.0))
 
@@ -394,7 +417,7 @@ class OpticalDisturbanceEngine:
             transmittance = 0.0
 
         # Meteorological optical range (Koschmieder formula): V = 3.912 / beta (km)
-        vis_km = float(np.clip(3.912 / max(0.01, beta), 0.5, 50.0))
+        vis_km = float(np.clip(3.912 / max(0.001, beta), 0.5, 999.0))
         self.last_transmittance = transmittance
         self.last_amb_factor = amb_factor
         self.last_vis_km = vis_km
@@ -465,11 +488,15 @@ class OpticalDisturbanceEngine:
     # =========================================================================
 
     def apply_atmospheric_image_degradation(
-        self, frame: np.ndarray, contrast_scale: float, path_radiance: float
+        self, frame: np.ndarray, contrast_scale: float, path_radiance: float, atmosphere_path_frac: float = 1.0
     ) -> np.ndarray:
         """
         Physically modifies contrast, atmospheric path radiance, and meteorological effects.
+        Per Part 3: If atmosphere_path_frac == 0, returns frame untouched.
         """
+        if atmosphere_path_frac <= 1e-6:
+            return frame
+
         cond = self.config.atmospheric_condition
         h, w = frame.shape[:2]
 
@@ -480,13 +507,14 @@ class OpticalDisturbanceEngine:
             f_float = (f_float - 128.0) * contrast_scale + 128.0 + path_radiance
             frame = np.clip(f_float, 0, 255).astype(np.uint8)
 
-        # 2. Fog Mie Scattering Blur
-        if cond == "Fog" and self.config.fog_density > 0.2:
-            ksize = int(round(self.config.fog_density * 6)) * 2 + 1
+        # 2. Fog Mie Scattering Blur (scaled by atmosphere_path_frac)
+        eff_fog = self.config.fog_density * atmosphere_path_frac
+        if cond == "Fog" and eff_fog > 0.2:
+            ksize = int(round(eff_fog * 6)) * 2 + 1
             frame = cv2.GaussianBlur(frame, (ksize, ksize), sigmaX=ksize / 2.5)
 
         # 3. Falling Rain Streaks Simulation
-        if cond == "Rain" and self.config.rain_rate_mm_hr > 5.0:
+        if cond == "Rain" and self.config.rain_rate_mm_hr * atmosphere_path_frac > 5.0:
             frame = self._render_rain_streaks(frame)
 
         # 4. Brightness Fluctuation Drift
@@ -593,11 +621,12 @@ class OpticalDisturbanceEngine:
         pan_rate: float = 0.0,
         tilt_rate: float = 0.0,
         dt: float = 0.033,
+        atmosphere_path_frac: float = 1.0,
     ) -> Tuple[np.ndarray, float, DisturbanceTelemetry]:
         """
         Executes complete physical disturbance chain on frame and optical beacon:
-        1. Temporal kinematics (Jitter, Platform motion, Shock).
-        2. Atmospheric radiative transfer (Beer-Lambert, path radiance, contrast).
+        1. Temporal kinematics (Jitter, Platform motion, Shock) - ALWAYS applies.
+        2. Atmospheric radiative transfer - scales with atmosphere_path_frac (0 in vacuum).
         3. Temporary occlusion mask.
         4. Motion blur convolution.
         5. Sensor noise injection (Gaussian, Salt & Pepper, Poisson).
@@ -606,18 +635,18 @@ class OpticalDisturbanceEngine:
         Returns:
             (disturbed_frame, effective_beacon_intensity, disturbance_telemetry)
         """
-        # 1. Update temporal kinematics
+        # 1. Update temporal kinematics (Platform vibration ALWAYS applies)
         self.step_temporal_kinematics(dt)
 
         # 2. Compute atmospheric attenuation and radiant intensity
         transmittance, contrast_scale, path_radiance, eff_intensity = (
-            self.compute_atmospheric_effects(beacon_intensity, depth_m)
+            self.compute_atmospheric_effects(beacon_intensity, depth_m, atmosphere_path_frac=atmosphere_path_frac)
         )
 
         frame = raw_frame.copy()
 
         # 3. Apply atmospheric image degradation (contrast, fog diffusion, rain streaks)
-        frame = self.apply_atmospheric_image_degradation(frame, contrast_scale, path_radiance)
+        frame = self.apply_atmospheric_image_degradation(frame, contrast_scale, path_radiance, atmosphere_path_frac=atmosphere_path_frac)
 
         # 4. Apply temporary occlusion masking if active
         if self.is_occluded:

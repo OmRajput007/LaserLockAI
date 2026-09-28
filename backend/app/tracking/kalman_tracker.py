@@ -64,6 +64,8 @@ class KalmanTracker(BaseTracker):
         self.loss_events_count: int = 0
         self.total_loss_duration_s: float = 0.0
         self.total_sim_duration_s: float = 0.0
+        self.count_link_blocked: int = 0
+        self.duration_link_blocked_s: float = 0.0
 
         # Position Telemetry
         self.last_measured: Optional[Tuple[float, float]] = None
@@ -93,6 +95,8 @@ class KalmanTracker(BaseTracker):
         self.loss_events_count = 0
         self.total_loss_duration_s = 0.0
         self.total_sim_duration_s = 0.0
+        self.count_link_blocked = 0
+        self.duration_link_blocked_s = 0.0
         self.last_measured = None
         self.last_predicted = None
         self.last_filtered = None
@@ -120,12 +124,15 @@ class KalmanTracker(BaseTracker):
         dt: Optional[float] = None,
         current_pan_deg: float = 0.0,
         current_tilt_deg: float = 0.0,
+        is_link_blocked: bool = False,
+        slew_saturated: bool = False,
+        gimbal_limit: bool = False,
     ) -> TrackingTelemetry:
         """
         Executes a discrete closed-loop tracking update step:
         1. Propagates Kalman filter state prediction.
         2. Updates filter with measurement if beacon detected, or coasts if missing.
-        3. Evaluates PAT State Machine transitions (SEARCHING, ACQUIRING, TRACKING, LOCKED, LOST, REACQUIRING).
+        3. Evaluates PAT State Machine transitions (SEARCHING, ACQUIRING, TRACKING, LOCKED, LOST, REACQUIRING, LINK_BLOCKED).
         4. Calculates pixel error and angular pointing error.
         5. Computes loss percentages and performance timers.
         """
@@ -133,6 +140,48 @@ class KalmanTracker(BaseTracker):
         self.sim_time += delta_t
         self.total_sim_duration_s += delta_t
         self.kf.update_dt(delta_t)
+
+        # -------------------------------------------------------------------
+        # Special State: LINK_BLOCKED (Earth blocks line of sight)
+        # Per Part 3: No detection possible, camera holds position,
+        # it is NOT counted as a tracker failure!
+        # -------------------------------------------------------------------
+        if is_link_blocked:
+            self.state = "LINK_BLOCKED"
+            self.count_link_blocked += 1
+            self.duration_link_blocked_s += delta_t
+            self.consecutive_detect_frames = 0
+            self.consecutive_lock_frames = 0
+            # Reset Kalman filter so it doesn't coast indefinitely through Earth
+            self.kf.reset()
+            self.last_measured = None
+            self.last_predicted = None
+            self.last_filtered = None
+            self.last_velocity = (0.0, 0.0)
+
+            effective_sim_time = max(0.001, self.total_sim_duration_s - self.duration_link_blocked_s)
+            target_loss_pct = (self.total_loss_duration_s / effective_sim_time * 100.0)
+
+            return TrackingTelemetry(
+                state="LINK_BLOCKED",
+                mode="LINK_BLOCKED",
+                is_link_blocked=True,
+                slew_saturated=slew_saturated,
+                gimbal_limit=gimbal_limit,
+                target_lost_count=self.loss_events_count,
+                lost_frames=0,
+                loss_duration_s=round(self.total_loss_duration_s, 2),
+                target_loss_percent=round(target_loss_pct, 2),
+                is_locked=False,
+                consecutive_locked_frames=0,
+                pan_cmd_deg_s=0.0,
+                tilt_cmd_deg_s=0.0,
+                search_pattern_name=self.config.search_pattern,
+            )
+
+        # Re-emerging from LINK_BLOCKED
+        if self.state == "LINK_BLOCKED":
+            self.state = "SEARCHING"
 
         # 1. Kalman Prior Prediction
         pred_x, pred_y = self.kf.predict()
@@ -173,7 +222,7 @@ class KalmanTracker(BaseTracker):
         err_x_px, err_y_px, total_err_px = None, None, None
         ang_err_az_deg, ang_err_el_deg = None, None
 
-        if target_pt is not None:
+        if target_pt is not None and target_pt[0] is not None and target_pt[1] is not None:
             tx, ty = target_pt
             err_x_px = tx - self.cx_px
             err_y_px = ty - self.cy_px
@@ -187,7 +236,7 @@ class KalmanTracker(BaseTracker):
         prev_state = self.state
 
         if is_detected:
-            if self.state == "SEARCHING":
+            if self.state in ["SEARCHING", "LINK_BLOCKED"]:
                 # First detected! Start acquisition phase
                 self.state = "ACQUIRING"
                 self.acquisition_start_sim_time = self.sim_time
@@ -248,16 +297,20 @@ class KalmanTracker(BaseTracker):
 
         is_locked_bool = (self.state == "LOCKED")
 
-        # 5. Calculate Target Loss Percentage
+        # 5. Calculate Target Loss Percentage (excluding LINK_BLOCKED duration)
+        effective_sim_time = max(0.001, self.total_sim_duration_s - self.duration_link_blocked_s)
         target_loss_pct = (
-            (self.total_loss_duration_s / self.total_sim_duration_s * 100.0)
-            if self.total_sim_duration_s > 0
+            (self.total_loss_duration_s / effective_sim_time * 100.0)
+            if effective_sim_time > 0
             else 0.0
         )
 
         return TrackingTelemetry(
             state=self.state,
             mode=self.state,
+            is_link_blocked=False,
+            slew_saturated=slew_saturated,
+            gimbal_limit=gimbal_limit,
             measured_x=round(self.last_measured[0], 2) if self.last_measured else None,
             measured_y=round(self.last_measured[1], 2) if self.last_measured else None,
             predicted_x=round(self.last_predicted[0], 2) if self.last_predicted else None,

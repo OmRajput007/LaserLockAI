@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { api } from '../services/api';
 import {
@@ -16,6 +16,10 @@ import {
   Play,
   RotateCcw,
   Compass,
+  PenTool,
+  CheckCircle,
+  Trash2,
+  XCircle,
 } from 'lucide-react';
 
 interface Props {
@@ -38,6 +42,11 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
   onResetSim,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Custom path drawing state
+  const [drawMode, setDrawMode] = useState(false);
+  const [customWaypoints, setCustomWaypoints] = useState<[number, number][]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const target = telemetry?.target;
   const camera = telemetry?.camera;
@@ -188,23 +197,87 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
         ctx.stroke();
       }
     }
-  }, [target, camera, currentSize, currentShape]);
+    // Custom path preview overlay
+    if (drawMode && customWaypoints.length > 0) {
+      const pts = customWaypoints.map(([wx, wy]) => [wx * scale, wy * scale]);
 
-  // Click on canvas to teleport/override target position
+      // Drawn segments
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      pts.forEach(([px, py], i) => {
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+
+      // Closing segment (dashed)
+      if (customWaypoints.length > 1) {
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+        ctx.lineTo(pts[0][0], pts[0][1]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Waypoint dots
+      pts.forEach(([px, py], i) => {
+        ctx.beginPath();
+        ctx.arc(px, py, i === 0 ? 6 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = i === 0 ? '#10b981' : '#f59e0b';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Index label
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(String(i + 1), px + 6, py - 4);
+      });
+    }
+  }, [target, camera, currentSize, currentShape, drawMode, customWaypoints]);
+
+  // Click on canvas: place waypoint in draw mode, or teleport target in normal mode
   const handleCanvasClick = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
-    const worldX = Math.round((clickX / canvas.width) * 2000);
-    const worldY = Math.round((clickY / canvas.height) * 2000);
+    const worldX = Math.round((clickX / canvas.clientWidth) * 2000);
+    const worldY = Math.round((clickY / canvas.clientHeight) * 2000);
+
+    if (drawMode) {
+      setCustomWaypoints(prev => [...prev, [worldX, worldY]]);
+      return;
+    }
 
     try {
       await api.setTargetPosition(worldX, worldY);
     } catch (err) {
       console.error('Failed to set target position:', err);
     }
+  };
+
+  const handleActivateCustomPath = async () => {
+    if (customWaypoints.length < 2) return;
+    setSubmitting(true);
+    try {
+      await api.setCustomPath(customWaypoints, currentSpeed || 60);
+      onSelectMotion('Custom Path');
+      setDrawMode(false);
+    } catch (err) {
+      console.error('Failed to activate custom path:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClearPath = () => {
+    setCustomWaypoints([]);
   };
 
   const handleCenterTarget = async () => {
@@ -284,6 +357,47 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
               onClick={handleCanvasClick}
               className="w-full h-full object-contain"
             />
+            {drawMode && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-amber-950/90 border border-amber-600 text-amber-300 text-[11px] font-mono px-3 py-1 rounded-full pointer-events-none">
+                ✏️ DRAW MODE — Click canvas to place waypoints ({customWaypoints.length} placed)
+              </div>
+            )}
+          </div>
+
+          {/* Draw Mode Controls */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60">
+            {!drawMode ? (
+              <button
+                onClick={() => { setDrawMode(true); setCustomWaypoints([]); }}
+                className="px-2.5 py-1 rounded bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-700 text-[11px] flex items-center gap-1.5 font-bold transition"
+              >
+                <PenTool className="w-3.5 h-3.5" /> Draw Custom Path
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleActivateCustomPath}
+                  disabled={customWaypoints.length < 2 || submitting}
+                  className="px-2.5 py-1 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600 text-[11px] flex items-center gap-1.5 font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {submitting ? 'Activating…' : `Activate Loop Path (${customWaypoints.length} pts)`}
+                </button>
+                <button
+                  onClick={handleClearPath}
+                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] flex items-center gap-1.5 transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Clear
+                </button>
+                <button
+                  onClick={() => { setDrawMode(false); setCustomWaypoints([]); }}
+                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-red-900 text-slate-400 hover:text-red-300 border border-slate-700 text-[11px] flex items-center gap-1.5 transition"
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Cancel
+                </button>
+                <span className="text-[10px] text-slate-500 ml-1">Min 2 pts · loop auto-closes</span>
+              </>
+            )}
           </div>
 
           {/* Quick Reposition Action Buttons */}
@@ -458,18 +572,29 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                 { id: 'Random', label: 'Random Walk' },
                 { id: 'Spiral', label: 'Spiral' },
                 { id: 'Sinusoidal', label: 'Sinusoidal' },
+                { id: 'Custom Path', label: '✏️ Custom Path' },
               ].map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => onSelectMotion(item.id)}
+                  onClick={() => {
+                    if (item.id === 'Custom Path') {
+                      setDrawMode(true);
+                      setCustomWaypoints([]);
+                    } else {
+                      onSelectMotion(item.id);
+                      setDrawMode(false);
+                    }
+                  }}
                   className={`py-1.5 px-2 rounded font-mono text-[11px] border text-left flex items-center justify-between transition ${
-                    currentMotion === item.id
-                      ? 'bg-cyan-950 text-cyan-300 border-cyan-500 font-bold'
+                    (item.id === 'Custom Path' && drawMode) || ((currentMotion as string) === item.id && item.id !== 'Custom Path')
+                      ? 'bg-amber-950 text-amber-300 border-amber-500 font-bold'
                       : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-white'
                   }`}
                 >
                   <span>{item.label}</span>
-                  {currentMotion === item.id && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+                  {((item.id === 'Custom Path' && drawMode) || ((currentMotion as string) === item.id && item.id !== 'Custom Path')) && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  )}
                 </button>
               ))}
             </div>

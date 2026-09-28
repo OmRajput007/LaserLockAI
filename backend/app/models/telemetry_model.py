@@ -115,17 +115,24 @@ class CameraState(BaseModel):
     frustum_corners_world: List[List[float]] = Field(
         default_factory=list, description="4 corners of the FOV frustum at target depth in 3D"
     )
+    adaptive_speed_factor: float = Field(1.0, description="Current adaptive pursuit speed multiplier (1.0 = nominal, up to 4.0 when target is lost)")
+    lost_time_s: float = Field(0.0, description="Seconds the target has been continuously lost / searching")
+    slew_saturated: bool = Field(False, description="True if commanded rate hit max slew rate limit")
+    gimbal_limit: bool = Field(False, description="True if gimbal reached mechanical angle limit stop")
 
 
 class TrackingTelemetry(BaseModel):
     state: str = Field(
         "SEARCHING",
-        description="State Machine: SEARCHING | ACQUIRING | TRACKING | LOCKED | LOST | REACQUIRING",
+        description="State Machine: SEARCHING | ACQUIRING | TRACKING | LOCKED | LOST | REACQUIRING | LINK_BLOCKED",
     )
     mode: str = Field(
         "SEARCHING",
         description="Alias for state for backward compatibility",
     )
+    is_link_blocked: bool = Field(False, description="True if line-of-sight is blocked by Earth")
+    slew_saturated: bool = Field(False, description="True if commanded rate hit max slew rate limit")
+    gimbal_limit: bool = Field(False, description="True if gimbal reached mechanical angle limit stop")
     # Measured, Predicted, Filtered Positions
     measured_x: Optional[float] = Field(None, description="Detector measured beacon centroid X (px)")
     measured_y: Optional[float] = Field(None, description="Detector measured beacon centroid Y (px)")
@@ -206,4 +213,5 @@ class SimulationTelemetry(BaseModel):
     detection: DetectionTelemetry = Field(default_factory=DetectionTelemetry)
     disturbance: DisturbanceTelemetry = Field(default_factory=DisturbanceTelemetry)
     atmospheric_condition: str = "Clear"
+    orbital: Optional[dict] = Field(default=None, description="Orbital scenario telemetry")
 

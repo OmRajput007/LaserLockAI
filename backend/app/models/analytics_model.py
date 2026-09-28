@@ -19,6 +19,12 @@ class TelemetryPoint(BaseModel):
     is_locked: bool = False
     is_detected: bool = False
     target_state: str = "SEARCHING"
+    slew_saturated: bool = False
+    gimbal_limit: bool = False
+    is_link_blocked: bool = False
+    range_km: Optional[float] = None
+    beacon_angular_rate_deg_s: Optional[float] = None
+    atmosphere_path_frac: Optional[float] = None
 
 
 class OfficialRequirementStatus(BaseModel):
@@ -36,7 +42,7 @@ class OfficialRequirementStatus(BaseModel):
 class PerformanceMetrics(BaseModel):
     """
     Comprehensive performance metrics calculated from actual measurements
-    per Part 8 specification. Never hard-coded.
+    per Part 8 & Part 3 specifications. Never hard-coded.
     """
     simulation_duration_s: float = 0.0
     video_duration_s: Optional[float] = None
@@ -50,6 +56,8 @@ class PerformanceMetrics(BaseModel):
     reacquisition_time_s: Optional[float] = None
     average_tracking_error_px: Optional[float] = None
     max_tracking_error_px: Optional[float] = None
+    average_tracking_error_deg: Optional[float] = None
+    max_tracking_error_deg: Optional[float] = None
     average_centroid_error_px: Optional[float] = None
     max_centroid_error_px: Optional[float] = None
     rmse_px: Optional[float] = None
@@ -58,6 +66,24 @@ class PerformanceMetrics(BaseModel):
     detection_rate_percent: float = 0.0
     average_confidence: float = 0.0
     average_snr_db: Optional[float] = None
+
+    # Part 3: Orbital & Gimbal Performance Extensions
+    scenario_type: str = "Local"
+    camera_platform_type: Optional[str] = None
+    beacon_platform_type: Optional[str] = None
+    camera_altitude_km: Optional[float] = None
+    beacon_altitude_km: Optional[float] = None
+    orbit_presets: Optional[str] = None
+    min_range_km: Optional[float] = None
+    max_range_km: Optional[float] = None
+    mean_range_km: Optional[float] = None
+    max_beacon_angular_rate_deg_s: Optional[float] = None
+    count_slew_saturated: int = 0
+    count_gimbal_limit: int = 0
+    count_link_blocked: int = 0
+    total_duration_link_blocked_s: float = 0.0
+    mean_atmosphere_path_frac: Optional[float] = None
+    lock_retention_note: Optional[str] = None
 
 
 class AnalyticsSummaryResponse(BaseModel):

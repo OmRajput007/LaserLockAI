@@ -175,6 +175,119 @@ def set_target_position(cmd: TargetPositionCommand):
     return {"status": "position_updated", "x": cmd.x, "y": cmd.y, "z": cmd.z}
 
 
+class TargetSpeedCommand(BaseModel):
+    speed_pixels_per_s: float = Field(..., ge=1.0, le=500.0, description="Beacon speed in pixels/second (1–500)")
+
+
+@router.post("/simulation/target/speed")
+def set_beacon_speed(cmd: TargetSpeedCommand):
+    """
+    Changes beacon speed mid-simulation without resetting or rebuilding the trajectory.
+    Instantly patches the generator.speed on ALL active targets and syncs the config.
+    Derived quantities (angular_speed for circular, omega for figure-8, etc.) are
+    also recomputed so the speed change takes full effect on the next engine tick.
+    """
+    import math as _math
+    new_speed = cmd.speed_pixels_per_s
+
+    # 1. Patch every live target's generator in-place
+    for target in sim_engine.target_manager.targets:
+        gen = target._generator
+        if gen is None:
+            continue
+        gen.speed = new_speed
+
+        # Re-derive trajectory-specific speed-dependent quantities
+        gen_class = type(gen).__name__
+        if gen_class == "CircularTrajectory":
+            gen.angular_speed = new_speed / max(gen.radius, 1.0)
+        elif gen_class == "FigureOf8Trajectory":
+            gen.omega = new_speed / max(gen.amplitude_x, 1.0)
+        elif gen_class == "SpiralTrajectory":
+            # omega is the angular rate — keep same radius growth, scale angular speed
+            if hasattr(gen, "angular_speed"):
+                r = max((_math.hypot(gen.x - gen.cx, gen.y - gen.cy)), 1.0)
+                gen.angular_speed = new_speed / r
+        elif gen_class == "StraightLineTrajectory":
+            # Re-scale velocity vector to new speed while preserving direction
+            cur_speed = _math.hypot(gen.vx, gen.vy)
+            if cur_speed > 0:
+                scale = new_speed / cur_speed
+                gen.vx *= scale
+                gen.vy *= scale
+
+    # 2. Persist to config (non-resetting path — just updates the value)
+    cfg = config_manager.get_config()
+    cfg.motion.speed_pixels_per_s = new_speed
+    config_manager.set_config(cfg)
+
+    return {
+        "status": "speed_updated",
+        "speed_pixels_per_s": new_speed,
+        "active_targets": len(sim_engine.target_manager.targets),
+    }
+
+
+
+class CustomPathCommand(BaseModel):
+    waypoints: List[List[float]]   # [[x0,y0], [x1,y1], ...]
+    speed_pixels_per_s: Optional[float] = None
+
+
+@router.post("/simulation/target/custom_path")
+def set_custom_path(cmd: CustomPathCommand):
+    """
+    Activates 'Custom Path' trajectory and loads user-drawn looped waypoints.
+    Requires at least 2 waypoints. The backend automatically closes the loop
+    by re-appending the first waypoint at the end.
+    """
+    from backend.app.target.motion_generators import CustomPathTrajectory
+
+    if len(cmd.waypoints) < 2:
+        raise HTTPException(status_code=400, detail="Custom path requires at least 2 waypoints.")
+
+    waypoints_xy = [(float(wp[0]), float(wp[1])) for wp in cmd.waypoints]
+
+    # Update config so trajectory_type reflects the new mode
+    cfg = config_manager.get_config()
+    cfg.motion.trajectory_type = "Custom Path"
+    if cmd.speed_pixels_per_s:
+        cfg.motion.speed_pixels_per_s = cmd.speed_pixels_per_s
+    config_manager.set_config(cfg)
+
+    # Directly swap the motion generator on the primary target
+    primary = sim_engine.target_manager.primary_target
+    gen = primary._generator
+
+    if isinstance(gen, CustomPathTrajectory):
+        # Already a custom path — update waypoints in-place
+        gen.speed = cfg.motion.speed_pixels_per_s
+        gen.cz = primary.z
+        gen.set_waypoints(waypoints_xy)
+    else:
+        # Create new CustomPathTrajectory and attach it
+        cz = primary.z
+        new_gen = CustomPathTrajectory(
+            waypoints_xy=waypoints_xy,
+            cx=float(cfg.motion.screen_width) / 2.0,
+            cy=float(cfg.motion.screen_height) / 2.0,
+            cz=cz,
+            speed=cfg.motion.speed_pixels_per_s,
+            world_width=float(cfg.motion.screen_width),
+            world_height=float(cfg.motion.screen_height),
+            world_depth=float(cfg.motion.world_depth_z),
+        )
+        primary._generator = new_gen
+        # Start from the first waypoint
+        primary.x, primary.y, primary.z = new_gen.x, new_gen.y, new_gen.z
+
+    return {
+        "status": "custom_path_activated",
+        "waypoint_count": len(waypoints_xy),
+        "loop_closed": True,
+    }
+
+
 @router.get("/simulation/frame")
 def get_camera_frame(annotated: bool = False):
     """
@@ -1156,6 +1269,40 @@ def export_experiments_json():
     return [e.model_dump() for e in experiment_engine.list_experiments()]
 
 
+# ------------------------------------------------------------------------------
+# Part 3: Automated Orbital Scenario Validation Suite (6 Testbench Runs)
+# ------------------------------------------------------------------------------
+
+class OrbitalValidationRunRequest(BaseModel):
+    duration_s: float = Field(120.0, ge=1.0, le=300.0, description="Duration per test in seconds (120s standard)")
+
+
+@router.post("/experiments/orbital-validation")
+def run_orbital_validation_suite(req: Optional[OrbitalValidationRunRequest] = None):
+    """
+    Executes the automated 6-scenario Orbital Scenario Validation Suite:
+      A. UAV below LEO 550 km (~0.8 deg/s)
+      B. LEO to GEO Intersatellite Link (very low rate)
+      C. LEO 550 km to LEO 550 km Crossing (~1.7 deg/s)
+      D. Close Pass at 100 km (~8.7 deg/s, SLEW_SATURATED & LOCK LOST recovery)
+      E. Two LEO 550 km satellites nearly opposite (LINK_BLOCKED, zero tracker failures)
+      F. Local Scenario regression (Straight Line and Circular)
+    """
+    from backend.app.orbital.validation_suite import execute_full_validation_suite
+    dur = req.duration_s if req and req.duration_s is not None else 120.0
+    report = execute_full_validation_suite(duration_s=dur)
+    return report.model_dump()
+
+
+@router.get("/experiments/orbital-validation")
+def get_orbital_validation_report():
+    """Retrieves the latest cached Orbital Validation Suite report or runs on demand."""
+    from backend.app.orbital.validation_suite import get_latest_validation_report
+    report = get_latest_validation_report()
+    return report.model_dump()
+
+
+
 # ==============================================================================
 # PART 9: AUTOMATIC REPORTING, TECHNICAL DOCUMENTATION, USER MANUAL & DEMO MODE
 # ==============================================================================
@@ -1323,6 +1470,231 @@ def stop_demo():
     """Halts any active demonstration immediately."""
     demo_orchestrator.stop_demo()
     return {"status": "stopped"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Orbital Scenario Layer Endpoints (Part 1 & Part 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+from backend.app.orbital.scenario import (
+    OrbitalScenarioConfig,
+    SatelliteConfig,
+    UAVConfig,
+)
+from backend.app.orbital.link_geometry import LinkConfig
+
+
+class SatelliteConfigModel(BaseModel):
+    preset: str = Field(default="LEO-550")
+    altitude_km: Optional[float] = Field(default=None)
+    inclination_deg: float = Field(default=53.0)
+    phase_deg: float = Field(default=0.0)
+    raan_deg: float = Field(default=0.0)
+
+
+class UAVConfigModel(BaseModel):
+    lat_deg: float = Field(default=28.6)
+    lon_deg: float = Field(default=77.2)
+    altitude_km: float = Field(default=10.0)
+    pattern: str = Field(default="Circular")
+    radius_km: float = Field(default=50.0)
+    speed_km_s: float = Field(default=0.25)
+    phase_deg: float = Field(default=0.0)
+
+
+class OrbitalConfigRequest(BaseModel):
+    camera_type: Literal["UAV", "SATELLITE"] = "SATELLITE"
+    beacon_type: Literal["UAV", "SATELLITE"] = "UAV"
+    camera_sat: SatelliteConfigModel = Field(default_factory=SatelliteConfigModel)
+    camera_uav: UAVConfigModel = Field(default_factory=UAVConfigModel)
+    beacon_sat: SatelliteConfigModel = Field(default_factory=lambda: SatelliteConfigModel(phase_deg=180.0))
+    beacon_uav: UAVConfigModel = Field(default_factory=lambda: UAVConfigModel(altitude_km=10.0))
+    atmosphere_margin_km: float = Field(default=100.0)
+    tilt_limit_deg: float = Field(default=30.0)
+
+
+class TimeWarpCommand(BaseModel):
+    time_warp: float = Field(..., ge=1.0, le=60.0)
+
+
+_current_orbital_config = OrbitalScenarioConfig()
+
+
+@router.get("/orbital/config")
+def get_orbital_configuration():
+    """Returns active orbital scenario configuration."""
+    return {
+        "camera_type": _current_orbital_config.camera_type,
+        "beacon_type": _current_orbital_config.beacon_type,
+        "camera_sat": {
+            "preset": _current_orbital_config.camera_sat.preset,
+            "altitude_km": _current_orbital_config.camera_sat.altitude_km,
+            "inclination_deg": _current_orbital_config.camera_sat.inclination_deg,
+            "phase_deg": _current_orbital_config.camera_sat.phase_deg,
+            "raan_deg": _current_orbital_config.camera_sat.raan_deg,
+        },
+        "camera_uav": {
+            "lat_deg": _current_orbital_config.camera_uav.lat_deg,
+            "lon_deg": _current_orbital_config.camera_uav.lon_deg,
+            "altitude_km": _current_orbital_config.camera_uav.altitude_km,
+            "pattern": _current_orbital_config.camera_uav.pattern,
+            "radius_km": _current_orbital_config.camera_uav.radius_km,
+            "speed_km_s": _current_orbital_config.camera_uav.speed_km_s,
+            "phase_deg": _current_orbital_config.camera_uav.phase_deg,
+        },
+        "beacon_sat": {
+            "preset": _current_orbital_config.beacon_sat.preset,
+            "altitude_km": _current_orbital_config.beacon_sat.altitude_km,
+            "inclination_deg": _current_orbital_config.beacon_sat.inclination_deg,
+            "phase_deg": _current_orbital_config.beacon_sat.phase_deg,
+            "raan_deg": _current_orbital_config.beacon_sat.raan_deg,
+        },
+        "beacon_uav": {
+            "lat_deg": _current_orbital_config.beacon_uav.lat_deg,
+            "lon_deg": _current_orbital_config.beacon_uav.lon_deg,
+            "altitude_km": _current_orbital_config.beacon_uav.altitude_km,
+            "pattern": _current_orbital_config.beacon_uav.pattern,
+            "radius_km": _current_orbital_config.beacon_uav.radius_km,
+            "speed_km_s": _current_orbital_config.beacon_uav.speed_km_s,
+            "phase_deg": _current_orbital_config.beacon_uav.phase_deg,
+        },
+        "atmosphere_margin_km": _current_orbital_config.link.atmosphere_margin_km,
+    }
+
+
+@router.post("/orbital/config")
+def update_orbital_configuration(req: OrbitalConfigRequest):
+    """
+    Updates orbital scenario configuration with strict altitude gap validation.
+    Switching presets re-initialises scenario and returns the Part 1 maneuver note.
+    """
+    global _current_orbital_config
+
+    # Validate 20-300 km altitude gap
+    if req.camera_type == "SATELLITE" and req.camera_sat.altitude_km is not None:
+        alt = req.camera_sat.altitude_km
+        if 20.0 < alt < 300.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid satellite altitude ({alt} km): 20 km to 300 km is an unstable physical gap. UAV max is 20 km, satellite orbit min is 300 km.",
+            )
+
+    if req.beacon_type == "SATELLITE" and req.beacon_sat.altitude_km is not None:
+        alt = req.beacon_sat.altitude_km
+        if 20.0 < alt < 300.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid satellite altitude ({alt} km): 20 km to 300 km is an unstable physical gap. UAV max is 20 km, satellite orbit min is 300 km.",
+            )
+
+    if req.camera_type == "UAV":
+        if req.camera_uav.altitude_km > 20.0 or req.camera_uav.altitude_km < 0.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid UAV altitude ({req.camera_uav.altitude_km} km): UAV altitude must be between 0 km and 20 km.",
+            )
+
+    if req.beacon_type == "UAV":
+        if req.beacon_uav.altitude_km > 20.0 or req.beacon_uav.altitude_km < 0.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid UAV altitude ({req.beacon_uav.altitude_km} km): UAV altitude must be between 0 km and 20 km.",
+            )
+
+    # Build OrbitalScenarioConfig
+    cam_sat = SatelliteConfig(
+        preset=req.camera_sat.preset,
+        altitude_km=req.camera_sat.altitude_km,
+        inclination_deg=req.camera_sat.inclination_deg,
+        phase_deg=req.camera_sat.phase_deg,
+        raan_deg=req.camera_sat.raan_deg,
+    )
+    cam_uav = UAVConfig(
+        lat_deg=req.camera_uav.lat_deg,
+        lon_deg=req.camera_uav.lon_deg,
+        altitude_km=req.camera_uav.altitude_km,
+        pattern=req.camera_uav.pattern,
+        radius_km=req.camera_uav.radius_km,
+        speed_km_s=req.camera_uav.speed_km_s,
+        phase_deg=req.camera_uav.phase_deg,
+    )
+    bea_sat = SatelliteConfig(
+        preset=req.beacon_sat.preset,
+        altitude_km=req.beacon_sat.altitude_km,
+        inclination_deg=req.beacon_sat.inclination_deg,
+        phase_deg=req.beacon_sat.phase_deg,
+        raan_deg=req.beacon_sat.raan_deg,
+    )
+    bea_uav = UAVConfig(
+        lat_deg=req.beacon_uav.lat_deg,
+        lon_deg=req.beacon_uav.lon_deg,
+        altitude_km=req.beacon_uav.altitude_km,
+        pattern=req.beacon_uav.pattern,
+        radius_km=req.beacon_uav.radius_km,
+        speed_km_s=req.beacon_uav.speed_km_s,
+        phase_deg=req.beacon_uav.phase_deg,
+    )
+    link_cfg = LinkConfig(atmosphere_margin_km=req.atmosphere_margin_km)
+
+    new_cfg = OrbitalScenarioConfig(
+        camera_type=req.camera_type,
+        beacon_type=req.beacon_type,
+        camera_sat=cam_sat,
+        camera_uav=cam_uav,
+        beacon_sat=bea_sat,
+        beacon_uav=bea_uav,
+        link=link_cfg,
+    )
+
+    _current_orbital_config = new_cfg
+    telem = sim_engine.update_orbital_config(new_cfg)
+
+    # Update camera tilt limits if specified
+    sim_engine.camera.tilt_min = -req.tilt_limit_deg
+    sim_engine.camera.tilt_max = req.tilt_limit_deg
+
+    return {
+        "status": "reinitialized",
+        "maneuver_note": (
+            "Note: Orbit switching re-initializes the scenario parameters; it is not a live maneuver. "
+            "A real LEO-550 → GEO transfer requires ~3.8 km/s delta-v and ~5.3 h. "
+            "This simulation re-initializes to the selected orbit."
+        ),
+        "telemetry": telem,
+    }
+
+
+@router.post("/orbital/reset")
+def reset_orbital_scenario():
+    """Resets the orbital scenario to initial orbit positions."""
+    telem = sim_engine.reset_orbital()
+    return {"status": "reset", "telemetry": telem}
+
+
+@router.get("/orbital/telemetry")
+def get_orbital_telemetry():
+    """Returns latest computed orbital telemetry."""
+    if sim_engine.last_orbital_telemetry is None:
+        sim_engine.last_orbital_telemetry = sim_engine.orbital_scenario.step(0.0).to_dict()
+    return sim_engine.last_orbital_telemetry
+
+
+@router.post("/orbital/time-warp")
+def set_time_warp(cmd: TimeWarpCommand):
+    """
+    Sets preview time-warp factor (1x, 10x, 60x).
+    Disallowed and rejected when tracking simulation is actively running.
+    """
+    if sim_engine.is_running:
+        raise HTTPException(
+            status_code=400,
+            detail="Time-warp locked to 1x during active tracking: at 60x a 0.82 deg/s beacon appears at ~49 deg/s, beyond any realistic gimbal.",
+        )
+    sim_engine.set_orbital_time_warp(cmd.time_warp)
+    return {
+        "status": "time_warp_updated",
+        "time_warp": cmd.time_warp,
+    }
 
 
 

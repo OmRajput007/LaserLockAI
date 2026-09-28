@@ -215,6 +215,61 @@ TECHNICAL_REPORT_SECTIONS = [
             "provide reliable, fast, and robust coarse alignment for mobile FSOC terminals under severe atmospheric and mechanical disturbances."
         ),
     },
+    {
+        "id": 24,
+        "title": "24. Orbital Scenario Integration & Coordinate Frames",
+        "content": (
+            "The Part 3 Orbital Scenario upgrade integrates multi-tier space-to-space and space-to-ground optical communications links. "
+            "Four distinct reference frames govern the kinematics:\n"
+            "- ECI (Earth-Centered Inertial): Cartesian origin at Earth center with +X pointing toward the Vernal Equinox, +Z along Earth's spin axis, "
+            "and +Y completing the right-handed triad. Circular Keplerian orbits propagate in double precision within ECI.\n"
+            "- LVLH (Local Vertical Local Horizontal): Satellite camera body frame with +Z pointing nadir toward Earth center, +X along the orbital "
+            "velocity vector (in-track), and +Y completing the frame along orbit normal (cross-track).\n"
+            "- ENU (East-North-Up): Topocentric horizon frame for UAV/ground platforms derived from geodetic latitude, longitude, and ellipsoidal altitude.\n"
+            "- Sensor/FPA Frame: Two-axis gimbal with azimuth (pan) and elevation (tilt). The physics layer feeds azimuth, elevation, and range to the "
+            "camera pipeline. Boresight angular errors map linearly to focal plane pixels at exactly 160 px/degree across the 640x480 array (4.0° x 3.0° FOV): "
+            "u = 320 + (az_body - pan) * 160, v = 240 - (el_body - tilt) * 160."
+        ),
+    },
+    {
+        "id": 25,
+        "title": "25. Orbital Physics Assumptions & Actuator Constraints",
+        "content": (
+            "The orbital simulation operates under standardized, deterministic physics assumptions:\n"
+            "- Earth Rotation: Ignored to provide stable, reproducible geometric testbeds without diurnal drift.\n"
+            "- Orbital Mechanics: Ideal circular Keplerian orbits (eccentricity e = 0, gravitational parameter mu = 398600.4418 km³/s², Earth radius Re = 6378.137 km).\n"
+            "- Orbit Transfers: Live impulsive delta-V maneuvers are excluded; switching presets re-initializes deterministic analytical state vectors.\n"
+            "- Gimbal Constraints: Pan is constrained to [-180°, +180°], Tilt is constrained to configured mechanical limits (default ±85° to prevent zenith keyhole singularities), "
+            "and maximum slew rate defaults to 5.0°/s (configurable up to 30.0°/s). Commanded rates exceeding limits trigger the SLEW_SATURATED or GIMBAL_LIMIT flags, "
+            "which are logged and displayed in real time."
+        ),
+    },
+    {
+        "id": 26,
+        "title": "26. Line-of-Sight Blocking & Atmospheric Turbulence Eligibility",
+        "content": (
+            "Link availability and environmental channel degradation are computed analytically each step:\n"
+            "- LOS Obstruction (LINK_BLOCKED): A ray-sphere intersection test evaluates the minimum distance d_min between the Earth center and the LOS vector. "
+            "If d_min <= Re (or Re + 100 km for intersatellite links), the Earth physically blocks transmission. The tracker enters LINK_BLOCKED state, "
+            "holds gimbal position, resets Kalman filter covariances without accumulating tracker failures, and excludes blocked frames from the lock retention denominator.\n"
+            "- Atmospheric Path Fraction: Computes the fraction of the optical vector traversing the 100 km atmospheric boundary. For vacuum intersatellite links "
+            "(fraction = 0), atmospheric contrast degradation, fog blur, and rain streaks are bypassed, while platform mechanical vibration continues unconditionally. "
+            "Manual turbulence injection displays an informational note when no atmosphere exists along the path."
+        ),
+    },
+    {
+        "id": 27,
+        "title": "27. Automated Validation Suite (Runs A through F)",
+        "content": (
+            "Part 3 incorporates an automated testbench suite executing six 120-second (3,600 frame) closed-loop benchmarks:\n"
+            "- Run A (UAV below LEO 550 km): Overflight at ~0.77°/s angular rate; tracker maintains continuous lock within 5°/s slew limit.\n"
+            "- Run B (LEO to GEO): Intersatellite geometry at ~0.002°/s; stable lock maintained across 37,585 km range.\n"
+            "- Run C (LEO 550 km Crossing): 74° crossing orbit with ~1.73°/s angular rate; holds coarse lock.\n"
+            "- Run D (Close Pass at 100 km): Counter-orbiting pass peaking at 8.66°/s; triggers SLEW_SATURATED, experiences transient FOV loss, and successfully re-acquires post-pass.\n"
+            "- Run E (Opposite LEO Satellites): 180° orbital phasing; reports LINK_BLOCKED for 100% of the duration with zero tracker failures charged.\n"
+            "- Run F (Local Scenario Regression): Validates Straight Line and Circular UAV trajectories against baseline performance metrics."
+        ),
+    },
 ]
 
 USER_MANUAL_CHAPTERS = [
@@ -356,6 +411,32 @@ USER_MANUAL_CHAPTERS = [
             "- High tracking overshoot: Reduce Pan/Tilt Kp gains or increase derivative Kd damping.\n"
             "- Low FPS (< 20): Close external background GPU processes or reduce screen resolution in settings.\n"
             "- Target loss event: Ensure Kalman dead-reckoning coasting is enabled in Tracking Settings."
+        ),
+    },
+    {
+        "chapter": 15,
+        "title": "15. Orbital Scenario Operations & 3D Earth Globe",
+        "content": (
+            "To operate the Orbital Scenario:\n"
+            "- In 'Virtual Simulation', select the 'Orbital View' tab.\n"
+            "- Choose Platform Types: Camera Platform (Satellite or UAV) and Beacon Platform (Satellite or UAV).\n"
+            "- Select Orbit Presets (LEO-550, ISS-400, Polar-800, MEO-20000, GEO-35786) or configure custom altitude, inclination, and phase.\n"
+            "- Observe real-time 3D Earth globe rendering with true-to-scale orbits (1 unit = 1000 km), atmosphere shell (100 km), "
+            "camera frustum (4° x 3°), and colored Line-of-Sight (Green: OK, Red: BLOCKED, Amber: OUT_OF_FOV).\n"
+            "- Use 'Follow Camera Platform' or 'Follow Beacon Platform' for anchored tracking view, and adjust time warp up to 100x."
+        ),
+    },
+    {
+        "chapter": 16,
+        "title": "16. Automated Orbital Validation Suite & Compliance Verification",
+        "content": (
+            "To execute the Part 3 automated closed-loop validation suite:\n"
+            "- Navigate to '9. Experiments'.\n"
+            "- Click 'RUN ORBITAL VALIDATION SUITE (A-F)' in the top banner or inside the Orbital Validation card.\n"
+            "- The engine executes all 6 standardized 120s runs at 30 Hz (Runs A to F) sequentially.\n"
+            "- Review the comprehensive compliance table reporting acquisition time, mean/max tracking error (pixels and degrees), "
+            "lock retention rate (strictly excluding LINK_BLOCKED time), slew saturation counts, gimbal limits, and LOS obstruction duration.\n"
+            "- Click 'Inspect' on any row to open the in-depth modal comparing expected kinematic behavior against simulation outcome."
         ),
     },
 ]

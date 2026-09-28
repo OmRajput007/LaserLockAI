@@ -10,6 +10,7 @@ from backend.app.models.telemetry_model import (
     CameraState,
     TrackingTelemetry,
     DisturbanceTelemetry,
+    DetectionTelemetry,
 )
 from backend.app.camera.fpa_camera import FPACamera
 from backend.app.target.beacon import TargetManager, BeaconTarget
@@ -18,6 +19,7 @@ from backend.app.detection.detection_manager import DetectionManager
 from backend.app.control.pid_controller import GimbalPIDController
 from backend.app.disturbances.optical_disturbance_engine import OpticalDisturbanceEngine
 from backend.app.analytics.metrics_base import AnalyticsEngine
+from backend.app.orbital.scenario import OrbitalScenario, OrbitalScenarioConfig, OrbitalTelemetry
 
 
 class SimulationEngine:
@@ -65,6 +67,23 @@ class SimulationEngine:
         self.last_tracking_telemetry: Optional[TrackingTelemetry] = None
         self.last_detection_telemetry: Optional[DetectionTelemetry] = None
 
+        # Adaptive pursuit: ramp slew speed when target is lost
+        self._lost_time: float = 0.0          # seconds spent in LOST / SEARCHING state
+        self._adaptive_speed_factor: float = 1.0  # current multiplier on max slew speed
+        self.ADAPTIVE_MAX_FACTOR: float = 4.0  # cap at 4× nominal slew speed
+        self.ADAPTIVE_RAMP_TIME_S: float = 3.0 # time to reach max factor from 1×
+
+        # Orbital Scenario physics layer (Part 1 & 2)
+        self.orbital_scenario = OrbitalScenario()
+        self.orbital_time_warp: float = 1.0
+        self.last_orbital_telemetry: Optional[dict] = self.orbital_scenario.step(0.0).to_dict()
+        self.scenario_mode: str = "Local"  # "Local" or "Orbital"
+
+    def set_scenario_mode(self, mode: str):
+        """Sets scenario mode: 'Local' or 'Orbital'."""
+        self.scenario_mode = "Orbital" if mode.lower() == "orbital" else "Local"
+        self.analytics.scenario_type = self.scenario_mode
+
     def update_config(self, new_config: SystemConfig, reset_state: bool = False):
         """Applies updated configuration parameters to all subsystems without resetting state unless requested."""
         self.config = new_config
@@ -91,6 +110,18 @@ class SimulationEngine:
         self.analytics.reset()
         self._current_frame = None
         self.last_step_wall_time = time.time()
+        self._lost_time = 0.0
+        self._adaptive_speed_factor = 1.0
+        self.orbital_scenario.reset()
+        self.last_orbital_telemetry = self.orbital_scenario.step(0.0).to_dict()
+        if self.scenario_mode == "Orbital" and self.last_orbital_telemetry:
+            link = self.last_orbital_telemetry.get("link", {})
+            init_az = float(link.get("az_body_deg", 0.0))
+            init_el = float(link.get("el_body_deg", 0.0))
+            self.camera.pan_deg = init_az
+            self.camera.tilt_deg = init_el
+            self.camera.target_pan_deg = init_az
+            self.camera.target_tilt_deg = init_el
 
     def start(self):
         """Starts the simulation clock and active stepping."""
@@ -194,40 +225,75 @@ class SimulationEngine:
         jit_dx, jit_dy = self.disturbance.step_temporal_kinematics(delta_t)
 
         primary = self.target_manager.primary_target
-        tx, ty, tz = primary.get_position()
-        target_depth = tz if tz > 0 else 1000.0
-
-        # Beacon flicker modulation
-        raw_intensity = self.get_instantaneous_intensity(primary.intensity)
-        if self.config.disturbance.beacon_flicker_enabled:
-            f_flicker = self.config.disturbance.beacon_flicker_frequency_hz
-            d_flicker = self.config.disturbance.beacon_flicker_depth
-            mod = 1.0 - d_flicker + d_flicker * (0.5 + 0.5 * math.sin(2.0 * math.pi * f_flicker * self.sim_time))
-            raw_intensity *= mod
-
         primary_u_eff: Optional[float] = None
         primary_v_eff: Optional[float] = None
 
-        # 3. Render all active targets strictly inside camera FOV with jitter/platform displacement
-        for t in self.target_manager.targets:
-            ptx, pty, ptz = t.get_position()
-            u, v, in_fov, _, _, _ = self.camera.project_3d_target(ptx, pty, ptz)
+        if self.scenario_mode == "Orbital":
+            link = self.last_orbital_telemetry.get("link", {}) if self.last_orbital_telemetry else {}
+            range_km = float(link.get("range_km", 1000.0))
+            target_depth = range_km * 1000.0
+            az_body = float(link.get("az_body_deg", 0.0))
+            el_body = float(link.get("el_body_deg", 0.0))
+            link_state = link.get("link_state", "LINK_OK")
+            intensity_frac = float(link.get("intensity_fraction", 1.0))
+            atmosphere_path_frac = float(link.get("atmosphere_path_frac", 0.0))
 
-            if in_fov and u is not None and v is not None:
-                # Displace beacon position on sensor by platform motion + camera jitter
-                u_eff = u + jit_dx
-                v_eff = v + jit_dy
+            # Beacon intensity scaling per Part 1 rule with receiver AGC contrast preservation
+            # (530 km reference = 1.0, scaled with 0.35 minimum AGC floor above detector noise floor)
+            scaled_fraction = 0.35 + 0.65 * intensity_frac
+            raw_intensity = self.get_instantaneous_intensity(primary.intensity) * scaled_fraction
+            if self.config.disturbance.beacon_flicker_enabled:
+                f_flicker = self.config.disturbance.beacon_flicker_frequency_hz
+                d_flicker = self.config.disturbance.beacon_flicker_depth
+                mod = 1.0 - d_flicker + d_flicker * (0.5 + 0.5 * math.sin(2.0 * math.pi * f_flicker * self.sim_time))
+                raw_intensity *= mod
 
-                if t.target_id == primary.target_id:
+            # If LINK_BLOCKED, Earth occludes beacon - do NOT render!
+            if link_state != "LINK_BLOCKED":
+                u, v, in_fov, _, _ = self.camera.project_orbital_beacon(az_body, el_body)
+                if in_fov and u is not None and v is not None:
+                    u_eff = u + jit_dx
+                    v_eff = v + jit_dy
                     primary_u_eff = u_eff
                     primary_v_eff = v_eff
 
-                # Strict requirement: If outside FOV, it must NOT appear in the camera image!
-                # Also, if occlusion is active, beacon is blocked!
-                if 0 <= u_eff <= w and 0 <= v_eff <= h and not self.disturbance.is_occluded:
-                    t_depth = ptz if ptz > 0 else 1000.0
-                    _, _, _, eff_i = self.disturbance.compute_atmospheric_effects(raw_intensity, t_depth)
-                    t.render_to_frame(frame, u_eff, v_eff, intensity_override=eff_i)
+                    if 0 <= u_eff <= w and 0 <= v_eff <= h and not self.disturbance.is_occluded:
+                        _, _, _, eff_i = self.disturbance.compute_atmospheric_effects(
+                            raw_intensity, target_depth, atmosphere_path_frac=atmosphere_path_frac
+                        )
+                        primary.render_to_frame(frame, u_eff, v_eff, intensity_override=eff_i)
+        else:
+            tx, ty, tz = primary.get_position()
+            target_depth = tz if tz > 0 else 1000.0
+            atmosphere_path_frac = 1.0
+
+            # Beacon flicker modulation
+            raw_intensity = self.get_instantaneous_intensity(primary.intensity)
+            if self.config.disturbance.beacon_flicker_enabled:
+                f_flicker = self.config.disturbance.beacon_flicker_frequency_hz
+                d_flicker = self.config.disturbance.beacon_flicker_depth
+                mod = 1.0 - d_flicker + d_flicker * (0.5 + 0.5 * math.sin(2.0 * math.pi * f_flicker * self.sim_time))
+                raw_intensity *= mod
+
+            # Render all active targets strictly inside camera FOV with jitter/platform displacement
+            for t in self.target_manager.targets:
+                ptx, pty, ptz = t.get_position()
+                u, v, in_fov, _, _, _ = self.camera.project_3d_target(ptx, pty, ptz)
+
+                if in_fov and u is not None and v is not None:
+                    u_eff = u + jit_dx
+                    v_eff = v + jit_dy
+
+                    if t.target_id == primary.target_id:
+                        primary_u_eff = u_eff
+                        primary_v_eff = v_eff
+
+                    if 0 <= u_eff <= w and 0 <= v_eff <= h and not self.disturbance.is_occluded:
+                        t_depth = ptz if ptz > 0 else 1000.0
+                        _, _, _, eff_i = self.disturbance.compute_atmospheric_effects(
+                            raw_intensity, t_depth, atmosphere_path_frac=1.0
+                        )
+                        t.render_to_frame(frame, u_eff, v_eff, intensity_override=eff_i)
 
         # 4. Optional synthetic false bright objects (glints/reflections) for rejection testing
         if self.config.detection.inject_false_bright_objects:
@@ -243,6 +309,7 @@ class SimulationEngine:
             pan_rate=self.camera.pan_rate,
             tilt_rate=self.camera.tilt_rate,
             dt=delta_t,
+            atmosphere_path_frac=atmosphere_path_frac,
         )
 
         self.last_disturbance_telemetry = dist_telem
@@ -289,19 +356,49 @@ class SimulationEngine:
         self.last_step_wall_time = now
 
         # 1. Kinematics step
-        if delta_t > 0:
-            self.target_manager.update(delta_t)
-            self.camera.update_kinematics(delta_t)
-            self.sim_time += delta_t
-            self.frame_number += 1
+        if self.scenario_mode == "Orbital":
+            if delta_t > 0:
+                self.sim_time += delta_t
+                self.frame_number += 1
+                self.camera.update_kinematics(delta_t)
 
-        primary = self.target_manager.primary_target
-        tx, ty, tz = primary.get_position()
-        tvx, tvy, tvz = primary.get_velocity()
-        tax, tay, taz = primary.get_acceleration()
+            orb_dt = delta_t if self.is_running else (delta_t * self.orbital_time_warp if delta_t > 0 else 0.0)
+            orb_telem = self.orbital_scenario.step(orb_dt)
+            self.last_orbital_telemetry = orb_telem.to_dict()
+            link = self.last_orbital_telemetry.get("link", {})
+            range_km = float(link.get("range_km", 1000.0))
+            target_depth = range_km * 1000.0
+            az_body = float(link.get("az_body_deg", 0.0))
+            el_body = float(link.get("el_body_deg", 0.0))
+            link_state = link.get("link_state", "LINK_OK")
+            is_link_blocked = (link_state == "LINK_BLOCKED")
+            angular_rate_deg_s = float(link.get("angular_rate_deg_s", 0.0))
+            atmosphere_path_frac = float(link.get("atmosphere_path_frac", 0.0))
 
-        # 2. 3D Projective geometry transformation (Ground-truth reference)
-        u_gt, v_gt, in_fov_gt, az_deg, el_deg, depth = self.camera.project_3d_target(tx, ty, tz)
+            u_gt, v_gt, in_fov_gt, delta_az, delta_el = self.camera.project_orbital_beacon(az_body, el_body)
+            if is_link_blocked:
+                in_fov_gt = False
+                u_gt = None
+                v_gt = None
+        else:
+            if delta_t > 0:
+                self.target_manager.update(delta_t)
+                self.camera.update_kinematics(delta_t)
+                self.sim_time += delta_t
+                self.frame_number += 1
+
+            if not self.is_running:
+                orb_dt = delta_t * self.orbital_time_warp if delta_t > 0 else 0.0
+                self.last_orbital_telemetry = self.orbital_scenario.step(orb_dt).to_dict()
+
+            primary = self.target_manager.primary_target
+            tx, ty, tz = primary.get_position()
+            target_depth = tz if tz > 0 else 1000.0
+            u_gt, v_gt, in_fov_gt, az_deg, el_deg, depth = self.camera.project_3d_target(tx, ty, tz)
+            is_link_blocked = False
+            range_km = target_depth / 1000.0
+            angular_rate_deg_s = 0.0
+            atmosphere_path_frac = 1.0
 
         # 3. Generate actual physical camera frame with full physical optical disturbances
         raw_frame = self.generate_raw_fpa_frame(dt=delta_t)
@@ -310,23 +407,51 @@ class SimulationEngine:
         detection_telemetry = self.detector.process_frame(
             raw_frame, flicker_intensity=round(self.last_effective_intensity, 1), dt=delta_t
         )
+        if is_link_blocked:
+            detection_telemetry.beacon_detected = False
+            detection_telemetry.detected_centroid_x = None
+            detection_telemetry.detected_centroid_y = None
 
         # 5. Closed-Loop Kalman Target Tracking & Full PAT State Machine (Part 5)
         meas = None
-        if detection_telemetry.beacon_detected and detection_telemetry.detected_centroid_x is not None:
+        if not is_link_blocked and detection_telemetry.beacon_detected and detection_telemetry.detected_centroid_x is not None:
             meas = (detection_telemetry.detected_centroid_x, detection_telemetry.detected_centroid_y)
 
         tracking_telemetry = self.tracker.step(
             measurement=meas,
-            confidence=detection_telemetry.confidence,
+            confidence=detection_telemetry.confidence if not is_link_blocked else 0.0,
             dt=delta_t,
             current_pan_deg=self.camera.pan_deg,
             current_tilt_deg=self.camera.tilt_deg,
+            is_link_blocked=is_link_blocked,
+            slew_saturated=self.camera.slew_saturated,
+            gimbal_limit=self.camera.gimbal_limit,
         )
 
-        # 6. Continuous Closed-Loop Gimbal Control (PID Coarse Pointing & Autonomous Search)
-        if tracking_telemetry.state == "SEARCHING":
-            # Target outside FOV: run autonomous search pattern (Raster / Sector / Spiral)
+        # -----------------------------------------------------------------------
+        # 6. Gimbal Control
+        # -----------------------------------------------------------------------
+        if self.scenario_mode == "Local":
+            is_target_lost = tracking_telemetry.state in ("LOST", "SEARCHING")
+            if is_target_lost:
+                self._lost_time += delta_t
+                ramp = min(1.0, self._lost_time / max(self.ADAPTIVE_RAMP_TIME_S, 0.001))
+                self._adaptive_speed_factor = 1.0 + (self.ADAPTIVE_MAX_FACTOR - 1.0) * ramp
+            else:
+                self._lost_time = 0.0
+                self._adaptive_speed_factor = 1.0
+
+            base_pan_speed  = self.camera.max_pan_speed
+            base_tilt_speed = self.camera.max_tilt_speed
+            self.camera.max_pan_speed  = base_pan_speed  * self._adaptive_speed_factor
+            self.camera.max_tilt_speed = base_tilt_speed * self._adaptive_speed_factor
+
+        if is_link_blocked:
+            # Per Requirement 4: Camera holds position during link blockage
+            self.camera.apply_rate_command(0.0, 0.0)
+            tracking_telemetry.pan_cmd_deg_s = 0.0
+            tracking_telemetry.tilt_cmd_deg_s = 0.0
+        elif tracking_telemetry.state == "SEARCHING":
             pan_cmd, tilt_cmd = self.tracker.search_generator.generate_search_rates(
                 self.camera.pan_deg, self.camera.tilt_deg, delta_t
             )
@@ -335,11 +460,15 @@ class SimulationEngine:
             tracking_telemetry.tilt_cmd_deg_s = round(tilt_cmd, 2)
         elif tracking_telemetry.state in ["ACQUIRING", "TRACKING", "LOCKED", "REACQUIRING"]:
             if self.config.control.mode == "PID Coarse Pointing":
-                # Continuous Closed-Loop 2-Axis PID Gimbal Controller
                 az_err = tracking_telemetry.error_azimuth_deg if tracking_telemetry.error_azimuth_deg is not None else 0.0
                 el_err = tracking_telemetry.error_elevation_deg if tracking_telemetry.error_elevation_deg is not None else 0.0
                 pan_cmd, tilt_cmd = self.controller.compute_control(az_err, el_err, delta_t)
                 self.camera.apply_rate_command(pan_cmd, tilt_cmd)
+
+                # Check PID saturation for slew_saturated flag
+                if self.controller.pan_pid.is_saturated or self.controller.tilt_pid.is_saturated:
+                    self.camera.slew_saturated = True
+                    tracking_telemetry.slew_saturated = True
 
                 diag = self.controller.get_diagnostics()
                 tracking_telemetry.pan_pid_p = diag["pan"]["p"]
@@ -352,8 +481,11 @@ class SimulationEngine:
                 tracking_telemetry.tilt_pid_d = diag["tilt"]["d"]
                 tracking_telemetry.tilt_cmd_deg_s = diag["tilt"]["cmd"]
         elif tracking_telemetry.state == "LOST":
-            # Coaster expired / lost: hold or decelerate
             self.camera.apply_rate_command(0.0, 0.0)
+
+        if self.scenario_mode == "Local":
+            self.camera.max_pan_speed  = base_pan_speed
+            self.camera.max_tilt_speed = base_tilt_speed
 
         self.last_tracking_telemetry = tracking_telemetry
         self.last_detection_telemetry = detection_telemetry
@@ -381,44 +513,75 @@ class SimulationEngine:
             snr_db=detection_telemetry.snr_db,
             is_locked=tracking_telemetry.is_locked,
             target_state=tracking_telemetry.state,
+            slew_saturated=self.camera.slew_saturated,
+            gimbal_limit=self.camera.gimbal_limit,
+            is_link_blocked=is_link_blocked,
+            range_km=range_km,
+            angular_rate_deg_s=angular_rate_deg_s,
+            atmosphere_path_frac=atmosphere_path_frac,
+            scenario_type=self.scenario_mode,
         )
 
         # 8. Build telemetry packet
-        target_depth = tz if tz > 0 else 1000.0
         bx, by, bz = self.camera.get_world_boresight_at_range(target_depth)
         frustum_corners = self.camera.get_frustum_corners_at_range(target_depth)
 
-        # Build list of all targets for multi-target telemetry
-        target_states: List[TargetState] = []
-        for t in self.target_manager.targets:
-            px_t, py_t, pz_t = t.get_position()
-            vx_t, vy_t, vz_t = t.get_velocity()
-            ax_t, ay_t, az_t = t.get_acceleration()
-            u_t, v_t, in_fov_t, az_t_deg, el_t_deg, depth_t = self.camera.project_3d_target(px_t, py_t, pz_t)
-            target_states.append(
+        if self.scenario_mode == "Orbital":
+            target_states = [
                 TargetState(
-                    target_id=t.target_id,
-                    world_x=round(px_t, 2),
-                    world_y=round(py_t, 2),
-                    world_z=round(pz_t, 2),
-                    velocity_x=round(vx_t, 2),
-                    velocity_y=round(vy_t, 2),
-                    velocity_z=round(vz_t, 2),
-                    acceleration_x=round(ax_t, 2),
-                    acceleration_y=round(ay_t, 2),
-                    acceleration_z=round(az_t, 2),
-                    pixel_x=u_t if in_fov_t else None,
-                    pixel_y=v_t if in_fov_t else None,
-                    azimuth_cam_deg=az_t_deg,
-                    elevation_cam_deg=el_t_deg,
-                    range_z_cam=depth_t,
-                    is_in_fov=in_fov_t,
-                    shape=t.shape,
-                    size_pixels=t.size_pixels,
-                    intensity=t.intensity,
-                    trajectory_trail=t.get_trail()[-50:],  # Recent 50 points
+                    target_id=1,
+                    world_x=0.0,
+                    world_y=0.0,
+                    world_z=round(target_depth, 2),
+                    velocity_x=0.0,
+                    velocity_y=0.0,
+                    velocity_z=0.0,
+                    acceleration_x=0.0,
+                    acceleration_y=0.0,
+                    acceleration_z=0.0,
+                    pixel_x=u_gt if in_fov_gt else None,
+                    pixel_y=v_gt if in_fov_gt else None,
+                    azimuth_cam_deg=round(az_body, 4),
+                    elevation_cam_deg=round(el_body, 4),
+                    range_z_cam=target_depth,
+                    is_in_fov=in_fov_gt,
+                    shape="Circle",
+                    size_pixels=6,
+                    intensity=self.target_manager.primary_target.intensity,
+                    trajectory_trail=[],
                 )
-            )
+            ]
+        else:
+            target_states: List[TargetState] = []
+            for t in self.target_manager.targets:
+                px_t, py_t, pz_t = t.get_position()
+                vx_t, vy_t, vz_t = t.get_velocity()
+                ax_t, ay_t, az_t = t.get_acceleration()
+                u_t, v_t, in_fov_t, az_t_deg, el_t_deg, depth_t = self.camera.project_3d_target(px_t, py_t, pz_t)
+                target_states.append(
+                    TargetState(
+                        target_id=t.target_id,
+                        world_x=round(px_t, 2),
+                        world_y=round(py_t, 2),
+                        world_z=round(pz_t, 2),
+                        velocity_x=round(vx_t, 2),
+                        velocity_y=round(vy_t, 2),
+                        velocity_z=round(vz_t, 2),
+                        acceleration_x=round(ax_t, 2),
+                        acceleration_y=round(ay_t, 2),
+                        acceleration_z=round(az_t, 2),
+                        pixel_x=u_t if in_fov_t else None,
+                        pixel_y=v_t if in_fov_t else None,
+                        azimuth_cam_deg=az_t_deg,
+                        elevation_cam_deg=el_t_deg,
+                        range_z_cam=depth_t,
+                        is_in_fov=in_fov_t,
+                        shape=t.shape,
+                        size_pixels=t.size_pixels,
+                        intensity=t.intensity,
+                        trajectory_trail=t.get_trail()[-50:],  # Recent 50 points
+                    )
+                )
 
         telemetry = SimulationTelemetry(
             timestamp=time.time(),
@@ -453,14 +616,70 @@ class SimulationEngine:
                 resolution_height=self.camera.height,
                 update_rate_hz=self.camera.config.update_rate_hz,
                 frustum_corners_world=frustum_corners,
+                adaptive_speed_factor=round(self._adaptive_speed_factor, 2),
+                lost_time_s=round(self._lost_time, 2),
+                slew_saturated=self.camera.slew_saturated,
+                gimbal_limit=self.camera.gimbal_limit,
             ),
             tracking=tracking_telemetry,
             detection=detection_telemetry,
             disturbance=self.last_disturbance_telemetry,
             atmospheric_condition=self.config.disturbance.atmospheric_condition,
+            orbital=self.last_orbital_telemetry,
         )
 
         return telemetry
+
+    def update_orbital_config(self, config: OrbitalScenarioConfig) -> dict:
+        """Re-initialises orbital scenario with updated config (orbit switch = re-init)."""
+        self.scenario_mode = "Orbital"
+        self.orbital_scenario.reset(config)
+        self.last_orbital_telemetry = self.orbital_scenario.step(0.0).to_dict()
+        self.analytics.scenario_type = "Orbital"
+        self.analytics.camera_platform_type = config.camera_type
+        self.analytics.beacon_platform_type = config.beacon_type
+        if config.camera_type == "SATELLITE":
+            self.analytics.camera_altitude_km = config.camera_sat.altitude_km or 550.0
+            self.analytics.camera_orbit_preset = config.camera_sat.preset
+        else:
+            self.analytics.camera_altitude_km = config.camera_uav.altitude_km
+            self.analytics.camera_orbit_preset = "UAV"
+        if config.beacon_type == "SATELLITE":
+            self.analytics.beacon_altitude_km = config.beacon_sat.altitude_km or 550.0
+            self.analytics.beacon_orbit_preset = config.beacon_sat.preset
+        else:
+            self.analytics.beacon_altitude_km = config.beacon_uav.altitude_km
+            self.analytics.beacon_orbit_preset = "UAV"
+
+        # Point gimbal initially at beacon within limits
+        link = self.last_orbital_telemetry.get("link", {})
+        init_az = float(link.get("az_body_deg", 0.0))
+        init_el = float(link.get("el_body_deg", 0.0))
+        self.camera.pan_deg = max(self.camera.pan_min, min(self.camera.pan_max, init_az))
+        self.camera.tilt_deg = max(self.camera.tilt_min, min(self.camera.tilt_max, init_el))
+        self.camera.target_pan_deg = self.camera.pan_deg
+        self.camera.target_tilt_deg = self.camera.tilt_deg
+        return self.last_orbital_telemetry
+
+    def reset_orbital(self) -> dict:
+        """Resets the orbital scenario."""
+        self.orbital_scenario.reset()
+        self.last_orbital_telemetry = self.orbital_scenario.step(0.0).to_dict()
+        if self.last_orbital_telemetry:
+            link = self.last_orbital_telemetry.get("link", {})
+            init_az = float(link.get("az_body_deg", 0.0))
+            init_el = float(link.get("el_body_deg", 0.0))
+            self.camera.pan_deg = max(self.camera.pan_min, min(self.camera.pan_max, init_az))
+            self.camera.tilt_deg = max(self.camera.tilt_min, min(self.camera.tilt_max, init_el))
+            self.camera.target_pan_deg = self.camera.pan_deg
+            self.camera.target_tilt_deg = self.camera.tilt_deg
+        return self.last_orbital_telemetry
+
+    def set_orbital_time_warp(self, warp: float):
+        """Sets preview time warp (1x, 10x, 60x). Ignored when simulation is active."""
+        if not self.is_running:
+            self.orbital_time_warp = max(1.0, float(warp))
+
 
 
 from backend.app.config.manager import config_manager

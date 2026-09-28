@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { VirtualSceneCanvas } from '../simulation/VirtualSceneCanvas';
 import { FPACameraViewport } from '../simulation/FPACameraViewport';
 import { Scene3DViewport } from '../simulation/Scene3DViewport';
 import { TelemetryChart } from '../charts/TelemetryChart';
+import { api } from '../services/api';
 import {
   Play,
   Pause,
@@ -17,6 +18,8 @@ import {
   Eye,
   EyeOff,
   Crosshair,
+  Gauge,
+  Zap,
 } from 'lucide-react';
 
 interface Props {
@@ -41,6 +44,20 @@ export const MissionControlPage: React.FC<Props> = ({
   onSelectShape,
 }) => {
   const [viewMode, setViewMode] = useState<'dual' | '3d' | '2d_camera'>('dual');
+  const [localSpeed, setLocalSpeed] = useState<number>(
+    config?.motion?.speed_pixels_per_s ?? 40
+  );
+  const [speedApplied, setSpeedApplied] = useState(false);
+
+  const applySpeed = useCallback(async (spd: number) => {
+    try {
+      await api.setBeaconSpeed(spd);
+      setSpeedApplied(true);
+      setTimeout(() => setSpeedApplied(false), 800);
+    } catch (e) {
+      console.error('Failed to set beacon speed:', e);
+    }
+  }, []);
 
   const isRunning = telemetry?.is_running ?? false;
   const isLocked = telemetry?.tracking.is_locked ?? false;
@@ -195,7 +212,7 @@ export const MissionControlPage: React.FC<Props> = ({
       {/* Main Viewports */}
       {viewMode === 'dual' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="h-[520px]">
+          <div className="min-h-[520px]">
             <VirtualSceneCanvas
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
@@ -205,7 +222,7 @@ export const MissionControlPage: React.FC<Props> = ({
             />
           </div>
 
-          <div className="h-[520px]">
+          <div className="h-full">
             <FPACameraViewport
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
@@ -219,7 +236,7 @@ export const MissionControlPage: React.FC<Props> = ({
 
       {viewMode === '3d' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 h-[560px]">
+          <div className="lg:col-span-2 min-h-[560px]">
             <Scene3DViewport
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
@@ -229,7 +246,7 @@ export const MissionControlPage: React.FC<Props> = ({
             />
           </div>
 
-          <div className="h-[560px]">
+          <div className="h-full">
             <FPACameraViewport
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
@@ -306,6 +323,74 @@ export const MissionControlPage: React.FC<Props> = ({
           <div className="flex justify-between">
             <span className="text-slate-400">Az:</span>
             <span className="text-amber-300 font-bold">{target?.acceleration_z.toFixed(2)} m/s²</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── BEACON SPEED CONTROL ─── */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3 font-mono text-xs">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider">
+            <Gauge className="w-4 h-4" />
+            Beacon Speed Control
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded transition ${
+              speedApplied ? 'bg-emerald-900 text-emerald-300 border border-emerald-700' : 'bg-slate-800 text-slate-400 border border-slate-700'
+            }`}>
+              {speedApplied ? '✓ APPLIED' : `${localSpeed.toFixed(0)} px/s`}
+            </span>
+          </div>
+        </div>
+
+        {/* Speed presets */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-slate-400 text-[10px]">Presets:</span>
+          {[
+            { label: 'Slow', value: 15, color: 'text-emerald-400' },
+            { label: 'Normal', value: 40, color: 'text-cyan-400' },
+            { label: 'Fast', value: 120, color: 'text-amber-400' },
+            { label: 'Max', value: 300, color: 'text-rose-400' },
+          ].map(({ label, value, color }) => (
+            <button
+              key={label}
+              onClick={() => { setLocalSpeed(value); applySpeed(value); }}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold border transition ${
+                Math.round(localSpeed) === value
+                  ? 'bg-slate-700 border-cyan-500 ' + color
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'
+              }`}
+            >
+              {label} ({value})
+            </button>
+          ))}
+        </div>
+
+        {/* Live slider */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-slate-400">
+            <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Live Speed Adjustment</span>
+            <span>
+              <span className="text-white font-bold">{localSpeed.toFixed(0)}</span>
+              <span className="text-slate-500"> px/s</span>
+              <span className="text-slate-600 ml-2">(range: 1 – 500)</span>
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={500}
+            step={1}
+            value={localSpeed}
+            onChange={(e) => setLocalSpeed(Number(e.target.value))}
+            onMouseUp={(e) => applySpeed(Number((e.target as HTMLInputElement).value))}
+            onTouchEnd={(e) => applySpeed(Number((e.target as HTMLInputElement).value))}
+            className="w-full accent-cyan-500 cursor-pointer"
+          />
+          <div className="flex justify-between text-[10px] text-slate-600">
+            <span>1 px/s (Slow)</span>
+            <span>250 px/s</span>
+            <span>500 px/s (Max)</span>
           </div>
         </div>
       </div>

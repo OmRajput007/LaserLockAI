@@ -54,6 +54,22 @@ class AnalyticsEngine:
         self.is_currently_locked = False
         self.consecutive_locked = 0
 
+        # Part 3: Orbital & Gimbal Metrics Accumulation
+        self.scenario_type: str = "Local"
+        self.camera_platform_type: Optional[str] = None
+        self.beacon_platform_type: Optional[str] = None
+        self.camera_altitude_km: Optional[float] = None
+        self.beacon_altitude_km: Optional[float] = None
+        self.orbit_presets: Optional[str] = None
+        self.ranges_km: List[float] = []
+        self.beacon_angular_rates: List[float] = []
+        self.atmosphere_path_fractions: List[float] = []
+        self.angular_errors_deg: List[float] = []
+        self.count_slew_saturated: int = 0
+        self.count_gimbal_limit: int = 0
+        self.count_link_blocked: int = 0
+        self.duration_link_blocked_s: float = 0.0
+
         # Time series points for charts
         self.time_series: List[TelemetryPoint] = []
         self.last_point: Optional[TelemetryPoint] = None
@@ -82,22 +98,64 @@ class AnalyticsEngine:
         is_locked: bool = False,
         target_state: str = "SEARCHING",
         video_duration_s: Optional[float] = None,
+        slew_saturated: bool = False,
+        gimbal_limit: bool = False,
+        is_link_blocked: bool = False,
+        range_km: Optional[float] = None,
+        angular_rate_deg_s: Optional[float] = None,
+        atmosphere_path_frac: Optional[float] = None,
+        scenario_type: str = "Local",
+        camera_platform_type: Optional[str] = None,
+        beacon_platform_type: Optional[str] = None,
+        camera_altitude_km: Optional[float] = None,
+        beacon_altitude_km: Optional[float] = None,
+        orbit_presets: Optional[str] = None,
     ):
         """
         Records a single frame simulation / benchmark telemetry step.
-        Preserves backward compatibility for first 4 arguments.
+        Preserves backward compatibility for all arguments.
         """
         if self.start_sim_time is None:
             self.start_sim_time = sim_time
+        dt_step = max(0.0, sim_time - self.last_sim_time) if self.last_sim_time > 0 else 0.0333
         self.last_sim_time = sim_time
         if video_duration_s is not None:
             self.video_duration_s = video_duration_s
+
+        self.scenario_type = scenario_type
+        if camera_platform_type:
+            self.camera_platform_type = camera_platform_type
+        if beacon_platform_type:
+            self.beacon_platform_type = beacon_platform_type
+        if camera_altitude_km is not None:
+            self.camera_altitude_km = camera_altitude_km
+        if beacon_altitude_km is not None:
+            self.beacon_altitude_km = beacon_altitude_km
+        if orbit_presets:
+            self.orbit_presets = orbit_presets
 
         self.total_frames += 1
         if in_fov:
             self.frames_in_fov += 1
         if is_detected or (total_error_px is not None and in_fov):
             self.frames_detected += 1
+
+        if slew_saturated:
+            self.count_slew_saturated += 1
+        if gimbal_limit:
+            self.count_gimbal_limit += 1
+        if is_link_blocked or target_state == "LINK_BLOCKED":
+            self.count_link_blocked += 1
+            self.duration_link_blocked_s += dt_step
+
+        if range_km is not None:
+            self.ranges_km.append(range_km)
+        if angular_rate_deg_s is not None:
+            self.beacon_angular_rates.append(angular_rate_deg_s)
+        if atmosphere_path_frac is not None:
+            self.atmosphere_path_fractions.append(atmosphere_path_frac)
+        if angular_error_deg is not None:
+            self.angular_errors_deg.append(angular_error_deg)
 
         if fps > 0:
             self.fps_history.append(fps)
@@ -167,6 +225,12 @@ class AnalyticsEngine:
             is_locked=is_locked or self.is_currently_locked,
             is_detected=is_detected,
             target_state=target_state,
+            slew_saturated=slew_saturated,
+            gimbal_limit=gimbal_limit,
+            is_link_blocked=is_link_blocked or target_state == "LINK_BLOCKED",
+            range_km=round(range_km, 3) if range_km is not None else None,
+            beacon_angular_rate_deg_s=round(angular_rate_deg_s, 6) if angular_rate_deg_s is not None else None,
+            atmosphere_path_frac=round(atmosphere_path_frac, 4) if atmosphere_path_frac is not None else None,
         )
         self.last_point = point
         self.time_series.append(point)
@@ -203,16 +267,24 @@ class AnalyticsEngine:
             sq_sum = sum(e * e for e in self.tracking_errors)
             rmse = math.sqrt(sq_sum / len(self.tracking_errors))
 
+        # Part 3 requirement: Lock retention rate must exclude LINK_BLOCKED time from the denominator
+        # and report that choice in the log header.
+        effective_frames = max(1, self.total_frames - self.count_link_blocked)
         target_loss = (
-            ((self.total_frames - self.frames_in_fov) / self.total_frames * 100.0)
-            if self.total_frames > 0
+            ((self.total_frames - self.frames_in_fov - self.count_link_blocked) / effective_frames * 100.0)
+            if effective_frames > 0
             else 0.0
         )
+        target_loss = max(0.0, target_loss)
         lock_retention = (
-            (self.frames_locked / self.total_frames * 100.0)
-            if self.total_frames > 0
+            (self.frames_locked / effective_frames * 100.0)
+            if effective_frames > 0
             else 0.0
         )
+        lock_note = None
+        if self.count_link_blocked > 0:
+            lock_note = f"Lock retention rate denominator excludes {self.count_link_blocked} LINK_BLOCKED frames ({round(self.duration_link_blocked_s, 2)}s). Effective denominator: {effective_frames}/{self.total_frames} frames."
+
         det_rate = (
             (self.frames_detected / self.total_frames * 100.0)
             if self.total_frames > 0
@@ -221,6 +293,15 @@ class AnalyticsEngine:
 
         avg_conf = (sum(self.confidence_history) / len(self.confidence_history)) if self.confidence_history else 0.0
         avg_snr = (sum(self.snr_history) / len(self.snr_history)) if self.snr_history else None
+
+        # Part 3 orbital metrics
+        min_r = round(min(self.ranges_km), 3) if self.ranges_km else None
+        max_r = round(max(self.ranges_km), 3) if self.ranges_km else None
+        mean_r = round(sum(self.ranges_km) / len(self.ranges_km), 3) if self.ranges_km else None
+        max_ang_rate = round(max(self.beacon_angular_rates), 6) if self.beacon_angular_rates else None
+        mean_atm_frac = round(sum(self.atmosphere_path_fractions) / len(self.atmosphere_path_fractions), 4) if self.atmosphere_path_fractions else None
+        avg_trk_deg = round(sum(self.angular_errors_deg) / len(self.angular_errors_deg), 4) if self.angular_errors_deg else None
+        max_trk_deg = round(max(self.angular_errors_deg), 4) if self.angular_errors_deg else None
 
         return PerformanceMetrics(
             simulation_duration_s=round(sim_duration, 2),
@@ -235,6 +316,8 @@ class AnalyticsEngine:
             reacquisition_time_s=round(self.reacquisition_time_s, 3) if self.reacquisition_time_s is not None else None,
             average_tracking_error_px=round(avg_trk, 2) if avg_trk is not None else None,
             max_tracking_error_px=round(max_trk, 2) if max_trk is not None else None,
+            average_tracking_error_deg=avg_trk_deg,
+            max_tracking_error_deg=max_trk_deg,
             average_centroid_error_px=round(avg_cen, 2) if avg_cen is not None else None,
             max_centroid_error_px=round(max_cen, 2) if max_cen is not None else None,
             rmse_px=round(rmse, 2) if rmse is not None else None,
@@ -243,6 +326,22 @@ class AnalyticsEngine:
             detection_rate_percent=round(det_rate, 2),
             average_confidence=round(avg_conf, 2),
             average_snr_db=round(avg_snr, 1) if avg_snr is not None else None,
+            scenario_type=self.scenario_type,
+            camera_platform_type=self.camera_platform_type,
+            beacon_platform_type=self.beacon_platform_type,
+            camera_altitude_km=self.camera_altitude_km,
+            beacon_altitude_km=self.beacon_altitude_km,
+            orbit_presets=self.orbit_presets,
+            min_range_km=min_r,
+            max_range_km=max_r,
+            mean_range_km=mean_r,
+            max_beacon_angular_rate_deg_s=max_ang_rate,
+            count_slew_saturated=self.count_slew_saturated,
+            count_gimbal_limit=self.count_gimbal_limit,
+            count_link_blocked=self.count_link_blocked,
+            total_duration_link_blocked_s=round(self.duration_link_blocked_s, 2),
+            mean_atmosphere_path_frac=mean_atm_frac,
+            lock_retention_note=lock_note,
         )
 
     def evaluate_official_requirements(self) -> List[OfficialRequirementStatus]:

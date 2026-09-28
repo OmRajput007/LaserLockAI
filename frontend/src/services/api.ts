@@ -11,6 +11,7 @@ import {
   DemoStatusResponse,
   TechnicalReportResponse,
   UserManualResponse,
+  ValidationSuiteReport,
 } from '../types';
 
 const API_BASE = '/api';
@@ -94,6 +95,14 @@ export const api = {
     });
   },
 
+  async setCustomPath(waypoints: [number, number][], speed_pixels_per_s?: number): Promise<void> {
+    await fetch(`${API_BASE}/simulation/target/custom_path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ waypoints, speed_pixels_per_s }),
+    });
+  },
+
   async setTargetPosition(x: number, y: number, z: number = 1000.0): Promise<void> {
     await fetch(`${API_BASE}/simulation/target/position`, {
       method: 'POST',
@@ -101,6 +110,15 @@ export const api = {
       body: JSON.stringify({ x, y, z }),
     });
   },
+
+  async setBeaconSpeed(speed_pixels_per_s: number): Promise<void> {
+    await fetch(`${API_BASE}/simulation/target/speed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed_pixels_per_s }),
+    });
+  },
+
 
   async setControlMode(mode: 'Open Loop' | 'PID Coarse Pointing' | 'State Feedback'): Promise<void> {
     await fetch(`${API_BASE}/simulation/control/mode`, {
@@ -437,6 +455,73 @@ export const api = {
   async stopDemo(): Promise<any> {
     const res = await fetch(`${API_BASE}/demo/stop`, { method: 'POST' });
     if (!res.ok) throw new Error(`Failed to stop demo: ${res.statusText}`);
+    return res.json();
+  },
+
+  // Orbital Scenario (Part 2)
+  async getOrbitalConfig(): Promise<any> {
+    const res = await fetch(`${API_BASE}/orbital/config`);
+    if (!res.ok) throw new Error(`Failed to get orbital config: ${res.statusText}`);
+    return res.json();
+  },
+
+  async updateOrbitalConfig(config: any): Promise<{ status: string; maneuver_note: string; telemetry: any }> {
+    const res = await fetch(`${API_BASE}/orbital/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to update orbital config: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async resetOrbital(): Promise<{ status: string; telemetry: any }> {
+    const res = await fetch(`${API_BASE}/orbital/reset`, { method: 'POST' });
+    if (!res.ok) throw new Error(`Failed to reset orbital: ${res.statusText}`);
+    return res.json();
+  },
+
+  async getOrbitalTelemetry(): Promise<any> {
+    const res = await fetch(`${API_BASE}/orbital/telemetry`);
+    if (!res.ok) throw new Error(`Failed to fetch orbital telemetry: ${res.statusText}`);
+    return res.json();
+  },
+
+  async setTimeWarp(time_warp: number): Promise<{ status: string; time_warp: number }> {
+    const res = await fetch(`${API_BASE}/orbital/time-warp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ time_warp }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to set time warp: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async runOrbitalValidation(durationS: number = 120.0): Promise<ValidationSuiteReport> {
+    const res = await fetch(`${API_BASE}/experiments/orbital-validation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duration_s: durationS }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Orbital validation suite execution failed: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async getOrbitalValidationReport(): Promise<ValidationSuiteReport> {
+    const res = await fetch(`${API_BASE}/experiments/orbital-validation`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to fetch orbital validation report: ${res.statusText}`);
+    }
     return res.json();
   },
 };

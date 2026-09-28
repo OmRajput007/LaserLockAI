@@ -21,6 +21,13 @@ class RawFrameLogEntry(BaseModel):
     tilt_deg: float = 0.0
     fps: float = 0.0
     processing_time_ms: float = 0.0
+    angular_error_deg: Optional[float] = None
+    slew_saturated: bool = False
+    gimbal_limit: bool = False
+    is_link_blocked: bool = False
+    range_km: Optional[float] = None
+    angular_rate_deg_s: Optional[float] = None
+    atmosphere_path_frac: Optional[float] = None
 
 
 class PerformanceReport(BaseModel):

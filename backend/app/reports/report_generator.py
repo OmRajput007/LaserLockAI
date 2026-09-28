@@ -78,6 +78,13 @@ class ReportGenerator:
                     tilt_deg=pt.tilt_deg,
                     fps=pt.fps,
                     processing_time_ms=pt.processing_time_ms,
+                    angular_error_deg=pt.angular_error_deg,
+                    slew_saturated=pt.slew_saturated,
+                    gimbal_limit=pt.gimbal_limit,
+                    is_link_blocked=pt.is_link_blocked,
+                    range_km=pt.range_km,
+                    angular_rate_deg_s=pt.beacon_angular_rate_deg_s,
+                    atmosphere_path_frac=pt.atmosphere_path_frac,
                 )
             )
 
@@ -189,7 +196,14 @@ class ReportGenerator:
             lines.append(f"- **Benchmark Video File:** `{video_filename}`")
 
         lines.extend([
+            f"- **Scenario Type:** `{metrics.scenario_type}`",
             f"- **Overall Evaluation Status:** **{overall_status}** ({passed_reqs}/{total_reqs} Requirements Passed)\n",
+        ])
+
+        if metrics.lock_retention_note:
+            lines.append(f"> **Lock Retention Policy:** {metrics.lock_retention_note}\n")
+
+        lines.extend([
             f"---",
             f"## 1. Official Requirements Compliance Summary\n",
             f"| Parameter | Required Threshold | Actual Measured | Margin | Verification Status |",
@@ -210,11 +224,13 @@ class ReportGenerator:
             f"| **Kinematics & Timing** | Simulation Duration | {metrics.simulation_duration_s:.2f} s | -- |",
             f"| | Acquisition Time | {metrics.acquisition_time_s or 'Searching'} s | <= 2.0 s (Mandatory) |",
             f"| | Re-acquisition Time | {metrics.reacquisition_time_s or '0.00'} s | <= 1.0 s (Mandatory) |",
-            f"| **Tracking Accuracy** | Average Tracking Error | {metrics.average_tracking_error_px or '--'} px | <= 10.0 px (Mandatory) |",
-            f"| | Maximum Tracking Error | {metrics.max_tracking_error_px or '--'} px | Camera FOV bounds |",
+            f"| **Tracking Accuracy** | Average Tracking Error (px) | {metrics.average_tracking_error_px or '--'} px | <= 10.0 px (Mandatory) |",
+            f"| | Maximum Tracking Error (px) | {metrics.max_tracking_error_px or '--'} px | Camera FOV bounds |",
+            f"| | Average Angular Error (deg) | {metrics.average_tracking_error_deg if metrics.average_tracking_error_deg is not None else '--'} deg | Fine Boresight Alignment |",
+            f"| | Maximum Angular Error (deg) | {metrics.max_tracking_error_deg if metrics.max_tracking_error_deg is not None else '--'} deg | Sensor Limit (2.0° az, 1.5° el) |",
             f"| | Centroid Error vs GT | {metrics.average_centroid_error_px or '--'} px | Optical Spot Radius |",
             f"| | Root Mean Square Error (RMSE) | {metrics.rmse_px or '--'} px | Gaussian Boresight Dispersion |",
-            f"| **Robustness & Lock** | Lock Retention Rate | {metrics.lock_retention_percent:.1f} % | Continuous Coarse PAT |",
+            f"| **Robustness & Lock** | Lock Retention Rate | {metrics.lock_retention_percent:.1f} % | Continuous Coarse PAT (excl. blocked) |",
             f"| | Target Loss Rate | {metrics.target_loss_percent:.1f} % | < 5.0 % (Mandatory) |",
             f"| | Beacon Detection Rate | {metrics.detection_rate_percent:.1f} % | Sensor Detection Floor |",
             f"| **Execution Performance**| Average Throughput (FPS) | {metrics.average_fps:.1f} FPS | >= 20.0 FPS (Mandatory) |",
@@ -223,8 +239,26 @@ class ReportGenerator:
             f"| | Peak Execution Latency | {metrics.max_processing_time_ms:.2f} ms | System Hard Real-Time |",
             f"| **Signal Quality** | Mean Detection Confidence | {metrics.average_confidence * 100:.1f} % | >= 70.0 % |",
             f"| | Mean Signal-to-Noise Ratio| {metrics.average_snr_db or '--'} dB | >= 12.0 dB |",
+        ])
+
+        # Part 3: Orbital & Gimbal Extended Metrics Section
+        lines.extend([
             f"\n---",
-            f"## 3. Subsystem Hardware & Simulation Configuration\n",
+            f"## 3. Orbital Geometry & Gimbal Kinematics (Part 3 Extension)\n",
+            f"| Parameter | Measured Value | Specification Reference |",
+            f"| :--- | :--- | :--- |",
+            f"| Scenario Type | {metrics.scenario_type} | Orbital Scenario / Local Scene |",
+            f"| Camera Platform | {metrics.camera_platform_type or '--'} ({metrics.camera_altitude_km or '--'} km) | Observing terminal |",
+            f"| Beacon Platform | {metrics.beacon_platform_type or '--'} ({metrics.beacon_altitude_km or '--'} km) | Target terminal |",
+            f"| Orbit Preset | {metrics.orbit_presets or '--'} | Preset geometry |",
+            f"| Range (Min / Mean / Max) | {metrics.min_range_km or '--'} / {metrics.mean_range_km or '--'} / {metrics.max_range_km or '--'} km | Slant range |",
+            f"| Maximum Beacon Angular Rate | {metrics.max_beacon_angular_rate_deg_s or '--'} deg/s | Transverse relative motion |",
+            f"| Frames with SLEW_SATURATED | {metrics.count_slew_saturated} | Actuator slew rate saturation limit |",
+            f"| Frames with GIMBAL_LIMIT | {metrics.count_gimbal_limit} | Mechanical gimbal travel limit stops |",
+            f"| LINK_BLOCKED Frames & Duration | {metrics.count_link_blocked} frames ({metrics.total_duration_link_blocked_s:.2f} s) | Earth occlusion (zero failure penalty) |",
+            f"| Mean Atmosphere Path Fraction | {metrics.mean_atmosphere_path_frac if metrics.mean_atmosphere_path_frac is not None else '--'} | Fraction below 20 km altitude |",
+            f"\n---",
+            f"## 4. Subsystem Hardware & Simulation Configuration\n",
             f"- **Optical Camera Sensor:** {cfg['camera']['sensor_type']} ({cfg['camera']['resolution']}, {cfg['camera']['fov']} FOV, {cfg['camera']['update_rate_hz']} Hz)",
             f"- **Gimbal Actuation:** Slew limits: {cfg['camera']['max_slew_speed']}",
             f"- **Optical Target:** {cfg['target']['shape']} shape, {cfg['target']['size_pixels']} px spot size, {cfg['target']['intensity']} intensity",
@@ -234,7 +268,7 @@ class ReportGenerator:
             f"- **2-Axis PID Gimbal Controller:** Mode: `{cfg['control']['mode']}` | Pan: `{cfg['control']['pan_pid']}` | Tilt: `{cfg['control']['tilt_pid']}`",
             f"- **Perturbation & Noise Engine:** Noise: `{cfg['disturbance']['noise_type']}` (std dev {cfg['disturbance']['noise_std_dev']}px) | Jitter: `{cfg['disturbance']['jitter_max_px']}px` | Atmosphere: `{cfg['disturbance']['atmosphere']}` | Base Motion: `{cfg['disturbance']['platform_motion']}`\n",
             f"---",
-            f"## 4. Telemetry Verification Signature\n",
+            f"## 5. Telemetry Verification Signature\n",
             f"This document serves as an immutable verification record generated by the Automated Verification System for Problem Statement 4.\n",
         ])
 
@@ -267,6 +301,7 @@ class ReportGenerator:
             "error_x_px",
             "error_y_px",
             "total_error_px",
+            "angular_error_deg",
             "confidence",
             "detection_status",
             "tracking_state",
@@ -274,6 +309,12 @@ class ReportGenerator:
             "tilt_deg",
             "fps",
             "processing_time_ms",
+            "slew_saturated",
+            "gimbal_limit",
+            "is_link_blocked",
+            "range_km",
+            "angular_rate_deg_s",
+            "atmosphere_path_frac",
         ]
         lines = [",".join(headers)]
         for log in logs:
@@ -287,6 +328,7 @@ class ReportGenerator:
                 str(log.error_x_px) if log.error_x_px is not None else "",
                 str(log.error_y_px) if log.error_y_px is not None else "",
                 str(log.total_error_px) if log.total_error_px is not None else "",
+                f"{log.angular_error_deg:.4f}" if log.angular_error_deg is not None else "",
                 f"{log.confidence:.2f}",
                 log.detection_status,
                 log.tracking_state,
@@ -294,6 +336,12 @@ class ReportGenerator:
                 f"{log.tilt_deg:.2f}",
                 f"{log.fps:.1f}",
                 f"{log.processing_time_ms:.2f}",
+                "1" if log.slew_saturated else "0",
+                "1" if log.gimbal_limit else "0",
+                "1" if log.is_link_blocked else "0",
+                f"{log.range_km:.3f}" if log.range_km is not None else "",
+                f"{log.angular_rate_deg_s:.6f}" if log.angular_rate_deg_s is not None else "",
+                f"{log.atmosphere_path_frac:.4f}" if log.atmosphere_path_frac is not None else "",
             ]
             lines.append(",".join(row))
 

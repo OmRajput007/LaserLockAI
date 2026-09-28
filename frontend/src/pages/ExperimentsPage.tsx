@@ -18,21 +18,30 @@ import {
   FileSpreadsheet,
   FileCode,
   Sparkles,
+  Globe,
+  ShieldCheck,
+  Eye,
+  Info,
 } from 'lucide-react';
 import {
   ExperimentRecord,
   AlgorithmComparisonResponse,
   AlgorithmComparisonResult,
+  ValidationSuiteReport,
+  ValidationRunResult,
 } from '../types';
 import { api } from '../services/api';
 
 export const ExperimentsPage: React.FC = () => {
   const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
   const [comparison, setComparison] = useState<AlgorithmComparisonResponse | null>(null);
+  const [orbitalReport, setOrbitalReport] = useState<ValidationSuiteReport | null>(null);
   const [isComparing, setIsComparing] = useState<boolean>(false);
+  const [isValidatingOrbital, setIsValidatingOrbital] = useState<boolean>(false);
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [selectedExp, setSelectedExp] = useState<ExperimentRecord | null>(null);
+  const [selectedValidationRun, setSelectedValidationRun] = useState<ValidationRunResult | null>(null);
 
   // Form state for creating custom experiment
   const [formName, setFormName] = useState<string>('Optical Ground Station Cross-Track Trial');
@@ -60,9 +69,33 @@ export const ExperimentsPage: React.FC = () => {
     }
   };
 
+  const loadOrbitalReport = async () => {
+    try {
+      const rep = await api.getOrbitalValidationReport();
+      if (rep && rep.runs && rep.runs.length > 0) {
+        setOrbitalReport(rep);
+      }
+    } catch (e) {
+      // Not yet generated
+    }
+  };
+
   useEffect(() => {
     loadExperiments();
+    loadOrbitalReport();
   }, []);
+
+  const handleRunOrbitalValidation = async (durationS: number = 120.0) => {
+    setIsValidatingOrbital(true);
+    try {
+      const rep = await api.runOrbitalValidation(durationS);
+      setOrbitalReport(rep);
+    } catch (e) {
+      console.error('Failed to run orbital validation suite:', e);
+    } finally {
+      setIsValidatingOrbital(false);
+    }
+  };
 
   const handleRunComparison = async (scenario: string = 'Standard Cross-Track Evaluation') => {
     setIsComparing(true);
@@ -136,6 +169,19 @@ export const ExperimentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => handleRunOrbitalValidation(120.0)}
+            disabled={isValidatingOrbital}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded text-[11px] flex items-center gap-2 transition shadow-md disabled:opacity-50"
+          >
+            {isValidatingOrbital ? (
+              <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Globe className="w-3.5 h-3.5" />
+            )}
+            {isValidatingOrbital ? 'RUNNING 120s VALIDATION...' : 'RUN ORBITAL VALIDATION (A-F)'}
+          </button>
+
           <button
             onClick={() => handleRunComparison()}
             disabled={isComparing}
@@ -267,6 +313,178 @@ export const ExperimentsPage: React.FC = () => {
           <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded">
             Click &quot;RUN 5-ALGORITHM COMPARISON&quot; above to evaluate Basic CV, CV+Kalman, CV+PID, AI, and AI+Kalman+PID
             on an identical standardized scenario.
+          </div>
+        )}
+      </div>
+
+      {/* Orbital Scenario Validation Suite Section */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <Globe className="w-4 h-4 text-emerald-400" />
+            <span className="font-bold text-white text-xs uppercase tracking-wider">
+              Orbital Tracking Validation Suite (Runs A – F)
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">
+              PART 3 BENCHMARK: 120s @ 1X
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleRunOrbitalValidation(120.0)}
+              disabled={isValidatingOrbital}
+              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold flex items-center gap-1.5 transition disabled:opacity-50 shadow"
+            >
+              {isValidatingOrbital ? (
+                <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5" />
+              )}
+              {isValidatingOrbital ? 'SIMULATING 120s SUITE...' : 'RUN FULL 6-SCENARIO SUITE'}
+            </button>
+          </div>
+        </div>
+
+        {/* Lock Retention Policy Notice */}
+        <div className="bg-slate-950/70 border border-emerald-900/40 p-2.5 rounded text-[10px] text-slate-300 flex items-start gap-2 mb-3">
+          <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <span className="font-bold text-emerald-400">Lock Retention Protocol: </span>
+            <span>
+              {orbitalReport?.lock_retention_note ||
+                'Lock retention rate denominator strictly excludes LINK_BLOCKED duration. When line of sight is obstructed by Earth or dense atmosphere, the camera holds position and zero tracker failures are charged.'}
+            </span>
+          </div>
+        </div>
+
+        {isValidatingOrbital ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <RotateCcw className="w-8 h-8 text-emerald-400 animate-spin" />
+            <p className="text-sm font-bold text-white">Running 6 Standardized Closed-Loop Orbital Simulations...</p>
+            <p className="text-xs text-slate-400">
+              Executing Runs A through F (120s each @ 30 Hz = 3,600 frames/run, 21,600 frames total closed-loop CV + Kalman + PID).
+            </p>
+          </div>
+        ) : orbitalReport ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-950/80 border-b border-slate-800 text-[10px] font-mono text-emerald-400 uppercase tracking-wider">
+                <tr>
+                  <th className="p-2.5">Run & Name</th>
+                  <th className="p-2.5">Platforms & Altitudes</th>
+                  <th className="p-2.5">Max Rate</th>
+                  <th className="p-2.5">Range (km)</th>
+                  <th className="p-2.5">Acq (s)</th>
+                  <th className="p-2.5">Mean / Max Err (px)</th>
+                  <th className="p-2.5">Mean / Max Err (deg)</th>
+                  <th className="p-2.5">Lock Retention</th>
+                  <th className="p-2.5">Slew Sat / Limit</th>
+                  <th className="p-2.5">Blocked / Atmo</th>
+                  <th className="p-2.5">Verdict</th>
+                  <th className="p-2.5 text-right">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80 text-slate-300 text-xs">
+                {orbitalReport.runs.map((r: ValidationRunResult, idx: number) => {
+                  const isPass = r.verdict === 'PASS';
+                  return (
+                    <tr
+                      key={idx}
+                      className="hover:bg-slate-800/40 cursor-pointer transition"
+                      onClick={() => setSelectedValidationRun(r)}
+                    >
+                      <td className="p-2.5 font-bold text-white flex items-center gap-2">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            isPass ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-amber-400'
+                          }`}
+                        ></span>
+                        <div>
+                          <div className="font-bold text-cyan-300">{r.run_id}</div>
+                          <div className="text-[10px] text-slate-400 font-normal">{r.name}</div>
+                        </div>
+                      </td>
+                      <td className="p-2.5 text-[11px] text-slate-300">
+                        <div><span className="text-slate-500">Cam:</span> {r.camera_platform}</div>
+                        <div><span className="text-slate-500">Bcn:</span> {r.beacon_platform}</div>
+                      </td>
+                      <td className="p-2.5 font-mono text-cyan-300 font-bold">
+                        {r.max_angular_rate_deg_s.toFixed(2)}°/s
+                      </td>
+                      <td className="p-2.5 font-mono text-slate-300 text-[11px]">
+                        {r.min_range_km.toFixed(0)} - {r.max_range_km.toFixed(0)} km
+                      </td>
+                      <td className="p-2.5 font-mono text-slate-200">
+                        {r.acquisition_time_s !== null ? `${r.acquisition_time_s.toFixed(2)}s` : '--'}
+                      </td>
+                      <td className="p-2.5 font-mono text-amber-300 font-bold">
+                        {r.mean_tracking_error_px.toFixed(2)} / {r.max_tracking_error_px.toFixed(2)}
+                      </td>
+                      <td className="p-2.5 font-mono text-slate-300">
+                        {r.mean_tracking_error_deg.toFixed(3)}° / {r.max_tracking_error_deg.toFixed(3)}°
+                      </td>
+                      <td className="p-2.5 font-mono font-bold">
+                        <span
+                          className={
+                            r.lock_retention_percent >= 90
+                              ? 'text-emerald-400'
+                              : r.lock_retention_percent >= 50
+                              ? 'text-amber-400'
+                              : 'text-red-400'
+                          }
+                        >
+                          {r.lock_retention_percent.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="p-2.5 font-mono text-[11px]">
+                        <span className={r.count_slew_saturated > 0 ? 'text-amber-400 font-bold' : 'text-slate-500'}>
+                          Sat: {r.count_slew_saturated}
+                        </span>
+                        <span className="text-slate-600 mx-1">|</span>
+                        <span className={r.count_gimbal_limit > 0 ? 'text-red-400 font-bold' : 'text-slate-500'}>
+                          Lim: {r.count_gimbal_limit}
+                        </span>
+                      </td>
+                      <td className="p-2.5 font-mono text-[11px]">
+                        <div className={r.count_link_blocked > 0 ? 'text-purple-400 font-bold' : 'text-slate-400'}>
+                          Blk: {r.count_link_blocked} ({r.duration_link_blocked_s.toFixed(1)}s)
+                        </div>
+                        <div className="text-slate-500 text-[10px]">
+                          Atmo: {(r.mean_atmosphere_path_frac * 100).toFixed(1)}%
+                        </div>
+                      </td>
+                      <td className="p-2.5 font-mono">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            isPass
+                              ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+                              : 'bg-amber-950 border-amber-700 text-amber-300'
+                          }`}
+                        >
+                          {r.verdict}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-right font-mono">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedValidationRun(r);
+                          }}
+                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded text-[10px] font-bold inline-flex items-center gap-1 transition"
+                        >
+                          <Eye className="w-3 h-3" /> Inspect
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded">
+            Click &quot;RUN FULL 6-SCENARIO SUITE&quot; above to execute automated closed-loop validation across Runs A, B, C, D, E, and F.
           </div>
         )}
       </div>
@@ -615,6 +833,125 @@ export const ExperimentsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Run Inspection Modal */}
+      {selectedValidationRun && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-700 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    {selectedValidationRun.run_id}: {selectedValidationRun.name}
+                  </h3>
+                  <p className="text-slate-400 text-[10px]">
+                    Scenario Type: {selectedValidationRun.scenario_type} | Duration: {selectedValidationRun.duration_s}s ({selectedValidationRun.total_frames} frames)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedValidationRun(null)}
+                className="text-slate-400 hover:text-white text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              {/* Expected vs Actual */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-lg">
+                  <span className="text-[10px] uppercase font-bold text-cyan-400 block mb-1">Expected Behavior</span>
+                  <p className="text-slate-300 text-xs leading-relaxed">{selectedValidationRun.expected_behavior}</p>
+                </div>
+                <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-lg">
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 block mb-1">Actual Simulation Outcome</span>
+                  <p className="text-slate-200 text-xs leading-relaxed">{selectedValidationRun.actual_outcome}</p>
+                </div>
+              </div>
+
+              {/* Kinematic & Metric Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Lock Retention</div>
+                  <div className="text-base font-bold text-emerald-400">{selectedValidationRun.lock_retention_percent.toFixed(1)}%</div>
+                  <div className="text-[9px] text-slate-500">Excl. Blocked frames</div>
+                </div>
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Acquisition Time</div>
+                  <div className="text-base font-bold text-cyan-400">
+                    {selectedValidationRun.acquisition_time_s !== null ? `${selectedValidationRun.acquisition_time_s.toFixed(2)}s` : 'N/A'}
+                  </div>
+                  <div className="text-[9px] text-slate-500">Time to boresight lock</div>
+                </div>
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Mean Tracking Error</div>
+                  <div className="text-base font-bold text-amber-300">{selectedValidationRun.mean_tracking_error_px.toFixed(2)} px</div>
+                  <div className="text-[9px] text-slate-400">{selectedValidationRun.mean_tracking_error_deg.toFixed(3)}°</div>
+                </div>
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Max Tracking Error</div>
+                  <div className="text-base font-bold text-red-400">{selectedValidationRun.max_tracking_error_px.toFixed(2)} px</div>
+                  <div className="text-[9px] text-slate-400">{selectedValidationRun.max_tracking_error_deg.toFixed(3)}°</div>
+                </div>
+              </div>
+
+              {/* Hardware & Link Geometry */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Max Angular Rate</div>
+                  <div className="text-sm font-bold text-purple-300">{selectedValidationRun.max_angular_rate_deg_s.toFixed(2)}°/s</div>
+                  <div className="text-[9px] text-slate-500">Mean: {selectedValidationRun.mean_angular_rate_deg_s.toFixed(2)}°/s</div>
+                </div>
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Slew Saturation</div>
+                  <div className="text-sm font-bold text-amber-400">{selectedValidationRun.count_slew_saturated} frames</div>
+                  <div className="text-[9px] text-slate-500">Clamped at max speed</div>
+                </div>
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">Gimbal Limit</div>
+                  <div className="text-sm font-bold text-red-400">{selectedValidationRun.count_gimbal_limit} frames</div>
+                  <div className="text-[9px] text-slate-500">Pan ±180° / Tilt limit</div>
+                </div>
+                <div className="bg-slate-950/50 border border-slate-800 p-2.5 rounded">
+                  <div className="text-[10px] text-slate-500 uppercase">LOS Blocked</div>
+                  <div className="text-sm font-bold text-indigo-400">
+                    {selectedValidationRun.count_link_blocked} frames ({selectedValidationRun.duration_link_blocked_s.toFixed(1)}s)
+                  </div>
+                  <div className="text-[9px] text-slate-500">Atmo Path: {(selectedValidationRun.mean_atmosphere_path_frac * 100).toFixed(1)}%</div>
+                </div>
+              </div>
+
+              {/* Range & Notes */}
+              <div className="bg-slate-950/70 border border-slate-800 p-3 rounded-lg text-xs space-y-1">
+                <div className="flex justify-between text-slate-400 text-[11px]">
+                  <span>Range Extents:</span>
+                  <span className="text-slate-200 font-mono">
+                    Min {selectedValidationRun.min_range_km.toFixed(1)} km | Mean {selectedValidationRun.mean_range_km.toFixed(1)} km | Max {selectedValidationRun.max_range_km.toFixed(1)} km
+                  </span>
+                </div>
+                {selectedValidationRun.notes && (
+                  <div className="pt-2 border-t border-slate-800/80 text-slate-400 text-[11px] leading-relaxed">
+                    <strong className="text-slate-300">Technical Analysis: </strong>{selectedValidationRun.notes}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setSelectedValidationRun(null)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded font-bold text-xs transition"
+              >
+                Close Inspection
+              </button>
+            </div>
           </div>
         </div>
       )}

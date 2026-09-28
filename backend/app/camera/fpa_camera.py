@@ -62,6 +62,10 @@ class FPACamera:
         self.tilt_min = config.tilt_min_limit_deg         # -85°
         self.tilt_max = config.tilt_max_limit_deg         # +85°
 
+        # Gimbal constraint flags (Part 3)
+        self.slew_saturated: bool = False
+        self.gimbal_limit: bool = False
+
     def update_config(self, config: CameraConfig):
         """Updates camera optical parameters without clearing current gimbal angles."""
         self.config = config
@@ -111,6 +115,8 @@ class FPACamera:
         self.target_tilt_deg = self.tilt_deg
         self.pan_rate = 0.0
         self.tilt_rate = 0.0
+        self.slew_saturated = False
+        self.gimbal_limit = False
 
     def set_target_angles(self, pan_deg: float, tilt_deg: float):
         """Commands a target gimbal angle setpoint, clamped to physical limits."""
@@ -125,11 +131,17 @@ class FPACamera:
         self.target_tilt_deg = self.tilt_deg
         self.pan_rate = 0.0
         self.tilt_rate = 0.0
+        self.slew_saturated = False
+        self.gimbal_limit = False
 
     def apply_rate_command(self, d_pan_deg_s: float, d_tilt_deg_s: float):
         """Sets operator manual slew rates or closed-loop PID rate commands, clamped to maximum slew speeds."""
-        self.pan_rate = max(-self.max_pan_speed, min(self.max_pan_speed, d_pan_deg_s))
-        self.tilt_rate = max(-self.max_tilt_speed, min(self.max_tilt_speed, d_tilt_deg_s))
+        raw_pan = d_pan_deg_s
+        raw_tilt = d_tilt_deg_s
+
+        self.slew_saturated = (abs(raw_pan) >= self.max_pan_speed - 1e-4) or (abs(raw_tilt) >= self.max_tilt_speed - 1e-4)
+        self.pan_rate = max(-self.max_pan_speed, min(self.max_pan_speed, raw_pan))
+        self.tilt_rate = max(-self.max_tilt_speed, min(self.max_tilt_speed, raw_tilt))
         self.target_pan_deg = self.pan_deg
         self.target_tilt_deg = self.tilt_deg
 
@@ -138,7 +150,10 @@ class FPACamera:
         Advances gimbal actuator dynamics by dt.
         If a target angle setpoint is set, slews toward target at max speed (rate-limited).
         If a direct rate command is active, integrates velocity clamped to physical stops.
+        Raises GIMBAL_LIMIT flag if travel limits are hit.
         """
+        hit_limit = False
+
         # 1. Closed-loop slew towards target setpoint if differ
         pan_diff = self.target_pan_deg - self.pan_deg
         if abs(pan_diff) > 0.001:
@@ -158,20 +173,64 @@ class FPACamera:
             self.tilt_deg += self.tilt_rate * dt
             self.target_tilt_deg = self.tilt_deg
 
-        # Enforce physical mechanical limit stops
-        if self.pan_deg < self.pan_min:
+        # Enforce physical mechanical limit stops & raise GIMBAL_LIMIT flag
+        if self.pan_deg <= self.pan_min:
             self.pan_deg = self.pan_min
-            self.pan_rate = 0.0
-        elif self.pan_deg > self.pan_max:
+            if self.pan_rate < 0:
+                self.pan_rate = 0.0
+                hit_limit = True
+        elif self.pan_deg >= self.pan_max:
             self.pan_deg = self.pan_max
-            self.pan_rate = 0.0
+            if self.pan_rate > 0:
+                self.pan_rate = 0.0
+                hit_limit = True
 
-        if self.tilt_deg < self.tilt_min:
+        if self.tilt_deg <= self.tilt_min:
             self.tilt_deg = self.tilt_min
-            self.tilt_rate = 0.0
-        elif self.tilt_deg > self.tilt_max:
+            if self.tilt_rate < 0:
+                self.tilt_rate = 0.0
+                hit_limit = True
+        elif self.tilt_deg >= self.tilt_max:
             self.tilt_deg = self.tilt_max
-            self.tilt_rate = 0.0
+            if self.tilt_rate > 0:
+                self.tilt_rate = 0.0
+                hit_limit = True
+
+        self.gimbal_limit = hit_limit
+
+    def project_orbital_beacon(self, az_body_deg: float, el_body_deg: float) -> Tuple[
+        Optional[float],  # pixel_u
+        Optional[float],  # pixel_v
+        bool,             # is_in_fov
+        float,            # error_azimuth_deg
+        float,            # error_elevation_deg
+    ]:
+        """
+        Projects an orbital beacon onto the 640x480 FPA from azimuth and elevation in the camera body frame.
+        Per Part 3 specification:
+            Angle error from boresight:
+                delta_az = az_body_deg - pan_deg
+                delta_el = el_body_deg - tilt_deg
+            Beacon pixel position = (angle error from boresight) x 160 px/degree (640x480, 4 deg x 3 deg):
+                u = 320.0 + delta_az * 160.0
+                v = 240.0 - delta_el * 160.0
+        """
+        delta_az = (az_body_deg - self.pan_deg + 180.0) % 360.0 - 180.0
+        delta_el = el_body_deg - self.tilt_deg
+
+        scale = 160.0  # px/degree (640 px / 4.0° = 160, 480 px / 3.0° = 160)
+        u = self.cx_px + delta_az * scale
+        v = self.cy_px - delta_el * scale
+
+        half_fov_h = self.fov_h / 2.0  # 2.0°
+        half_fov_v = self.fov_v / 2.0  # 1.5°
+
+        is_in_angular_fov = (abs(delta_az) <= half_fov_h) and (abs(delta_el) <= half_fov_v)
+        is_in_sensor_bounds = (0.0 <= u <= float(self.width)) and (0.0 <= v <= float(self.height))
+
+        is_in_fov = is_in_angular_fov and is_in_sensor_bounds
+
+        return round(u, 2), round(v, 2), is_in_fov, round(delta_az, 4), round(delta_el, 4)
 
     def world_to_camera_transform(self, wx: float, wy: float, wz: float) -> Tuple[float, float, float]:
         """
@@ -237,11 +296,11 @@ class FPACamera:
         u = self.cx_px + self.fx_px * (xc / zc)
         v = self.cy_px - self.fy_px * (yc / zc)
 
-        # 4. Rigorous FOV check (both angular and sensor boundary check)
-        half_fov_h = self.fov_h / 2.0
-        half_fov_v = self.fov_v / 2.0
+        # 4. Rigorous FOV check with small tolerance margin to prevent edge flicker
+        half_fov_h = self.fov_h / 2.0 * 1.05   # +5% tolerance margin
+        half_fov_v = self.fov_v / 2.0 * 1.05
         is_in_angular_fov = (abs(az_deg) <= half_fov_h) and (abs(el_deg) <= half_fov_v)
-        is_in_sensor_bounds = (0.0 <= u <= float(self.width)) and (0.0 <= v <= float(self.height))
+        is_in_sensor_bounds = (-2.0 <= u <= float(self.width) + 2.0) and (-2.0 <= v <= float(self.height) + 2.0)
 
         is_in_fov = is_in_angular_fov and is_in_sensor_bounds
 

@@ -311,10 +311,15 @@ export interface CameraState {
   resolution_height: number;
   update_rate_hz: number;
   frustum_corners_world: [number, number, number][];
+  adaptive_speed_factor: number;
+  lost_time_s: number;
+  slew_saturated?: boolean;
+  gimbal_limit?: boolean;
+  is_link_blocked?: boolean;
 }
 
 export interface TrackingTelemetry {
-  state?: 'SEARCHING' | 'ACQUIRING' | 'TRACKING' | 'LOCKED' | 'LOST' | 'REACQUIRING' | string;
+  state?: 'SEARCHING' | 'ACQUIRING' | 'TRACKING' | 'LOCKED' | 'LOST' | 'REACQUIRING' | 'LINK_BLOCKED' | string;
   mode: string;
   measured_x?: number | null;
   measured_y?: number | null;
@@ -346,6 +351,12 @@ export interface TrackingTelemetry {
   tilt_pid_d?: number;
   tilt_cmd_deg_s?: number;
   search_pattern_name?: string;
+  slew_saturated?: boolean;
+  gimbal_limit?: boolean;
+  is_link_blocked?: boolean;
+  atmosphere_path_frac?: number;
+  range_km?: number;
+  angular_rate_deg_s?: number;
 }
 
 export interface SimulationTelemetry {
@@ -361,6 +372,76 @@ export interface SimulationTelemetry {
   detection: DetectionTelemetry;
   disturbance?: DisturbanceTelemetry;
   atmospheric_condition: string;
+  scenario_mode?: 'Local' | 'Orbital' | string;
+  orbital?: OrbitalTelemetry;
+}
+
+export interface SatelliteConfig {
+  preset: string;
+  altitude_km?: number | null;
+  inclination_deg: number;
+  phase_deg: number;
+  raan_deg: number;
+}
+
+export interface UAVConfig {
+  lat_deg: number;
+  lon_deg: number;
+  altitude_km: number;
+  pattern: string;
+  radius_km: number;
+  speed_km_s: number;
+  phase_deg: number;
+}
+
+export interface OrbitalScenarioConfig {
+  camera_type: 'UAV' | 'SATELLITE';
+  beacon_type: 'UAV' | 'SATELLITE';
+  camera_sat: SatelliteConfig;
+  camera_uav: UAVConfig;
+  beacon_sat: SatelliteConfig;
+  beacon_uav: UAVConfig;
+  atmosphere_margin_km: number;
+  tilt_limit_deg?: number;
+}
+
+export interface OrbitalPlatformTelemetry {
+  pos_eci: [number, number, number];
+  vel_eci: [number, number, number];
+  altitude_km: number;
+  speed_km_s: number;
+  trail: [number, number, number][];
+  platform_type?: 'UAV' | 'SATELLITE';
+}
+
+export interface OrbitalOrbitTelemetry {
+  r_km: number;
+  speed_km_s: number;
+  period_s: number;
+  omega_deg_s: number;
+  theta_deg: number;
+}
+
+export interface OrbitalLinkTelemetry {
+  range_km: number;
+  az_body_deg: number;
+  el_body_deg: number;
+  link_state: 'LINK_OK' | 'LINK_BLOCKED' | string;
+  angular_rate_deg_s: number;
+  intensity_fraction: number;
+  atmosphere_path_frac: number;
+  min_los_clearance_km: number;
+  relative_speed_km_s: number;
+  is_out_of_fov?: boolean;
+}
+
+export interface OrbitalTelemetry {
+  sim_time_s: number;
+  camera: OrbitalPlatformTelemetry;
+  beacon: OrbitalPlatformTelemetry;
+  camera_orbit?: OrbitalOrbitTelemetry | null;
+  beacon_orbit?: OrbitalOrbitTelemetry | null;
+  link: OrbitalLinkTelemetry;
 }
 
 export interface VideoMetadata {
@@ -650,3 +731,41 @@ export interface UserManualResponse {
   chapters_count: number;
   chapters: DocumentationSection[];
 }
+
+export interface ValidationRunResult {
+  run_id: string;
+  name: string;
+  scenario_type: string;
+  camera_platform: string;
+  beacon_platform: string;
+  duration_s: number;
+  total_frames: number;
+  acquisition_time_s: number | null;
+  mean_tracking_error_px: number;
+  max_tracking_error_px: number;
+  mean_tracking_error_deg: number;
+  max_tracking_error_deg: number;
+  lock_retention_percent: number;
+  count_slew_saturated: number;
+  count_gimbal_limit: number;
+  count_link_blocked: number;
+  duration_link_blocked_s: number;
+  min_range_km: number;
+  max_range_km: number;
+  mean_range_km: number;
+  max_angular_rate_deg_s: number;
+  mean_angular_rate_deg_s: number;
+  mean_atmosphere_path_frac: number;
+  expected_behavior: string;
+  actual_outcome: string;
+  verdict: string;
+  notes?: string;
+}
+
+export interface ValidationSuiteReport {
+  generated_at: string;
+  total_runs: number;
+  runs: ValidationRunResult[];
+  lock_retention_note: string;
+}
+

@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Sparkles,
   Layers,
+  Locate,
 } from 'lucide-react';
 
 interface FPACameraViewportProps {
@@ -35,13 +36,56 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [viewMode, setViewMode] = useState<'canvas' | 'opencv_annotated' | 'opencv_raw'>('canvas');
   const [streamTick, setStreamTick] = useState(0);
+  const [autoLOS, setAutoLOS] = useState(false);
 
   // Historical projected pixel breadcrumbs for sensor trajectory trail
   const pixelHistoryRef = useRef<{ u: number; v: number }[]>([]);
 
+  const nudgeIntervalRef = useRef<any>(null);
+
+  const startNudge = (pan_rate: number, tilt_rate: number) => {
+    if (nudgeIntervalRef.current) clearInterval(nudgeIntervalRef.current);
+    onGimbalNudge?.(pan_rate, tilt_rate);
+    nudgeIntervalRef.current = setInterval(() => {
+      onGimbalNudge?.(pan_rate, tilt_rate);
+    }, 50);
+  };
+
+  const stopNudge = () => {
+    if (nudgeIntervalRef.current) {
+      clearInterval(nudgeIntervalRef.current);
+      nudgeIntervalRef.current = null;
+      onGimbalNudge?.(0, 0);
+    }
+  };
+
   useEffect(() => {
-    if (target && target.is_in_fov && target.pixel_x !== null && target.pixel_y !== null) {
-      pixelHistoryRef.current.push({ u: target.pixel_x, v: target.pixel_y });
+    return () => {
+      if (nudgeIntervalRef.current) clearInterval(nudgeIntervalRef.current);
+    };
+  }, []);
+
+  // Auto LOS Align: continuously slew the camera boresight toward the LOS ray.
+  // azimuth_cam_deg / elevation_cam_deg are the angular offsets between the camera
+  // boresight and the actual target direction in camera space, so:
+  //   needed_pan  = camera.pan_deg  + azimuth_cam_deg
+  //   needed_tilt = camera.tilt_deg + elevation_cam_deg
+  useEffect(() => {
+    if (!autoLOS) return;
+    if (!target || !camera || !onGimbalAngles) return;
+    if (target.azimuth_cam_deg === null || target.elevation_cam_deg === null) return;
+
+    const neededPan  = camera.pan_deg  + (target.azimuth_cam_deg  ?? 0);
+    const neededTilt = camera.tilt_deg + (target.elevation_cam_deg ?? 0);
+    onGimbalAngles(neededPan, neededTilt);
+  }, [autoLOS, target, camera, onGimbalAngles]);
+
+  useEffect(() => {
+    const px = target?.pixel_x ?? null;
+    const py = target?.pixel_y ?? null;
+    const inSensor = px !== null && py !== null && px >= 0 && px <= 640 && py >= 0 && py <= 480;
+    if (target && inSensor && px !== null && py !== null) {
+      pixelHistoryRef.current.push({ u: px, v: py });
       if (pixelHistoryRef.current.length > 35) {
         pixelHistoryRef.current.shift();
       }
@@ -150,11 +194,17 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       }
     }
 
-    // 4. Render Beacon ONLY IF INSIDE FOV!
-    // Strict requirement: If outside FOV, it must NOT appear in the camera image!
-    if (target && target.is_in_fov && target.pixel_x !== null && target.pixel_y !== null) {
-      const px = target.pixel_x;
-      const py = target.pixel_y;
+    // 4. Render Beacon — visible when pixel coordinate is within sensor bounds
+    // Use pixel_x/pixel_y directly (backend always returns them even when is_in_fov flickers at edges)
+    const beaconPx = target?.pixel_x ?? null;
+    const beaconPy = target?.pixel_y ?? null;
+    const beaconInSensor = beaconPx !== null && beaconPy !== null
+      && beaconPx >= 0 && beaconPx <= 640
+      && beaconPy >= 0 && beaconPy <= 480;
+
+    if (target && beaconInSensor && beaconPx !== null && beaconPy !== null) {
+      const px = beaconPx;
+      const py = beaconPy;
       const sz = target.size_pixels; // 10 px default
       const shape = target.shape || 'Square';
 
@@ -420,20 +470,41 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
+          {/* Auto LOS Align toggle */}
+          <button
+            onClick={() => setAutoLOS(v => !v)}
+            title="Automatically slew the camera boresight to align with the Line of Sight (LOS) to the target"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded border font-bold transition text-[11px] ${
+              autoLOS
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-600 animate-pulse'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+            }`}
+          >
+            <Locate className="w-3.5 h-3.5" />
+            {autoLOS ? 'Auto LOS: ON' : 'Auto LOS: OFF'}
+          </button>
+
+          <span className="text-slate-600">|</span>
+
           <span className="text-slate-400">
             FOV: <span className="text-white font-bold">{camera?.fov_horizontal_deg.toFixed(1)}° × {camera?.fov_vertical_deg.toFixed(1)}°</span>
           </span>
           <span className="text-slate-600">|</span>
           <span className="text-slate-400">
-            Target: {target?.is_in_fov ? (
-              <span className="text-emerald-400 font-bold inline-flex items-center gap-1">
-                <Eye className="w-3 h-3" /> VISIBLE IN FOV
-              </span>
-            ) : (
-              <span className="text-rose-400 font-bold inline-flex items-center gap-1">
-                <EyeOff className="w-3 h-3" /> OUTSIDE FOV (CLIPPED)
-              </span>
-            )}
+            Target: {(() => {
+              const px = target?.pixel_x ?? null;
+              const py = target?.pixel_y ?? null;
+              const inSensor = px !== null && py !== null && px >= 0 && px <= 640 && py >= 0 && py <= 480;
+              return inSensor ? (
+                <span className="text-emerald-400 font-bold inline-flex items-center gap-1">
+                  <Eye className="w-3 h-3" /> VISIBLE IN FOV
+                </span>
+              ) : (
+                <span className="text-rose-400 font-bold inline-flex items-center gap-1">
+                  <EyeOff className="w-3 h-3" /> OUTSIDE FOV (CLIPPED)
+                </span>
+              );
+            })()}
           </span>
         </div>
       </div>
@@ -460,8 +531,12 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           </div>
         )}
 
-        {/* Real-time Boresight & Detection Telemetry Overlay */}
-        <div className="absolute top-4 left-4 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[10px] space-y-1 text-slate-300 pointer-events-none">
+      </div>
+
+      {/* Telemetry Dashboard (Moved out of viewport) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3 bg-slate-900 border-t border-slate-800 font-mono text-[10px] text-slate-300">
+        {/* Real-time Boresight & Detection Telemetry */}
+        <div className="bg-slate-950 border border-slate-800 p-2.5 rounded space-y-1">
           <div className="text-cyan-400 font-bold border-b border-slate-800 pb-1 flex justify-between gap-4">
             <span>BORESIGHT ALIGNMENT</span>
             <span className={tracking?.is_locked ? 'text-emerald-400' : 'text-amber-400'}>
@@ -531,13 +606,18 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           )}
         </div>
 
-        {/* Gimbal Angles Overlay */}
-        <div className="absolute top-4 right-4 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[10px] space-y-1 text-slate-300 text-right pointer-events-none">
+        {/* Gimbal Angles */}
+        <div className="bg-slate-950 border border-slate-800 p-2.5 rounded space-y-1">
           <div className="text-cyan-400 font-bold border-b border-slate-800 pb-1">GIMBAL KINEMATICS</div>
           <div>Pan Angle: <span className="text-white font-bold">{camera?.pan_deg.toFixed(2)}°</span></div>
           <div>Tilt Angle: <span className="text-white font-bold">{camera?.tilt_deg.toFixed(2)}°</span></div>
-          <div>Pan Slew: <span className="text-slate-400">{camera?.pan_rate_deg_s.toFixed(1)}°/s (Max 5°/s)</span></div>
-          <div>Tilt Slew: <span className="text-slate-400">{camera?.tilt_rate_deg_s.toFixed(1)}°/s (Max 5°/s)</span></div>
+          <div>Pan Slew: <span className="text-slate-400">{camera?.pan_rate_deg_s.toFixed(1)}°/s (Cap: {(5.0 * (camera?.adaptive_speed_factor || 1.0)).toFixed(1)}°/s)</span></div>
+          <div>Tilt Slew: <span className="text-slate-400">{camera?.tilt_rate_deg_s.toFixed(1)}°/s (Cap: {(5.0 * (camera?.adaptive_speed_factor || 1.0)).toFixed(1)}°/s)</span></div>
+          {camera?.adaptive_speed_factor && camera.adaptive_speed_factor > 1.0 && (
+            <div className="pt-1 mt-1 border-t border-slate-800 text-amber-400 animate-pulse font-bold">
+              ⚡ ADAPTIVE PURSUIT: {camera.adaptive_speed_factor.toFixed(2)}x
+            </div>
+          )}
         </div>
       </div>
 
@@ -593,29 +673,37 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
 
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => onGimbalNudge?.(-2.5, 0)}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px]"
+              onPointerDown={() => startNudge(-2.5, 0)}
+              onPointerUp={stopNudge}
+              onPointerLeave={stopNudge}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px] select-none"
               title="Pan Left (-2.5°/s)"
             >
               <ArrowLeft className="w-3 h-3" /> Pan Left
             </button>
             <button
-              onClick={() => onGimbalNudge?.(0, 2.5)}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px]"
+              onPointerDown={() => startNudge(0, 2.5)}
+              onPointerUp={stopNudge}
+              onPointerLeave={stopNudge}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px] select-none"
               title="Tilt Up (+2.5°/s)"
             >
               <ArrowUp className="w-3 h-3" /> Tilt Up
             </button>
             <button
-              onClick={() => onGimbalNudge?.(0, -2.5)}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px]"
+              onPointerDown={() => startNudge(0, -2.5)}
+              onPointerUp={stopNudge}
+              onPointerLeave={stopNudge}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px] select-none"
               title="Tilt Down (-2.5°/s)"
             >
               <ArrowDown className="w-3 h-3" /> Tilt Down
             </button>
             <button
-              onClick={() => onGimbalNudge?.(2.5, 0)}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px]"
+              onPointerDown={() => startNudge(2.5, 0)}
+              onPointerUp={stopNudge}
+              onPointerLeave={stopNudge}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 flex items-center gap-1 transition text-[11px] select-none"
               title="Pan Right (+2.5°/s)"
             >
               <ArrowRight className="w-3 h-3" /> Pan Right

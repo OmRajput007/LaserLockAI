@@ -94,6 +94,16 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
     }
   };
 
+  const handleInjectTurbulence = () => {
+    const atmoFrac = telemetry?.tracking?.atmosphere_path_frac ?? telemetry?.orbital?.link?.atmosphere_path_frac ?? (telemetry?.scenario_mode === 'Orbital' ? 0.0 : 1.0);
+    if (atmoFrac <= 1e-4) {
+      showFeedback('Note: No atmosphere is on the path (vacuum link, fraction = 0.00). Turbulence and blur do not apply.');
+      return;
+    }
+    handleUpdateDisturbance({ atmospheric_condition: 'Haze' });
+    showFeedback(`Injected atmospheric turbulence (scaled by path fraction ${(atmoFrac * 100).toFixed(1)}%)!`);
+  };
+
   // Atmospheric conditions styling
   const atmoMeta: Record<string, { icon: any; color: string; desc: string; trans: string }> = {
     Clear: {
@@ -523,6 +533,36 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                 );
               })}
             </div>
+          </div>
+
+          {/* Atmospheric Path Fraction & Turbulence Injection */}
+          <div className="p-3 bg-slate-950 rounded border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-300 font-bold uppercase flex items-center gap-1.5">
+                <Wind className="w-3.5 h-3.5 text-cyan-400" /> Atmosphere Path Fraction
+              </span>
+              <span className="font-mono text-cyan-300 font-bold">
+                {(((telemetry?.tracking?.atmosphere_path_frac ?? telemetry?.orbital?.link?.atmosphere_path_frac ?? (telemetry?.scenario_mode === 'Orbital' ? 0.0 : 1.0))) * 100).toFixed(1)}%
+              </span>
+            </div>
+
+            {((telemetry?.tracking?.atmosphere_path_frac ?? telemetry?.orbital?.link?.atmosphere_path_frac ?? (telemetry?.scenario_mode === 'Orbital' ? 0.0 : 1.0)) <= 1e-4) ? (
+              <div className="p-2.5 rounded bg-amber-950/40 border border-amber-800/60 text-amber-300 text-[10px] flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>Note: No atmosphere is on the path (vacuum link, fraction = 0.00). Turbulence and blur do not apply.</span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-slate-400">
+                Atmospheric turbulence and blur apply in proportion to path fraction ({(((telemetry?.tracking?.atmosphere_path_frac ?? 1.0)) * 100).toFixed(1)}%). Platform vibration always applies.
+              </div>
+            )}
+
+            <button
+              onClick={handleInjectTurbulence}
+              className="w-full py-1.5 px-3 rounded bg-gradient-to-r from-blue-700 to-cyan-600 hover:from-blue-600 hover:to-cyan-500 text-white font-bold text-[11px] transition shadow flex items-center justify-center gap-1.5"
+            >
+              <Wind className="w-3.5 h-3.5" /> Inject Turbulence
+            </button>
           </div>
 
           {/* Temporary Occlusion Obstacle (Tests Kalman Coasting) */}
