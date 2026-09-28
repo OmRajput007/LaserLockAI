@@ -1,0 +1,221 @@
+{
+  "scenario": "15-Minute Multi-Satellite Handover Simulation",
+  "orbital_physics_explanation": {
+    "leo_altitude_km": 550.0,
+    "pass_arc_deg": 12.0,
+    "pass_duration_s": 190.0,
+    "phase_offset_20deg_gap_s": 130.0,
+    "phase_offset_5deg_overlap_s": 70.0,
+    "finding": "20 deg phase offset exceeds the visibility footprint of a 550km LEO pass, causing zero overlap. 5 deg offset creates the physical overlap necessary for seamless predictive handover."
+  },
+  "demo1_baseline_metrics": {
+    "handover_count": 0,
+    "successful_handovers": 0,
+    "failed_handovers": 0,
+    "no_coverage_events": 1,
+    "total_no_coverage_s": 900.0,
+    "mean_acquisition_time_s": null
+  },
+  "demo2_pass_metrics": {
+    "handover_count": 1,
+    "successful_handovers": 1,
+    "failed_handovers": 0,
+    "no_coverage_events": 2,
+    "total_no_coverage_s": 995.0,
+    "mean_acquisition_time_s": 10.0
+  },
+  "events": [
+    {
+      "sim_time_s": 1135.0,
+      "from_sat": "SAT-2",
+      "to_sat": "SAT-1",
+      "succeeded": true,
+      "acquisition_time_s": 10.0,
+      "reason": "PREDICTED_LOSS"
+    }
+  ],
+  "timeline_sample": [
+    {
+      "t": 0.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 50.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 100.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 150.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 200.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 250.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 300.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 350.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 400.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 450.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 500.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 550.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 600.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 650.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 700.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 750.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 800.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 850.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 900.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 950.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    },
+    {
+      "t": 1000.0,
+      "active_sees": true,
+      "backup_sees": false,
+      "state": "IDLE",
+      "link_state": "LINK_OK"
+    },
+    {
+      "t": 1050.0,
+      "active_sees": true,
+      "backup_sees": false,
+      "state": "IDLE",
+      "link_state": "LINK_OK"
+    },
+    {
+      "t": 1100.0,
+      "active_sees": true,
+      "backup_sees": true,
+      "state": "IDLE",
+      "link_state": "LINK_OK"
+    },
+    {
+      "t": 1150.0,
+      "active_sees": true,
+      "backup_sees": true,
+      "state": "IDLE",
+      "link_state": "LINK_OK"
+    },
+    {
+      "t": 1200.0,
+      "active_sees": true,
+      "backup_sees": false,
+      "state": "IDLE",
+      "link_state": "LINK_OK"
+    },
+    {
+      "t": 1250.0,
+      "active_sees": false,
+      "backup_sees": false,
+      "state": "NO_COVERAGE",
+      "link_state": "NO_COVERAGE"
+    }
+  ]
+}

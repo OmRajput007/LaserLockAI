@@ -217,6 +217,7 @@ export const MissionControlPage: React.FC<Props> = ({
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
               camera={telemetry?.camera ?? null}
+              disturbance={telemetry?.disturbance ?? null}
               worldWidth={config?.motion.screen_width ?? 2000}
               worldHeight={config?.motion.screen_height ?? 2000}
             />
@@ -227,6 +228,8 @@ export const MissionControlPage: React.FC<Props> = ({
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
               tracking={telemetry?.tracking ?? null}
+              detection={telemetry?.detection ?? null}
+              disturbance={telemetry?.disturbance ?? null}
               onGimbalNudge={onGimbalNudge}
               onGimbalAngles={onGimbalAngles}
             />
@@ -241,6 +244,7 @@ export const MissionControlPage: React.FC<Props> = ({
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
               camera={telemetry?.camera ?? null}
+              disturbance={telemetry?.disturbance ?? null}
               worldWidth={config?.motion.screen_width ?? 2000}
               worldHeight={config?.motion.screen_height ?? 2000}
             />
@@ -251,6 +255,8 @@ export const MissionControlPage: React.FC<Props> = ({
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
               tracking={telemetry?.tracking ?? null}
+              detection={telemetry?.detection ?? null}
+              disturbance={telemetry?.disturbance ?? null}
               onGimbalNudge={onGimbalNudge}
               onGimbalAngles={onGimbalAngles}
             />
@@ -264,6 +270,8 @@ export const MissionControlPage: React.FC<Props> = ({
             target={telemetry?.target ?? null}
             camera={telemetry?.camera ?? null}
             tracking={telemetry?.tracking ?? null}
+            detection={telemetry?.detection ?? null}
+            disturbance={telemetry?.disturbance ?? null}
             onGimbalNudge={onGimbalNudge}
             onGimbalAngles={onGimbalAngles}
           />

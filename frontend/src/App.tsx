@@ -22,11 +22,16 @@ import {
   Crosshair,
   ShieldCheck,
   Zap,
+  Volume2,
+  VolumeX,
+  AlertTriangle,
 } from 'lucide-react';
 
 import { NavTabId, SystemConfig } from './types';
 import { useTelemetry } from './hooks/useTelemetry';
 import { api } from './services/api';
+import { alarmAudio } from './services/alarmAudio';
+import { satellitePovSync } from './simulation/satellitePovSync';
 
 import { MissionControlPage } from './pages/MissionControlPage';
 import { VirtualSimulationPage } from './pages/VirtualSimulationPage';
@@ -59,6 +64,123 @@ export const App: React.FC = () => {
     toggleSimulation,
     resetSimulation,
   } = useTelemetry();
+
+  // Beacon Lost FOV Alarm State & Subscription
+  const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
+  const [isAlarmMuted, setIsAlarmMuted] = useState<boolean>(alarmAudio.getIsMuted());
+  const [isAlarmSuspended, setIsAlarmSuspended] = useState<boolean>(alarmAudio.getIsSuspended());
+
+  useEffect(() => {
+    const unsub = alarmAudio.subscribe((active, muted, suspended) => {
+      setIsAlarmActive(active);
+      setIsAlarmMuted(muted);
+      setIsAlarmSuspended(suspended);
+    });
+    return unsub;
+  }, []);
+
+  // Synchronize alarm with satellitePovSync (when rectangular frustum turns green -> silence, when red -> beep)
+  useEffect(() => {
+    const unsub = satellitePovSync.subscribe((data) => {
+      if (data.isLockedInFov) {
+        alarmAudio.stopLostAlarm();
+      } else if (data.isLostFromFov) {
+        alarmAudio.startLostAlarm();
+      }
+    });
+    return unsub;
+  }, []);
+
+  // Monitor satellite camera FOV and trigger alarm when beacon is lost
+  useEffect(() => {
+    // 3D FOV frustum is the primary source of truth:
+    // When locked in FOV (rectangular frustum is GREEN), alarm MUST be silent
+    const pov = satellitePovSync.getData();
+    if (pov.isLockedInFov) {
+      alarmAudio.stopLostAlarm();
+      return;
+    }
+    // When lost from FOV (rectangular frustum is RED), alarm MUST sound
+    if (pov.isLostFromFov) {
+      alarmAudio.startLostAlarm();
+      return;
+    }
+
+    if (!telemetry) {
+      alarmAudio.stopLostAlarm();
+      return;
+    }
+
+    const t = telemetry.target;
+    const det = telemetry.detection;
+    const trk = telemetry.tracking;
+
+    const isCvDetected = Boolean(
+      det?.beacon_detected &&
+      det.detected_centroid_x !== null &&
+      det.detected_centroid_y !== null &&
+      det.detected_centroid_x >= 0 &&
+      det.detected_centroid_x <= 640 &&
+      det.detected_centroid_y >= 0 &&
+      det.detected_centroid_y <= 480
+    );
+
+    const isTrackingLocked = Boolean(
+      trk?.is_locked ||
+      trk?.state === 'LOCKED' ||
+      trk?.state === 'TRACKING' ||
+      trk?.mode === 'TRACKING' ||
+      trk?.mode === 'LOCKED'
+    );
+
+    const isTrackedInSensor = Boolean(
+      trk &&
+      trk.state !== 'LOST' &&
+      trk.state !== 'SEARCHING' &&
+      trk.filtered_x !== null &&
+      trk.filtered_x !== undefined &&
+      trk.filtered_y !== null &&
+      trk.filtered_y !== undefined &&
+      trk.filtered_x >= 0 &&
+      trk.filtered_x <= 640 &&
+      trk.filtered_y >= 0 &&
+      trk.filtered_y <= 480
+    );
+
+    const isGroundTruthInSensor = Boolean(
+      t &&
+      t.pixel_x !== null &&
+      t.pixel_x !== undefined &&
+      t.pixel_y !== null &&
+      t.pixel_y !== undefined &&
+      t.pixel_x >= 0 &&
+      t.pixel_x <= 640 &&
+      t.pixel_y >= 0 &&
+      t.pixel_y <= 480
+    );
+
+    const isPovOccluded = Boolean(satellitePovSync.getCurrent()?.isOccluded);
+    const isOccluded = Boolean(
+      telemetry.disturbance?.is_occluded ||
+      telemetry.orbital?.link?.link_state === 'LINK_BLOCKED' ||
+      isPovOccluded
+    );
+
+    const isVisibleInFov = !isOccluded && (isCvDetected || isTrackingLocked || isTrackedInSensor || isGroundTruthInSensor);
+
+    // Alarm beeps whenever beacon is lost from the satellite camera FOV
+    if (!isVisibleInFov) {
+      alarmAudio.startLostAlarm();
+    } else {
+      alarmAudio.stopLostAlarm();
+    }
+  }, [telemetry]);
+
+  useEffect(() => {
+    return () => {
+      alarmAudio.stopLostAlarm();
+    };
+  }, []);
 
   // Load active configuration from backend on mount
   useEffect(() => {
@@ -230,6 +352,45 @@ export const App: React.FC = () => {
 
             {/* Quick Transport Buttons */}
             <div className="flex items-center gap-1.5">
+              {/* Lost Alarm Indicator / Mute Toggle Button */}
+              <button
+                onClick={() => {
+                  alarmAudio.unlock();
+                  alarmAudio.toggleMute();
+                }}
+                title={
+                  isAlarmMuted
+                    ? 'Alarm Audio Muted (Click to Unmute)'
+                    : isAlarmActive
+                    ? isAlarmSuspended
+                      ? 'Alarm is active - Click to enable browser sound output'
+                      : 'ALARM BEEPING: Beacon lost from satellite camera FOV (Click to Mute)'
+                    : 'Alarm Armed: Beeps if beacon leaves camera FOV (Click to Mute)'
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border font-mono text-xs font-bold transition shadow-sm ${
+                  isAlarmMuted
+                    ? 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                    : isAlarmActive
+                    ? 'bg-rose-950 border-rose-500 text-rose-200 animate-pulse shadow-rose-950/60'
+                    : 'bg-slate-900/90 border-slate-800 text-cyan-400 hover:border-slate-700'
+                }`}
+              >
+                {isAlarmMuted ? (
+                  <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                ) : (
+                  <Volume2 className={`w-3.5 h-3.5 ${isAlarmActive ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`} />
+                )}
+                <span>
+                  {isAlarmMuted
+                    ? 'ALARM: MUTED'
+                    : isAlarmActive
+                    ? isAlarmSuspended
+                      ? 'ALARM: CLICK FOR SOUND'
+                      : 'ALARM: BEACON LOST'
+                    : 'ALARM: ARMED'}
+                </span>
+              </button>
+
               <button
                 onClick={() => setIsDemoModalOpen(true)}
                 className="px-3 py-1.5 rounded font-bold flex items-center gap-1.5 transition bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-sm"

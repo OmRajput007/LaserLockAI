@@ -442,6 +442,9 @@ export interface OrbitalTelemetry {
   camera_orbit?: OrbitalOrbitTelemetry | null;
   beacon_orbit?: OrbitalOrbitTelemetry | null;
   link: OrbitalLinkTelemetry;
+  handover?: any;
+  backup_camera?: OrbitalPlatformTelemetry | null;
+  backup_camera_orbit?: OrbitalOrbitTelemetry | null;
 }
 
 export interface VideoMetadata {

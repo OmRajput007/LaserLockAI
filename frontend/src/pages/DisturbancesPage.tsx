@@ -381,8 +381,15 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={distCfg?.camera_jitter_enabled ?? false}
-                  onChange={(e) => handleUpdateDisturbance({ camera_jitter_enabled: e.target.checked })}
+                  checked={(distCfg?.camera_jitter_enabled || (distCfg?.camera_jitter_max_px ?? 0) > 0) ?? false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const amp = isChecked ? ((distCfg?.camera_jitter_max_px && distCfg.camera_jitter_max_px > 0) ? distCfg.camera_jitter_max_px : 10.0) : 0.0;
+                    handleUpdateDisturbance({
+                      camera_jitter_enabled: isChecked,
+                      camera_jitter_max_px: amp,
+                    });
+                  }}
                   className="accent-cyan-500"
                 />
                 <span className="text-cyan-300 font-bold uppercase text-[11px]">High-Frequency Camera Jitter</span>
@@ -403,7 +410,13 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                 max="20"
                 step="1"
                 value={distCfg?.camera_jitter_max_px ?? 0}
-                onChange={(e) => handleUpdateDisturbance({ camera_jitter_max_px: parseFloat(e.target.value) })}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  handleUpdateDisturbance({
+                    camera_jitter_max_px: val,
+                    camera_jitter_enabled: val > 0,
+                  });
+                }}
                 className="w-full accent-cyan-500 cursor-pointer"
               />
             </div>
@@ -431,8 +444,15 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={distCfg?.platform_motion_enabled ?? false}
-                  onChange={(e) => handleUpdateDisturbance({ platform_motion_enabled: e.target.checked })}
+                  checked={(distCfg?.platform_motion_enabled || (distCfg?.platform_motion_max_px ?? 0) > 0) ?? false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    const amp = isChecked ? ((distCfg?.platform_motion_max_px && distCfg.platform_motion_max_px > 0) ? distCfg.platform_motion_max_px : 12.0) : 0.0;
+                    handleUpdateDisturbance({
+                      platform_motion_enabled: isChecked,
+                      platform_motion_max_px: amp,
+                    });
+                  }}
                   className="accent-cyan-500"
                 />
                 <span className="text-cyan-300 font-bold uppercase text-[11px]">Mobile Platform Motion</span>
@@ -448,7 +468,15 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                 {(['Linear', 'Sinusoidal', 'Circular', 'Figure of 8', 'Spiral', 'Random'] as const).map((m) => (
                   <button
                     key={m}
-                    onClick={() => handleUpdateDisturbance({ platform_motion_type: m })}
+                    onClick={() =>
+                      handleUpdateDisturbance({
+                        platform_motion_type: m,
+                        platform_motion_enabled: true,
+                        ...((!distCfg?.platform_motion_max_px || distCfg.platform_motion_max_px === 0)
+                          ? { platform_motion_max_px: 12.0 }
+                          : {}),
+                      })
+                    }
                     className={`p-1.5 rounded text-[10px] font-bold border transition ${
                       distCfg?.platform_motion_type === m
                         ? 'bg-purple-950 text-purple-300 border-purple-500'
@@ -472,7 +500,13 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                 max="20"
                 step="1"
                 value={distCfg?.platform_motion_max_px ?? 0}
-                onChange={(e) => handleUpdateDisturbance({ platform_motion_max_px: parseFloat(e.target.value) })}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  handleUpdateDisturbance({
+                    platform_motion_max_px: val,
+                    platform_motion_enabled: val > 0,
+                  });
+                }}
                 className="w-full accent-cyan-500 cursor-pointer"
               />
             </div>

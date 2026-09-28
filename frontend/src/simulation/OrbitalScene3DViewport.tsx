@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitalTelemetry } from '../types';
 import { Globe, RefreshCw, Crosshair, Eye, Compass, ShieldAlert, CheckCircle, AlertTriangle } from 'lucide-react';
+import HandoverPanel from './HandoverPanel';
+import { satellitePovSync } from './satellitePovSync';
 
 interface Props {
   orbitalTelemetry: OrbitalTelemetry | null;
@@ -25,8 +27,10 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
   const earthGlobeRef = useRef<THREE.Mesh | null>(null);
   const atmosphereRef = useRef<THREE.Mesh | null>(null);
   const cameraMarkerRef = useRef<THREE.Group | null>(null);
+  const backupMarkerRef = useRef<THREE.Group | null>(null);
   const beaconMarkerRef = useRef<THREE.Group | null>(null);
   const losLineRef = useRef<THREE.Line | null>(null);
+  const backupLosLineRef = useRef<THREE.Line | null>(null);
   const frustumLinesRef = useRef<THREE.LineSegments | null>(null);
   const beaconTrailRef = useRef<THREE.Line | null>(null);
   const cameraTrailRef = useRef<THREE.Line | null>(null);
@@ -50,6 +54,8 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
 
   // Target look-at position (Earth center or camera platform)
   const currentLookAtRef = useRef(new THREE.Vector3(0, 0, 0));
+  const boresightDirRef = useRef<THREE.Vector3 | null>(null);
+  const slewProgressRef = useRef<number>(0);
 
   // Helper to create texture for billboard sprites
   const createMarkerSprite = (text: string, color: string, iconChar: string): THREE.Sprite => {
@@ -316,13 +322,44 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     scene.add(beaconGroup);
     beaconMarkerRef.current = beaconGroup;
 
-    // 10. Line of Sight (LOS)
+    // 9b. Backup Satellite Platform Marker & Billboard
+    const backupGroup = new THREE.Group();
+    const backupMarkerGeo = new THREE.SphereGeometry(0.18, 16, 16);
+    const backupMarkerMat = new THREE.MeshBasicMaterial({ color: 0x818cf8 });
+    const backupMesh = new THREE.Mesh(backupMarkerGeo, backupMarkerMat);
+    backupGroup.add(backupMesh);
+
+    const backupSprite = createMarkerSprite('BACKUP SAT', '#818cf8', 'S2');
+    backupSprite.position.set(0, 0.6, 0);
+    backupGroup.add(backupSprite);
+    backupGroup.visible = false;
+    scene.add(backupGroup);
+    backupMarkerRef.current = backupGroup;
+
+    // 10. Active Line of Sight (LOS) — Solid Line
     const losGeo = new THREE.BufferGeometry();
     losGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
     const losMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 2 });
     const losLine = new THREE.Line(losGeo, losMat);
     scene.add(losLine);
     losLineRef.current = losLine;
+
+    // 10b. Backup Line of Sight (LOS) — Dashed Line
+    const backupLosGeo = new THREE.BufferGeometry();
+    backupLosGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+    const backupLosMat = new THREE.LineDashedMaterial({
+      color: 0x818cf8,
+      linewidth: 1.5,
+      dashSize: 0.3,
+      gapSize: 0.15,
+      transparent: true,
+      opacity: 0.75,
+    });
+    const backupLosLine = new THREE.Line(backupLosGeo, backupLosMat);
+    backupLosLine.computeLineDistances();
+    backupLosLine.visible = false;
+    scene.add(backupLosLine);
+    backupLosLineRef.current = backupLosLine;
 
     // 11. Camera FOV Frustum (4° x 3° Cone wireframe)
     const frustumGeo = new THREE.BufferGeometry();
@@ -438,6 +475,15 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       beacon.pos_eci[1] / 1000.0
     );
 
+    // Safeguard: Ensure platforms never sink inside Earth globe (R = 6.378 units)
+    const earthRUnits = 6.378137 + 0.02;
+    if (camPos.length() < earthRUnits) {
+      camPos.normalize().multiplyScalar(earthRUnits);
+    }
+    if (beaconPos.length() < earthRUnits) {
+      beaconPos.normalize().multiplyScalar(earthRUnits);
+    }
+
     // 1. Update Camera Platform position
     if (cameraMarkerRef.current) {
       cameraMarkerRef.current.position.copy(camPos);
@@ -478,11 +524,75 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       }
     }
 
+    // 4b. Update Backup Satellite & Backup Dashed LOS Line
+    const backupCam = orbitalTelemetry.backup_camera;
+    if (backupCam && backupMarkerRef.current && backupLosLineRef.current) {
+      const backupPos = new THREE.Vector3(
+        backupCam.pos_eci[0] / 1000.0,
+        backupCam.pos_eci[2] / 1000.0,
+        backupCam.pos_eci[1] / 1000.0
+      );
+      if (backupPos.length() < earthRUnits) {
+        backupPos.normalize().multiplyScalar(earthRUnits);
+      }
+      backupMarkerRef.current.position.copy(backupPos);
+      backupMarkerRef.current.visible = true;
+
+      const backupPositions = backupLosLineRef.current.geometry.attributes.position as THREE.BufferAttribute;
+      if (backupPositions) {
+        backupPositions.setXYZ(0, backupPos.x, backupPos.y, backupPos.z);
+        backupPositions.setXYZ(1, beaconPos.x, beaconPos.y, beaconPos.z);
+        backupPositions.needsUpdate = true;
+      }
+      backupLosLineRef.current.computeLineDistances();
+      backupLosLineRef.current.visible = true;
+
+      // Color backup link: indigo when seeing, red when blocked
+      const hoData = orbitalTelemetry.handover;
+      const backupCanSee = hoData ? hoData.backup_vis_can_see : true;
+      const bMat = backupLosLineRef.current.material as THREE.LineDashedMaterial;
+      if (bMat) {
+        bMat.color.setHex(backupCanSee ? 0x818cf8 : 0xef4444);
+        bMat.opacity = backupCanSee ? 0.8 : 0.4;
+      }
+    } else {
+      if (backupMarkerRef.current) backupMarkerRef.current.visible = false;
+      if (backupLosLineRef.current) backupLosLineRef.current.visible = false;
+    }
+
     // 5. Update Camera Frustum Cone (4° horizontal x 3° vertical)
     if (frustumLinesRef.current) {
-      // Frustum direction: from camera pointing toward target LOS direction (or along boresight)
-      const losDir = new THREE.Vector3().subVectors(beaconPos, camPos).normalize();
-      const frustumDepth = Math.min(camPos.distanceTo(beaconPos), 6.0); // max 6 units long
+      const isAutoLOS = satellitePovSync.getData().autoLOS;
+      const nadirDir = camPos.clone().negate().normalize();
+      const losTargetDir = new THREE.Vector3().subVectors(beaconPos, camPos).normalize();
+
+      if (isAutoLOS) {
+        slewProgressRef.current = Math.min(1.0, slewProgressRef.current + 0.025);
+      } else {
+        slewProgressRef.current = Math.max(0.0, slewProgressRef.current - 0.025);
+      }
+      const p = slewProgressRef.current;
+      const t = p * p * (3 - 2 * p); // smoothstep
+      const dot = THREE.MathUtils.clamp(nadirDir.dot(losTargetDir), -1, 1);
+      const omega = Math.acos(dot);
+      let losDir: THREE.Vector3;
+      if (p <= 0.0001) {
+        losDir = nadirDir.clone();
+      } else if (p >= 0.9999 || omega < 0.001) {
+        losDir = losTargetDir.clone();
+      } else {
+        const sinOmega = Math.sin(omega);
+        losDir = new THREE.Vector3()
+          .addScaledVector(nadirDir, Math.sin((1 - t) * omega) / sinOmega)
+          .addScaledVector(losTargetDir, Math.sin(t * omega) / sinOmega)
+          .normalize();
+      }
+      boresightDirRef.current = losDir;
+
+      const frustumDepth = Math.min(
+        isAutoLOS ? camPos.distanceTo(beaconPos) : Math.max(1.0, camPos.length() - earthRUnits),
+        6.0
+      );
 
       // Build orthogonal basis for frustum
       const upRef = new THREE.Vector3(0, 1, 0);
@@ -637,7 +747,11 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 bg-emerald-400 inline-block"></span>
-          <span>Line of Sight (OK)</span>
+          <span>Active Link (Solid)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-0.5 border-t-2 border-dashed border-indigo-400 inline-block"></span>
+          <span className="text-indigo-300">Backup Link (Dashed)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-0.5 bg-rose-500 inline-block"></span>
@@ -656,6 +770,13 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
           <span>100 km Atmosphere Shell</span>
         </div>
       </div>
+
+      {/* Handover Status Panel HUD Overlay */}
+      {orbitalTelemetry?.handover && (
+        <div className="absolute bottom-3 right-3 z-20 pointer-events-auto">
+          <HandoverPanel handover={orbitalTelemetry.handover} />
+        </div>
+      )}
 
       {/* Bottom Floating Stats Strip */}
       <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[11px] text-slate-300 pointer-events-none flex flex-wrap gap-4 shadow-xl">

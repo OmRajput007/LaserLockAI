@@ -1,11 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { TargetState, CameraState } from '../types';
+import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { Compass, Crosshair, Eye, EyeOff } from 'lucide-react';
 
 interface VirtualSceneProps {
   target: TargetState | null;
   targets?: TargetState[];
   camera: CameraState | null;
+  disturbance?: DisturbanceTelemetry | null;
   worldWidth?: number;
   worldHeight?: number;
 }
@@ -14,6 +15,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
   target,
   targets = [],
   camera,
+  disturbance,
   worldWidth = 2000,
   worldHeight = 2000,
 }) => {
@@ -143,9 +145,13 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
         ctx.stroke();
       }
 
-      // Draw Target Beacon
-      const tx = t.world_x * scale;
-      const ty = t.world_y * scale;
+      // Draw Target Beacon (with disturbance displacement)
+      const jx = disturbance?.jitter_offset_x_px ?? 0;
+      const jy = disturbance?.jitter_offset_y_px ?? 0;
+      const px = disturbance?.platform_offset_x_px ?? 0;
+      const py = disturbance?.platform_offset_y_px ?? 0;
+      const tx = (t.world_x + (jx + px) * 2.0) * scale;
+      const ty = (t.world_y + (jy + py) * 2.0) * scale;
       const tsz = Math.max(5, t.size_pixels * scale);
       const isLocked = t.is_in_fov;
 
@@ -183,7 +189,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
         ty - 6
       );
     });
-  }, [target, targets, camera, worldWidth, worldHeight]);
+  }, [target, targets, camera, disturbance, worldWidth, worldHeight]);
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[#070a12] border border-slate-800 rounded-lg overflow-hidden shadow-2xl">

@@ -23,6 +23,7 @@ platform vibrations, and meteorological attenuation:
 
 import math
 import random
+import time
 from typing import Tuple, List, Optional, Dict, Any
 import numpy as np
 import cv2
@@ -192,14 +193,18 @@ class OpticalDisturbanceEngine:
         Computes high-frequency mechanical camera vibration jitter (+/-20 px maximum).
         Harmonic model with randomized sub-harmonics.
         """
-        if not self.config.camera_jitter_enabled or self.config.camera_jitter_max_px <= 0.0:
+        is_active = self.config.camera_jitter_enabled or self.config.camera_jitter_max_px > 0.0
+        if not is_active:
             self.jitter_offset_x = 0.0
             self.jitter_offset_y = 0.0
             return 0.0, 0.0
 
-        amp = min(self.config.camera_jitter_max_px, 20.0)
-        freq = self.config.camera_jitter_frequency_hz
-        t = self.sim_time
+        amp = self.config.camera_jitter_max_px
+        if amp <= 0.0:
+            amp = 10.0
+        amp = min(amp, 20.0)
+        freq = max(1.0, self.config.camera_jitter_frequency_hz)
+        t = self.sim_time if dt > 0 else time.time()
 
         # Multi-harmonic band-limited vibration synthesis
         w1 = 2.0 * math.pi * freq
@@ -228,14 +233,18 @@ class OpticalDisturbanceEngine:
         Computes mobile FSOC terminal base displacement (+/-20 px maximum).
         Supports: Linear, Sinusoidal, Circular, Random, Spiral, Figure of 8.
         """
-        if not self.config.platform_motion_enabled or self.config.platform_motion_max_px <= 0.0:
+        is_active = self.config.platform_motion_enabled or self.config.platform_motion_max_px > 0.0
+        if not is_active:
             self.platform_offset_x = 0.0
             self.platform_offset_y = 0.0
             return 0.0, 0.0
 
-        amp = min(self.config.platform_motion_max_px, 20.0)
-        freq = self.config.platform_motion_frequency_hz
-        t = self.sim_time
+        amp = self.config.platform_motion_max_px
+        if amp <= 0.0:
+            amp = 12.0
+        amp = min(amp, 20.0)
+        freq = max(0.1, self.config.platform_motion_frequency_hz)
+        t = self.sim_time if dt > 0 else time.time()
         omega = 2.0 * math.pi * freq
         m_type = self.config.platform_motion_type
 
@@ -322,6 +331,16 @@ class OpticalDisturbanceEngine:
         jx, jy = self.compute_instantaneous_jitter(dt)
         px, py = self.compute_platform_motion(dt)
         sx, sy = self.compute_sudden_shock(dt)
+
+        if hasattr(self, "last_telemetry") and self.last_telemetry is not None:
+            self.last_telemetry.jitter_offset_x_px = round(self.jitter_offset_x, 2)
+            self.last_telemetry.jitter_offset_y_px = round(self.jitter_offset_y, 2)
+            self.last_telemetry.jitter_dx_px = round(self.jitter_offset_x, 2)
+            self.last_telemetry.jitter_dy_px = round(self.jitter_offset_y, 2)
+            self.last_telemetry.platform_offset_x_px = round(self.platform_offset_x, 2)
+            self.last_telemetry.platform_offset_y_px = round(self.platform_offset_y, 2)
+            self.last_telemetry.platform_dx_px = round(self.platform_offset_x, 2)
+            self.last_telemetry.platform_dy_px = round(self.platform_offset_y, 2)
 
         total_dx = np.clip(jx + px + sx, -20.0, 20.0)
         total_dy = np.clip(jy + py + sy, -20.0, 20.0)

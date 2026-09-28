@@ -70,6 +70,13 @@ class AnalyticsEngine:
         self.count_link_blocked: int = 0
         self.duration_link_blocked_s: float = 0.0
 
+        # Handover metrics (populated when handover telemetry is present)
+        self.handover_count: int = 0
+        self.successful_handovers: int = 0
+        self.failed_handovers: int = 0
+        self.no_coverage_events: int = 0
+        self.total_no_coverage_s: float = 0.0
+
         # Time series points for charts
         self.time_series: List[TelemetryPoint] = []
         self.last_point: Optional[TelemetryPoint] = None
@@ -110,6 +117,7 @@ class AnalyticsEngine:
         camera_altitude_km: Optional[float] = None,
         beacon_altitude_km: Optional[float] = None,
         orbit_presets: Optional[str] = None,
+        handover_metrics: Optional[dict] = None,
     ):
         """
         Records a single frame simulation / benchmark telemetry step.
@@ -156,6 +164,14 @@ class AnalyticsEngine:
             self.atmosphere_path_fractions.append(atmosphere_path_frac)
         if angular_error_deg is not None:
             self.angular_errors_deg.append(angular_error_deg)
+
+        # Update handover counters if handover telemetry provided
+        if handover_metrics is not None:
+            self.handover_count          = handover_metrics.get("handover_count", self.handover_count)
+            self.successful_handovers    = handover_metrics.get("successful_handovers", self.successful_handovers)
+            self.failed_handovers        = handover_metrics.get("failed_handovers", self.failed_handovers)
+            self.no_coverage_events      = handover_metrics.get("no_coverage_events", self.no_coverage_events)
+            self.total_no_coverage_s     = handover_metrics.get("total_no_coverage_s", self.total_no_coverage_s)
 
         if fps > 0:
             self.fps_history.append(fps)

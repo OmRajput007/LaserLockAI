@@ -11,6 +11,7 @@ Usage:
 This class:
   - Owns the camera Platform and beacon Platform
   - Owns their motion integrators (CircularOrbitIntegrator or UAVLocalMotion)
+  - Optionally owns a SECOND satellite for handover (backup satellite)
   - Calls compute_link() each step
   - Returns OrbitalTelemetry (defined below)
 
@@ -37,6 +38,11 @@ from backend.app.orbital.orbital_mechanics import (
     validate_satellite_altitude,
 )
 from backend.app.orbital.link_geometry import LinkConfig, LinkGeometry, compute_link
+from backend.app.orbital.handover import (
+    HandoverManager,
+    HandoverConfig,
+    HandoverTelemetry,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -62,14 +68,24 @@ class OrbitalTelemetry:
     # Link geometry
     link:         dict  = field(default_factory=dict)
 
+    # Handover (None when handover is not enabled)
+    handover:     Optional[dict] = None
+
+    # Second satellite (backup) state — None when not in handover mode
+    backup_camera:       Optional[dict] = None
+    backup_camera_orbit: Optional[dict] = None
+
     def to_dict(self) -> dict:
         return {
-            "sim_time_s":   self.sim_time_s,
-            "camera":       self.camera,
-            "beacon":       self.beacon,
-            "camera_orbit": self.camera_orbit,
-            "beacon_orbit": self.beacon_orbit,
-            "link":         self.link,
+            "sim_time_s":         self.sim_time_s,
+            "camera":             self.camera,
+            "beacon":             self.beacon,
+            "camera_orbit":       self.camera_orbit,
+            "beacon_orbit":       self.beacon_orbit,
+            "link":               self.link,
+            "handover":           self.handover,
+            "backup_camera":      self.backup_camera,
+            "backup_camera_orbit":self.backup_camera_orbit,
         }
 
 
@@ -113,6 +129,10 @@ class OrbitalScenarioConfig:
     IMPORTANT: Orbit switching = re-initialisation, NOT live maneuver.
     A real LEO-550 → GEO Hohmann transfer requires ~3.8 km/s delta-v and ~5.3 h.
     This simulator simply reinitialises to the new orbit parameters.
+
+    Handover:
+      enable_handover: if True, a backup satellite is added on the same orbit,
+      offset by handover_config.phase_offset_deg along-track.
     """
     camera_type:  Literal["UAV", "SATELLITE"] = "SATELLITE"
     beacon_type:  Literal["UAV", "SATELLITE"] = "UAV"
@@ -125,6 +145,10 @@ class OrbitalScenarioConfig:
 
     link:         LinkConfig      = field(default_factory=LinkConfig)
 
+    # ── Handover additions ────────────────────────────────────────────────────
+    enable_handover:  bool          = False
+    handover_config:  HandoverConfig = field(default_factory=HandoverConfig)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OrbitalScenario
@@ -132,14 +156,16 @@ class OrbitalScenarioConfig:
 
 class OrbitalScenario:
     """
-    Orchestrates two-platform orbital scenario.
+    Orchestrates two-platform orbital scenario with optional handover.
 
     Public interface:
         __init__(config: OrbitalScenarioConfig)
         step(dt: float) -> OrbitalTelemetry
         reset(config: OrbitalScenarioConfig)
-        camera_platform: Platform   (read-only)
+        camera_platform: Platform   (read-only) — the *active* satellite
         beacon_platform: Platform   (read-only)
+        backup_platform: Optional[Platform]  — the backup satellite (if handover enabled)
+        handover_manager: Optional[HandoverManager]
     """
 
     def __init__(self, config: OrbitalScenarioConfig = None):
@@ -153,6 +179,10 @@ class OrbitalScenario:
         """Constructs platforms and their integrators from config."""
         self._camera_plat = Platform()
         self._beacon_plat = Platform()
+        self._backup_plat: Optional[Platform] = None
+        self._backup_integ = None
+        self._handover_mgr: Optional[HandoverManager] = None
+        self._last_handover_telem: Optional[HandoverTelemetry] = None
 
         # Camera integrator
         if cfg.camera_type == "SATELLITE":
@@ -200,30 +230,91 @@ class OrbitalScenario:
                 phase_deg    = b.phase_deg,
             )
 
+        # ── Backup satellite for handover ─────────────────────────────────────
+        if cfg.enable_handover and cfg.camera_type == "SATELLITE":
+            self._backup_plat = Platform()
+            # Same orbit, same inclination/RAAN, but phase offset by
+            # handover_config.phase_offset_deg
+            backup_phase = (
+                cfg.camera_sat.phase_deg + cfg.handover_config.phase_offset_deg
+            ) % 360.0
+            self._backup_integ = make_satellite_integrator(
+                platform        = self._backup_plat,
+                preset          = cfg.camera_sat.preset,
+                altitude_km     = cfg.camera_sat.altitude_km,
+                inclination_deg = cfg.camera_sat.inclination_deg,
+                phase_deg       = backup_phase,
+                raan_deg        = cfg.camera_sat.raan_deg,
+            )
+            self._handover_mgr = HandoverManager(cfg.handover_config)
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     @property
     def camera_platform(self) -> Platform:
+        """Returns the *active* satellite platform (may change after handover)."""
+        if self._handover_mgr is not None:
+            idx = self._handover_mgr.active_index
+            return [self._camera_plat, self._backup_plat][idx]
         return self._camera_plat
 
     @property
     def beacon_platform(self) -> Platform:
         return self._beacon_plat
 
-    def step(self, dt: float) -> OrbitalTelemetry:
-        """Advances both platforms by dt seconds and returns full telemetry."""
+    @property
+    def backup_platform(self) -> Optional[Platform]:
+        return self._backup_plat
+
+    @property
+    def handover_manager(self) -> Optional[HandoverManager]:
+        return self._handover_mgr
+
+    def step(self, dt: float, pat_state: str = "SEARCHING") -> OrbitalTelemetry:
+        """
+        Advances both platforms by dt seconds and returns full telemetry.
+
+        Parameters
+        ----------
+        dt        : simulation time step (s)
+        pat_state : current PAT state from KalmanTracker (used by handover
+                    manager to set the corrected pat_badge / link_state)
+        """
         self._sim_time += dt
 
         # Advance each platform
         self._camera_integ.step(dt)
         self._beacon_integ.step(dt)
 
-        # Link geometry
+        # Advance backup satellite if present
+        if self._backup_integ is not None:
+            self._backup_integ.step(dt)
+
+        # ── Handover step ─────────────────────────────────────────────────────
+        handover_telem: Optional[HandoverTelemetry] = None
+        if self._handover_mgr is not None and self._backup_plat is not None:
+            handover_telem = self._handover_mgr.step(
+                dt            = dt,
+                sat_platforms = [self._camera_plat, self._backup_plat],
+                beacon_platform = self._beacon_plat,
+                current_pat_state = pat_state,
+            )
+            self._last_handover_telem = handover_telem
+
+        # ── Active satellite is now determined by handover manager ────────────
+        active_plat = self.camera_platform   # property handles index selection
+
+        # Link geometry (active satellite → beacon)
         link: LinkGeometry = compute_link(
-            self._camera_plat,
+            active_plat,
             self._beacon_plat,
             self._cfg.link,
         )
+
+        # ── Override link_state from handover manager if available ────────────
+        effective_link_state = link.link_state
+        if handover_telem is not None:
+            effective_link_state = handover_telem.link_state
 
         # Orbital integrator state (None if UAV)
         cam_orbit = None
@@ -234,9 +325,20 @@ class OrbitalScenario:
         if isinstance(self._beacon_integ, CircularOrbitIntegrator):
             bea_orbit = self._beacon_integ.to_dict()
 
+        # Backup orbit state
+        backup_camera_dict = None
+        backup_orbit_dict  = None
+        if self._backup_plat is not None:
+            backup_camera_dict = self._backup_plat.to_dict()
+        if self._backup_integ is not None and isinstance(self._backup_integ, CircularOrbitIntegrator):
+            backup_orbit_dict = self._backup_integ.to_dict()
+
+        # is_in_fov uses 2°/1.5° thresholds (camera FOV half-angles)
+        is_in_fov = abs(link.az_body_deg) <= 2.0 and abs(link.el_body_deg) <= 1.5
+
         return OrbitalTelemetry(
             sim_time_s   = self._sim_time,
-            camera       = self._camera_plat.to_dict(),
+            camera       = active_plat.to_dict(),
             beacon       = self._beacon_plat.to_dict(),
             camera_orbit = cam_orbit,
             beacon_orbit = bea_orbit,
@@ -244,14 +346,17 @@ class OrbitalScenario:
                 "range_km":             round(link.range_km, 3),
                 "az_body_deg":          round(link.az_body_deg, 4),
                 "el_body_deg":          round(link.el_body_deg, 4),
-                "link_state":           link.link_state,
+                "link_state":           effective_link_state,
                 "angular_rate_deg_s":   round(link.angular_rate_deg_s, 6),
                 "intensity_fraction":   round(link.intensity_fraction, 6),
                 "atmosphere_path_frac": round(link.atmosphere_path_frac, 4),
                 "min_los_clearance_km": round(link.min_los_clearance_km, 3),
                 "relative_speed_km_s":  round(link.relative_speed_km_s, 4),
-                "is_in_fov":            abs(link.az_body_deg) <= 2.0 and abs(link.el_body_deg) <= 1.5,
+                "is_in_fov":            is_in_fov,
             },
+            handover           = handover_telem.to_dict() if handover_telem is not None else None,
+            backup_camera      = backup_camera_dict,
+            backup_camera_orbit= backup_orbit_dict,
         )
 
     def reset(self, config: OrbitalScenarioConfig = None) -> None:

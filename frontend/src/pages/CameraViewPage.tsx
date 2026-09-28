@@ -64,6 +64,7 @@ export const CameraViewPage: React.FC<Props> = ({
             camera={telemetry?.camera ?? null}
             tracking={telemetry?.tracking ?? null}
             detection={telemetry?.detection ?? null}
+            disturbance={telemetry?.disturbance ?? null}
             onGimbalNudge={onGimbalNudge}
             onGimbalAngles={onGimbalAngles}
           />

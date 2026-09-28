@@ -124,7 +124,7 @@ class CameraState(BaseModel):
 class TrackingTelemetry(BaseModel):
     state: str = Field(
         "SEARCHING",
-        description="State Machine: SEARCHING | ACQUIRING | TRACKING | LOCKED | LOST | REACQUIRING | LINK_BLOCKED",
+        description="State Machine: SEARCHING | ACQUIRING | TRACKING | LOCKED | LOST | REACQUIRING | LINK_BLOCKED | NO_COVERAGE",
     )
     mode: str = Field(
         "SEARCHING",
@@ -214,4 +214,5 @@ class SimulationTelemetry(BaseModel):
     disturbance: DisturbanceTelemetry = Field(default_factory=DisturbanceTelemetry)
     atmospheric_condition: str = "Clear"
     orbital: Optional[dict] = Field(default=None, description="Orbital scenario telemetry")
+    handover: Optional[dict] = Field(default=None, description="Satellite handover state and metrics")
 

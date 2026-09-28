@@ -20,6 +20,7 @@ from backend.app.control.pid_controller import GimbalPIDController
 from backend.app.disturbances.optical_disturbance_engine import OpticalDisturbanceEngine
 from backend.app.analytics.metrics_base import AnalyticsEngine
 from backend.app.orbital.scenario import OrbitalScenario, OrbitalScenarioConfig, OrbitalTelemetry
+from backend.app.orbital.handover import HandoverConfig
 
 
 class SimulationEngine:
@@ -58,6 +59,8 @@ class SimulationEngine:
         self.disturbance = OpticalDisturbanceEngine(config.disturbance, config.camera)
         self.last_disturbance_telemetry = DisturbanceTelemetry()
         self.last_effective_intensity = float(config.target.intensity)
+        self._last_jit_dx: float = 0.0
+        self._last_jit_dy: float = 0.0
 
         self.analytics = AnalyticsEngine(config.performance)
 
@@ -78,6 +81,8 @@ class SimulationEngine:
         self.orbital_time_warp: float = 1.0
         self.last_orbital_telemetry: Optional[dict] = self.orbital_scenario.step(0.0).to_dict()
         self.scenario_mode: str = "Local"  # "Local" or "Orbital"
+        # Last tracking state (for passing to orbital scenario handover manager)
+        self._last_pat_state: str = "SEARCHING"
 
     def set_scenario_mode(self, mode: str):
         """Sets scenario mode: 'Local' or 'Orbital'."""
@@ -114,6 +119,7 @@ class SimulationEngine:
         self._adaptive_speed_factor = 1.0
         self.orbital_scenario.reset()
         self.last_orbital_telemetry = self.orbital_scenario.step(0.0).to_dict()
+        self._last_pat_state = "SEARCHING"
         if self.scenario_mode == "Orbital" and self.last_orbital_telemetry:
             link = self.last_orbital_telemetry.get("link", {})
             init_az = float(link.get("az_body_deg", 0.0))
@@ -223,6 +229,8 @@ class SimulationEngine:
 
         # 2. Advance disturbance temporal kinematics (Jitter, Platform motion, Shock)
         jit_dx, jit_dy = self.disturbance.step_temporal_kinematics(delta_t)
+        self._last_jit_dx = jit_dx
+        self._last_jit_dy = jit_dy
 
         primary = self.target_manager.primary_target
         primary_u_eff: Optional[float] = None
@@ -363,7 +371,8 @@ class SimulationEngine:
                 self.camera.update_kinematics(delta_t)
 
             orb_dt = delta_t if self.is_running else (delta_t * self.orbital_time_warp if delta_t > 0 else 0.0)
-            orb_telem = self.orbital_scenario.step(orb_dt)
+            # Pass current PAT state so handover manager can correct the badge
+            orb_telem = self.orbital_scenario.step(orb_dt, pat_state=self._last_pat_state)
             self.last_orbital_telemetry = orb_telem.to_dict()
             link = self.last_orbital_telemetry.get("link", {})
             range_km = float(link.get("range_km", 1000.0))
@@ -371,7 +380,11 @@ class SimulationEngine:
             az_body = float(link.get("az_body_deg", 0.0))
             el_body = float(link.get("el_body_deg", 0.0))
             link_state = link.get("link_state", "LINK_OK")
-            is_link_blocked = (link_state == "LINK_BLOCKED")
+            # Handover can override link_state to NO_COVERAGE
+            handover_dict = self.last_orbital_telemetry.get("handover")
+            if handover_dict is not None:
+                link_state = handover_dict.get("link_state", link_state)
+            is_link_blocked = (link_state in ("LINK_BLOCKED", "NO_COVERAGE"))
             angular_rate_deg_s = float(link.get("angular_rate_deg_s", 0.0))
             atmosphere_path_frac = float(link.get("atmosphere_path_frac", 0.0))
 
@@ -489,6 +502,8 @@ class SimulationEngine:
 
         self.last_tracking_telemetry = tracking_telemetry
         self.last_detection_telemetry = detection_telemetry
+        # Persist PAT state for next step's handover manager call
+        self._last_pat_state = tracking_telemetry.state
 
         # 7. Analytics step
         ang_err = None
@@ -520,18 +535,29 @@ class SimulationEngine:
             angular_rate_deg_s=angular_rate_deg_s,
             atmosphere_path_frac=atmosphere_path_frac,
             scenario_type=self.scenario_mode,
+            handover_metrics=(
+                self.last_orbital_telemetry.get("handover", {}).get("metrics")
+                if self.last_orbital_telemetry and self.last_orbital_telemetry.get("handover")
+                else None
+            ),
         )
 
         # 8. Build telemetry packet
         bx, by, bz = self.camera.get_world_boresight_at_range(target_depth)
         frustum_corners = self.camera.get_frustum_corners_at_range(target_depth)
 
+        jit_dx = getattr(self, "_last_jit_dx", 0.0)
+        jit_dy = getattr(self, "_last_jit_dy", 0.0)
+
         if self.scenario_mode == "Orbital":
+            u_px = (u_gt + jit_dx) if (u_gt is not None) else None
+            v_px = (v_gt + jit_dy) if (v_gt is not None) else None
+
             target_states = [
                 TargetState(
                     target_id=1,
-                    world_x=0.0,
-                    world_y=0.0,
+                    world_x=round(self.disturbance.platform_offset_x, 2),
+                    world_y=round(self.disturbance.platform_offset_y, 2),
                     world_z=round(target_depth, 2),
                     velocity_x=0.0,
                     velocity_y=0.0,
@@ -539,14 +565,14 @@ class SimulationEngine:
                     acceleration_x=0.0,
                     acceleration_y=0.0,
                     acceleration_z=0.0,
-                    pixel_x=u_gt if in_fov_gt else None,
-                    pixel_y=v_gt if in_fov_gt else None,
+                    pixel_x=round(u_px, 2) if (u_px is not None and -100 <= u_px <= self.camera.width + 100) else None,
+                    pixel_y=round(v_px, 2) if (v_px is not None and -100 <= v_px <= self.camera.height + 100) else None,
                     azimuth_cam_deg=round(az_body, 4),
                     elevation_cam_deg=round(el_body, 4),
                     range_z_cam=target_depth,
                     is_in_fov=in_fov_gt,
-                    shape="Circle",
-                    size_pixels=6,
+                    shape=self.target_manager.primary_target.shape,
+                    size_pixels=self.target_manager.primary_target.size_pixels,
                     intensity=self.target_manager.primary_target.intensity,
                     trajectory_trail=[],
                 )
@@ -558,11 +584,13 @@ class SimulationEngine:
                 vx_t, vy_t, vz_t = t.get_velocity()
                 ax_t, ay_t, az_t = t.get_acceleration()
                 u_t, v_t, in_fov_t, az_t_deg, el_t_deg, depth_t = self.camera.project_3d_target(px_t, py_t, pz_t)
+                u_t_disp = (u_t + jit_dx) if (u_t is not None) else None
+                v_t_disp = (v_t + jit_dy) if (v_t is not None) else None
                 target_states.append(
                     TargetState(
                         target_id=t.target_id,
-                        world_x=round(px_t, 2),
-                        world_y=round(py_t, 2),
+                        world_x=round(px_t + self.disturbance.platform_offset_x, 2),
+                        world_y=round(py_t + self.disturbance.platform_offset_y, 2),
                         world_z=round(pz_t, 2),
                         velocity_x=round(vx_t, 2),
                         velocity_y=round(vy_t, 2),
@@ -570,8 +598,8 @@ class SimulationEngine:
                         acceleration_x=round(ax_t, 2),
                         acceleration_y=round(ay_t, 2),
                         acceleration_z=round(az_t, 2),
-                        pixel_x=u_t if in_fov_t else None,
-                        pixel_y=v_t if in_fov_t else None,
+                        pixel_x=round(u_t_disp, 2) if (u_t_disp is not None and -100 <= u_t_disp <= self.camera.width + 100) else None,
+                        pixel_y=round(v_t_disp, 2) if (v_t_disp is not None and -100 <= v_t_disp <= self.camera.height + 100) else None,
                         azimuth_cam_deg=az_t_deg,
                         elevation_cam_deg=el_t_deg,
                         range_z_cam=depth_t,
@@ -626,6 +654,7 @@ class SimulationEngine:
             disturbance=self.last_disturbance_telemetry,
             atmospheric_condition=self.config.disturbance.atmospheric_condition,
             orbital=self.last_orbital_telemetry,
+            handover=self.last_orbital_telemetry.get("handover") if self.last_orbital_telemetry else None,
         )
 
         return telemetry

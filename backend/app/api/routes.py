@@ -649,6 +649,7 @@ def apply_disturbance_preset(cmd: DisturbancePresetCommand):
     sim_engine.disturbance.apply_preset(cmd.preset)
     cfg.disturbance = sim_engine.disturbance.config
     config_manager.set_config(cfg)
+    sim_engine.config.disturbance = cfg.disturbance
     return {
         "status": "preset_applied",
         "preset": cmd.preset,
@@ -705,6 +706,7 @@ def update_disturbance_config(cmd: DisturbanceUpdateCommand):
 
     config_manager.set_config(cfg)
     sim_engine.disturbance.update_config(cfg.disturbance, cfg.camera)
+    sim_engine.config.disturbance = cfg.disturbance
     return {
         "status": "disturbance_config_updated",
         "disturbance": cfg.disturbance.model_dump(),
@@ -1698,5 +1700,105 @@ def set_time_warp(cmd: TimeWarpCommand):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Satellite handover endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class HandoverConfigRequest(BaseModel):
+    enable:               bool  = True
+    min_elevation_deg:    float = 5.0
+    lead_time_s:          float = 30.0
+    phase_offset_deg:     float = 20.0
+    gimbal_pan_limit_deg: float = 60.0
+    gimbal_tilt_limit_deg:float = 60.0
+    backup_acquire_steps: int   = 3
 
 
+@router.post("/orbital/handover/config")
+def configure_handover(cmd: HandoverConfigRequest):
+    """
+    Enables automatic satellite handover in Orbital scenario mode.
+    Rebuilds the OrbitalScenario with a backup satellite offset by
+    phase_offset_deg along the same orbit.
+
+    Must be called while the simulation is stopped (or will auto-stop).
+    """
+    from backend.app.orbital.scenario import OrbitalScenarioConfig
+    from backend.app.orbital.handover import HandoverConfig
+    from backend.app.orbital.link_geometry import LinkConfig
+
+    was_running = sim_engine.is_running
+    sim_engine.stop()
+
+    ho_cfg = HandoverConfig(
+        min_elevation_deg    = cmd.min_elevation_deg,
+        lead_time_s          = cmd.lead_time_s,
+        phase_offset_deg     = cmd.phase_offset_deg,
+        gimbal_pan_limit_deg = cmd.gimbal_pan_limit_deg,
+        gimbal_tilt_limit_deg= cmd.gimbal_tilt_limit_deg,
+        backup_acquire_steps = cmd.backup_acquire_steps,
+    )
+
+    # Inherit current orbital config if already in Orbital mode
+    current_orb = sim_engine.last_orbital_telemetry or {}
+    cam_orbit   = current_orb.get("camera_orbit") or {}
+    alt_km      = float(cam_orbit.get("altitude_km", 550.0))
+    inc_deg     = float(cam_orbit.get("inclination_deg", 53.0))
+    raan_deg    = float(cam_orbit.get("raan_deg", 0.0))
+    preset      = "LEO-550"
+
+    from backend.app.orbital.scenario import SatelliteConfig, UAVConfig
+    new_cfg = OrbitalScenarioConfig(
+        camera_type     = "SATELLITE",
+        beacon_type     = "UAV",
+        camera_sat      = SatelliteConfig(
+            preset          = preset,
+            altitude_km     = alt_km,
+            inclination_deg = inc_deg,
+            phase_deg       = 0.0,
+            raan_deg        = raan_deg,
+        ),
+        beacon_uav      = UAVConfig(altitude_km=0.0),
+        enable_handover = cmd.enable,
+        handover_config = ho_cfg,
+    )
+    sim_engine.update_orbital_config(new_cfg)
+    sim_engine.scenario_mode = "Orbital"
+    if was_running:
+        sim_engine.start()
+
+    return {
+        "status":            "handover_configured",
+        "enable":            cmd.enable,
+        "phase_offset_deg":  cmd.phase_offset_deg,
+        "lead_time_s":       cmd.lead_time_s,
+        "min_elevation_deg": cmd.min_elevation_deg,
+    }
+
+
+@router.get("/orbital/handover/metrics")
+def get_handover_metrics():
+    """Returns cumulative handover performance log."""
+    mgr = sim_engine.orbital_scenario.handover_manager
+    if mgr is None:
+        return {"error": "Handover not enabled", "metrics": None}
+    m = mgr.metrics
+    return {
+        "handover_count":           m.handover_count,
+        "successful_handovers":     m.successful_handovers,
+        "failed_handovers":         m.failed_handovers,
+        "no_coverage_events":       m.no_coverage_events,
+        "total_no_coverage_s":      round(m.total_no_coverage_s, 2),
+        "mean_acquisition_time_s":  round(m.mean_acquisition_time_s, 3) if m.mean_acquisition_time_s is not None else None,
+        "events": [
+            {
+                "sim_time_s":         ev.sim_time_s,
+                "from_sat":           ev.from_sat,
+                "to_sat":             ev.to_sat,
+                "succeeded":          ev.succeeded,
+                "acquisition_time_s": ev.acquisition_time_s,
+                "reason":             ev.reason,
+            }
+            for ev in m.events
+        ],
+    }

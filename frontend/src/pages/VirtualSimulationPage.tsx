@@ -255,6 +255,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
               camera={telemetry?.camera ?? null}
+              disturbance={telemetry?.disturbance ?? null}
               worldWidth={config?.motion.screen_width ?? 2000}
               worldHeight={config?.motion.screen_height ?? 2000}
             />
@@ -263,6 +264,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
               camera={telemetry?.camera ?? null}
+              disturbance={telemetry?.disturbance ?? null}
               worldWidth={config?.motion.screen_width ?? 2000}
               worldHeight={config?.motion.screen_height ?? 2000}
             />
