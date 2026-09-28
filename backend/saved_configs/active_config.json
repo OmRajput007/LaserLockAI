@@ -39,7 +39,7 @@
   },
   "motion": {
     "trajectory_type": "Figure of 8",
-    "speed_pixels_per_s": 60.0,
+    "speed_pixels_per_s": 160.0,
     "screen_width": 2000,
     "screen_height": 2000,
     "world_depth_z": 2000

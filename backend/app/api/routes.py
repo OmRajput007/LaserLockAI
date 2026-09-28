@@ -388,6 +388,7 @@ def set_detection_method(cmd: DetectionMethodCommand):
 
 
 class AIConfigCommand(BaseModel):
+    model_config = {"protected_namespaces": ()}
     ai_model_name: Optional[str] = None
     ai_confidence_threshold: Optional[float] = Field(None, ge=0.05, le=1.0)
     ai_input_resolution: Optional[str] = None

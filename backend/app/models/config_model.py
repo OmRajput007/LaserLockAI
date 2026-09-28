@@ -64,6 +64,7 @@ class MotionConfig(BaseModel):
 
 
 class DetectionConfig(BaseModel):
+    model_config = {"protected_namespaces": ()}
     # Part 4 Detection Architecture: Common interface across all 4 modes
     method: Literal["Classical CV", "AI Detector", "CV + Kalman", "AI + Kalman"] = Field(
         default="Classical CV",
