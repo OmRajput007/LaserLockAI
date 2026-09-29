@@ -47,6 +47,7 @@ export interface MotionConfig {
     | 'Waypoint'
     | 'User-defined';
   speed_pixels_per_s: number;
+  speed_kmh?: number;
   screen_width: number;
   screen_height: number;
   world_depth_z: number;
@@ -395,9 +396,15 @@ export interface SimulationTelemetry {
 export interface SatelliteConfig {
   preset: string;
   altitude_km?: number | null;
+  perigee_alt_km?: number | null;
+  apogee_alt_km?: number | null;
   inclination_deg: number;
   phase_deg: number;
   raan_deg: number;
+  arg_perigee_deg?: number;
+  true_anomaly_deg?: number;
+  semi_major_axis_km?: number;
+  eccentricity?: number;
 }
 
 export interface UAVConfig {
@@ -436,6 +443,13 @@ export interface OrbitalOrbitTelemetry {
   period_s: number;
   omega_deg_s: number;
   theta_deg: number;
+  semi_major_axis_km?: number;
+  eccentricity?: number;
+  perigee_alt_km?: number;
+  apogee_alt_km?: number;
+  true_anomaly_deg?: number;
+  eccentric_anomaly_deg?: number;
+  mean_anomaly_deg?: number;
 }
 
 export interface OrbitalLinkTelemetry {

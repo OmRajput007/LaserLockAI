@@ -46,6 +46,7 @@ interface HandoverData {
   backup_range_km:          number;
   backup_acquire_progress:  number;
   will_lose_soon:           boolean;
+  min_elevation_deg?:       number;
   metrics:                  HandoverMetrics;
   sim_time_s:               number;
 }

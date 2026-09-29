@@ -111,11 +111,11 @@ export const api = {
     });
   },
 
-  async setBeaconSpeed(speed_pixels_per_s: number): Promise<void> {
+  async setBeaconSpeed(speed_kmh: number): Promise<void> {
     await fetch(`${API_BASE}/simulation/target/speed`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ speed_pixels_per_s }),
+      body: JSON.stringify({ speed_kmh, speed_pixels_per_s: speed_kmh }),
     });
   },
 

@@ -69,9 +69,9 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
   // Maneuver notice banner
   const [showManeuverNotice, setShowManeuverNotice] = useState<boolean>(true);
 
-  // Altitude Gap Error States (20 km < alt < 300 km)
-  const isCamSatGapError = cameraType === 'SATELLITE' && camSatAlt > 20.0 && camSatAlt < 300.0;
-  const isBeaconSatGapError = beaconType === 'SATELLITE' && beaconSatAlt > 20.0 && beaconSatAlt < 300.0;
+  // Altitude Gap Error States (20 km < alt < 150 km) - Drag limit is 150 km
+  const isCamSatGapError = cameraType === 'SATELLITE' && camSatAlt > 20.0 && camSatAlt < 150.0;
+  const isBeaconSatGapError = beaconType === 'SATELLITE' && beaconSatAlt > 20.0 && beaconSatAlt < 150.0;
   const isCamUavAltError = cameraType === 'UAV' && (camUavAlt < 0 || camUavAlt > 20.0);
   const isBeaconUavAltError = beaconType === 'UAV' && (beaconUavAlt < 0 || beaconUavAlt > 20.0);
   const hasValidationError = isCamSatGapError || isBeaconSatGapError || isCamUavAltError || isBeaconUavAltError;
@@ -83,6 +83,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
     'LEO-2000': 2000.0,
     'MEO': 20200.0,
     'GEO': 35786.0,
+    'GTO': 17993.0,
   };
 
   // Handle Preset Switching
@@ -346,13 +347,13 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Validation Warning Alert (20-300 km Altitude Gap) */}
+      {/* Validation Warning Alert (20-150 km Altitude Gap) */}
       {(isCamSatGapError || isBeaconSatGapError) && (
         <div className="bg-rose-950/60 border border-rose-600 p-3 rounded-lg flex items-start gap-2.5 text-rose-200 text-[11px] shadow-lg animate-pulse">
           <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold text-rose-300 block mb-0.5">UNSTABLE ALTITUDE GAP DETECTED (20 - 300 KM):</span>
-            Altitudes between 20 km and 300 km are physically unstable: too high for aerodynamic UAV flight (max 20 km ceiling) and too low for satellite orbits without immediate atmospheric drag decay (min stable orbit is 300 km). Entry is rejected.
+            <span className="font-bold text-rose-300 block mb-0.5">UNSTABLE ALTITUDE GAP DETECTED (20 - 150 KM):</span>
+            Altitudes between 20 km and 150 km are physically unstable: too high for aerodynamic UAV flight (max 20 km ceiling) and too low for satellite orbits without immediate atmospheric drag decay (min stable orbit is 150 km). Entry is rejected.
           </div>
         </div>
       )}
@@ -402,6 +403,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
                   <option value="LEO-2000">LEO 2000 km</option>
                   <option value="MEO">MEO 20200 km (GPS)</option>
                   <option value="GEO">GEO 35786 km</option>
+                  <option value="GTO">GTO (200 × 35,786 km Demo)</option>
                   <option value="Custom">Custom Altitude</option>
                 </select>
               </div>
@@ -546,6 +548,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
                   <option value="LEO-2000">LEO 2000 km</option>
                   <option value="MEO">MEO 20200 km (GPS)</option>
                   <option value="GEO">GEO 35786 km</option>
+                  <option value="GTO">GTO (200 × 35,786 km Demo)</option>
                   <option value="Custom">Custom Altitude</option>
                 </select>
               </div>

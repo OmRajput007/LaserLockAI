@@ -13,18 +13,41 @@ export interface SatellitePovState {
   autoLOS: boolean;
   isLockedInFov: boolean; // True when rectangular FOV frustum is GREEN
   isLostFromFov: boolean;   // True when rectangular FOV frustum is RED
+  perigeeAltKm?: number;
+  apogeeAltKm?: number;
+  argPerigeeDeg?: number;
+  semiMajorAxisKm?: number;
+  eccentricity?: number;
+  speedKmS?: number;
+  currentRadiusKm?: number;
+  beaconSpeedKmh?: number;
 }
+
+// Earth equatorial circumference for atmospheric beacon kinematics
+export const EARTH_CIRCUMFERENCE_KM = 40075.0;
+
+/**
+ * Computes physical real-world angular velocity for an atmospheric beacon (UAV/Drone):
+ * omega_real = (2 * Math.PI * speed_kmh) / (40075 * 3600)  // in radians/sec
+ * At 1,200 km/h: 1 revolution takes 33 hours 24 minutes (120,225 seconds).
+ */
+export const computeBeaconOmegaReal = (speedKmh: number): number => {
+  if (speedKmh <= 0) return 0;
+  return (2.0 * Math.PI * speedKmh) / (EARTH_CIRCUMFERENCE_KM * 3600.0);
+};
 
 export const computeOrbitPoint = (
   radius: number,
   incDeg: number,
   raanDeg: number,
-  anomaly: number
+  anomaly: number,
+  argPerigeeDeg: number = 0
 ): THREE.Vector3 => {
+  const u = anomaly + THREE.MathUtils.degToRad(argPerigeeDeg);
   const inc = THREE.MathUtils.degToRad(incDeg);
   const raan = THREE.MathUtils.degToRad(raanDeg);
-  const xOrb = radius * Math.cos(anomaly);
-  const zOrb = radius * Math.sin(anomaly);
+  const xOrb = radius * Math.cos(u);
+  const zOrb = radius * Math.sin(u);
   const x = xOrb * Math.cos(raan) - zOrb * Math.cos(inc) * Math.sin(raan);
   const y = zOrb * Math.sin(inc);
   const z = xOrb * Math.sin(raan) + zOrb * Math.cos(inc) * Math.cos(raan);
@@ -58,13 +81,16 @@ export const checkEarthOcclusion = (
   return { isOccluded: false };
 };
 
+export const EARTH_ROT_DEG_PER_HOUR = 15.0;
+export const EARTH_ROT_RAD_PER_SEC = (15.0 * Math.PI) / (180.0 * 3600.0); // ~7.2722052e-5 rad/s (15 deg/hour)
+
 class SatellitePovSync {
   private currentData: SatellitePovState = {
-    satPos: computeOrbitPoint(150, 53.0, 35.0, 0.85),
+    satPos: computeOrbitPoint(108.62, 53.0, 35.0, 0.85),
     tgtPos: computeOrbitPoint(100, 35.0, 25.0, 0.4),
     earthRotationY: 0,
     isOccluded: false,
-    orbitRadius: 150,
+    orbitRadius: 108.62,
     incDeg: 53.0,
     raanDeg: 35.0,
     anomaly: 0.85,
@@ -88,6 +114,13 @@ class SatellitePovSync {
     if (data.autoLOS !== undefined) this.currentData.autoLOS = data.autoLOS;
     if (data.isLockedInFov !== undefined) this.currentData.isLockedInFov = data.isLockedInFov;
     if (data.isLostFromFov !== undefined) this.currentData.isLostFromFov = data.isLostFromFov;
+    if (data.perigeeAltKm !== undefined) this.currentData.perigeeAltKm = data.perigeeAltKm;
+    if (data.apogeeAltKm !== undefined) this.currentData.apogeeAltKm = data.apogeeAltKm;
+    if (data.argPerigeeDeg !== undefined) this.currentData.argPerigeeDeg = data.argPerigeeDeg;
+    if (data.semiMajorAxisKm !== undefined) this.currentData.semiMajorAxisKm = data.semiMajorAxisKm;
+    if (data.eccentricity !== undefined) this.currentData.eccentricity = data.eccentricity;
+    if (data.speedKmS !== undefined) this.currentData.speedKmS = data.speedKmS;
+    if (data.currentRadiusKm !== undefined) this.currentData.currentRadiusKm = data.currentRadiusKm;
     this.currentData.timestamp = Date.now();
 
     for (let i = 0; i < this.listeners.length; i++) {
@@ -99,15 +132,20 @@ class SatellitePovSync {
     const now = Date.now();
     // If no external updates received in >300ms, auto-propagate kinematics
     if (now - this.currentData.timestamp > 300) {
+      const dtSec = Math.min(2.0, (now - this.currentData.timestamp) / 1000);
       this.currentData.anomaly += 0.003;
-      this.currentData.earthRotationY += 0.0006;
+      this.currentData.earthRotationY += EARTH_ROT_RAD_PER_SEC * dtSec;
       const updatedSat = computeOrbitPoint(
         this.currentData.orbitRadius,
         this.currentData.incDeg,
         this.currentData.raanDeg,
-        this.currentData.anomaly
+        this.currentData.anomaly,
+        this.currentData.argPerigeeDeg ?? 0
       );
       this.currentData.satPos.copy(updatedSat);
+      const baseTgt = computeOrbitPoint(100, 35.0, 25.0, 0.4);
+      baseTgt.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.currentData.earthRotationY);
+      this.currentData.tgtPos.copy(baseTgt);
       const occ = checkEarthOcclusion(this.currentData.satPos, this.currentData.tgtPos, 100);
       this.currentData.isOccluded = occ.isOccluded;
       if (occ.isOccluded) {

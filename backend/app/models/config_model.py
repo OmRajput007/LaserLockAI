@@ -57,7 +57,8 @@ class MotionConfig(BaseModel):
         "Waypoint",
         "User-defined",
     ] = Field(default="Straight Line", description="Mathematical motion pattern")
-    speed_pixels_per_s: float = Field(default=40.0, ge=1.0, le=500.0, description="Target motion velocity")
+    speed_pixels_per_s: float = Field(default=150.0, ge=0.0, le=1200.0, description="Target motion velocity (km/h or px/s)")
+    speed_kmh: float = Field(default=150.0, ge=0.0, le=1200.0, description="Target physical velocity in km/h (0–1200)")
     screen_width: int = Field(default=2000, ge=2000, description="Virtual scene world width (min 2000)")
     screen_height: int = Field(default=2000, ge=2000, description="Virtual scene world height (min 2000)")
     world_depth_z: int = Field(default=2000, description="Virtual scene optical range depth")

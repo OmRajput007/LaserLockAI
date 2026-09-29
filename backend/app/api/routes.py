@@ -35,7 +35,8 @@ class TargetMotionCommand(BaseModel):
         "Waypoint",
         "User-defined",
     ] = Field(..., description="Trajectory motion pattern")
-    speed_pixels_per_s: Optional[float] = Field(None, ge=1.0, le=500.0)
+    speed_pixels_per_s: Optional[float] = Field(None, ge=0.0, le=1200.0)
+    speed_kmh: Optional[float] = Field(None, ge=0.0, le=1200.0)
 
 
 @router.get("/status")
@@ -176,7 +177,8 @@ def set_target_position(cmd: TargetPositionCommand):
 
 
 class TargetSpeedCommand(BaseModel):
-    speed_pixels_per_s: float = Field(..., ge=1.0, le=500.0, description="Beacon speed in pixels/second (1–500)")
+    speed_pixels_per_s: Optional[float] = Field(None, ge=0.0, le=1200.0, description="Beacon speed in px/s or legacy units (0–1200)")
+    speed_kmh: Optional[float] = Field(None, ge=0.0, le=1200.0, description="Beacon physical speed in km/h (0–1200)")
 
 
 @router.post("/simulation/target/speed")
@@ -188,7 +190,7 @@ def set_beacon_speed(cmd: TargetSpeedCommand):
     also recomputed so the speed change takes full effect on the next engine tick.
     """
     import math as _math
-    new_speed = cmd.speed_pixels_per_s
+    new_speed = cmd.speed_kmh if cmd.speed_kmh is not None else (cmd.speed_pixels_per_s if cmd.speed_pixels_per_s is not None else 150.0)
 
     # 1. Patch every live target's generator in-place
     for target in sim_engine.target_manager.targets:
@@ -219,11 +221,14 @@ def set_beacon_speed(cmd: TargetSpeedCommand):
     # 2. Persist to config (non-resetting path — just updates the value)
     cfg = config_manager.get_config()
     cfg.motion.speed_pixels_per_s = new_speed
+    if hasattr(cfg.motion, "speed_kmh"):
+        cfg.motion.speed_kmh = new_speed
     config_manager.set_config(cfg)
 
     return {
         "status": "speed_updated",
         "speed_pixels_per_s": new_speed,
+        "speed_kmh": new_speed,
         "active_targets": len(sim_engine.target_manager.targets),
     }
 
@@ -1568,9 +1573,13 @@ from backend.app.orbital.link_geometry import LinkConfig
 class SatelliteConfigModel(BaseModel):
     preset: str = Field(default="LEO-550")
     altitude_km: Optional[float] = Field(default=None)
+    perigee_alt_km: Optional[float] = Field(default=None)
+    apogee_alt_km: Optional[float] = Field(default=None)
     inclination_deg: float = Field(default=53.0)
     phase_deg: float = Field(default=0.0)
     raan_deg: float = Field(default=0.0)
+    arg_perigee_deg: float = Field(default=0.0)
+    true_anomaly_deg: float = Field(default=0.0)
 
 
 class UAVConfigModel(BaseModel):
@@ -1588,7 +1597,7 @@ class OrbitalConfigRequest(BaseModel):
     beacon_type: Literal["UAV", "SATELLITE"] = "UAV"
     camera_sat: SatelliteConfigModel = Field(default_factory=SatelliteConfigModel)
     camera_uav: UAVConfigModel = Field(default_factory=UAVConfigModel)
-    beacon_sat: SatelliteConfigModel = Field(default_factory=lambda: SatelliteConfigModel(phase_deg=180.0))
+    beacon_sat: SatelliteConfigModel = Field(default_factory=lambda: SatelliteConfigModel(phase_deg=180.0, true_anomaly_deg=180.0))
     beacon_uav: UAVConfigModel = Field(default_factory=lambda: UAVConfigModel(altitude_km=10.0))
     atmosphere_margin_km: float = Field(default=100.0)
     tilt_limit_deg: float = Field(default=30.0)
@@ -1603,16 +1612,20 @@ _current_orbital_config = OrbitalScenarioConfig()
 
 @router.get("/orbital/config")
 def get_orbital_configuration():
-    """Returns active orbital scenario configuration."""
+    """Returns active orbital scenario configuration with full Keplerian elements."""
     return {
         "camera_type": _current_orbital_config.camera_type,
         "beacon_type": _current_orbital_config.beacon_type,
         "camera_sat": {
             "preset": _current_orbital_config.camera_sat.preset,
             "altitude_km": _current_orbital_config.camera_sat.altitude_km,
+            "perigee_alt_km": _current_orbital_config.camera_sat.perigee_alt_km,
+            "apogee_alt_km": _current_orbital_config.camera_sat.apogee_alt_km,
             "inclination_deg": _current_orbital_config.camera_sat.inclination_deg,
             "phase_deg": _current_orbital_config.camera_sat.phase_deg,
             "raan_deg": _current_orbital_config.camera_sat.raan_deg,
+            "arg_perigee_deg": _current_orbital_config.camera_sat.arg_perigee_deg,
+            "true_anomaly_deg": _current_orbital_config.camera_sat.true_anomaly_deg,
         },
         "camera_uav": {
             "lat_deg": _current_orbital_config.camera_uav.lat_deg,
@@ -1626,9 +1639,13 @@ def get_orbital_configuration():
         "beacon_sat": {
             "preset": _current_orbital_config.beacon_sat.preset,
             "altitude_km": _current_orbital_config.beacon_sat.altitude_km,
+            "perigee_alt_km": _current_orbital_config.beacon_sat.perigee_alt_km,
+            "apogee_alt_km": _current_orbital_config.beacon_sat.apogee_alt_km,
             "inclination_deg": _current_orbital_config.beacon_sat.inclination_deg,
             "phase_deg": _current_orbital_config.beacon_sat.phase_deg,
             "raan_deg": _current_orbital_config.beacon_sat.raan_deg,
+            "arg_perigee_deg": _current_orbital_config.beacon_sat.arg_perigee_deg,
+            "true_anomaly_deg": _current_orbital_config.beacon_sat.true_anomaly_deg,
         },
         "beacon_uav": {
             "lat_deg": _current_orbital_config.beacon_uav.lat_deg,
@@ -1646,27 +1663,41 @@ def get_orbital_configuration():
 @router.post("/orbital/config")
 def update_orbital_configuration(req: OrbitalConfigRequest):
     """
-    Updates orbital scenario configuration with strict altitude gap validation.
+    Updates orbital scenario configuration with Keplerian element validation.
     Switching presets re-initialises scenario and returns the Part 1 maneuver note.
     """
     global _current_orbital_config
 
-    # Validate 20-300 km altitude gap
-    if req.camera_type == "SATELLITE" and req.camera_sat.altitude_km is not None:
-        alt = req.camera_sat.altitude_km
-        if 20.0 < alt < 300.0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid satellite altitude ({alt} km): 20 km to 300 km is an unstable physical gap. UAV max is 20 km, satellite orbit min is 300 km.",
-            )
+    # Validate satellite orbits: perigee >= 150 km, apogee >= perigee
+    if req.camera_type == "SATELLITE":
+        p_alt = req.camera_sat.perigee_alt_km if req.camera_sat.perigee_alt_km is not None else req.camera_sat.altitude_km
+        a_alt = req.camera_sat.apogee_alt_km if req.camera_sat.apogee_alt_km is not None else p_alt
+        if p_alt is not None:
+            if 20.0 < p_alt < 150.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid camera satellite perigee altitude ({p_alt} km): 20 km to 150 km is an unstable physical gap. Perigee must be >= 150 km (drag limit).",
+                )
+            if a_alt is not None and a_alt < p_alt:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid camera satellite apogee altitude ({a_alt} km): apogee must be >= perigee ({p_alt} km).",
+                )
 
-    if req.beacon_type == "SATELLITE" and req.beacon_sat.altitude_km is not None:
-        alt = req.beacon_sat.altitude_km
-        if 20.0 < alt < 300.0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid satellite altitude ({alt} km): 20 km to 300 km is an unstable physical gap. UAV max is 20 km, satellite orbit min is 300 km.",
-            )
+    if req.beacon_type == "SATELLITE":
+        p_alt = req.beacon_sat.perigee_alt_km if req.beacon_sat.perigee_alt_km is not None else req.beacon_sat.altitude_km
+        a_alt = req.beacon_sat.apogee_alt_km if req.beacon_sat.apogee_alt_km is not None else p_alt
+        if p_alt is not None:
+            if 20.0 < p_alt < 150.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid beacon satellite perigee altitude ({p_alt} km): 20 km to 150 km is an unstable physical gap. Perigee must be >= 150 km (drag limit).",
+                )
+            if a_alt is not None and a_alt < p_alt:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid beacon satellite apogee altitude ({a_alt} km): apogee must be >= perigee ({p_alt} km).",
+                )
 
     if req.camera_type == "UAV":
         if req.camera_uav.altitude_km > 20.0 or req.camera_uav.altitude_km < 0.0:
@@ -1682,13 +1713,17 @@ def update_orbital_configuration(req: OrbitalConfigRequest):
                 detail=f"Invalid UAV altitude ({req.beacon_uav.altitude_km} km): UAV altitude must be between 0 km and 20 km.",
             )
 
-    # Build OrbitalScenarioConfig
+    # Build OrbitalScenarioConfig with Keplerian elements
     cam_sat = SatelliteConfig(
         preset=req.camera_sat.preset,
         altitude_km=req.camera_sat.altitude_km,
+        perigee_alt_km=req.camera_sat.perigee_alt_km,
+        apogee_alt_km=req.camera_sat.apogee_alt_km,
         inclination_deg=req.camera_sat.inclination_deg,
         phase_deg=req.camera_sat.phase_deg,
         raan_deg=req.camera_sat.raan_deg,
+        arg_perigee_deg=req.camera_sat.arg_perigee_deg,
+        true_anomaly_deg=req.camera_sat.true_anomaly_deg,
     )
     cam_uav = UAVConfig(
         lat_deg=req.camera_uav.lat_deg,
@@ -1702,9 +1737,13 @@ def update_orbital_configuration(req: OrbitalConfigRequest):
     bea_sat = SatelliteConfig(
         preset=req.beacon_sat.preset,
         altitude_km=req.beacon_sat.altitude_km,
+        perigee_alt_km=req.beacon_sat.perigee_alt_km,
+        apogee_alt_km=req.beacon_sat.apogee_alt_km,
         inclination_deg=req.beacon_sat.inclination_deg,
         phase_deg=req.beacon_sat.phase_deg,
         raan_deg=req.beacon_sat.raan_deg,
+        arg_perigee_deg=req.beacon_sat.arg_perigee_deg,
+        true_anomaly_deg=req.beacon_sat.true_anomaly_deg,
     )
     bea_uav = UAVConfig(
         lat_deg=req.beacon_uav.lat_deg,
@@ -1737,8 +1776,8 @@ def update_orbital_configuration(req: OrbitalConfigRequest):
     return {
         "status": "reinitialized",
         "maneuver_note": (
-            "Note: Orbit switching re-initializes the scenario parameters; it is not a live maneuver. "
-            "A real LEO-550 → GEO transfer requires ~3.8 km/s delta-v and ~5.3 h. "
+            "Note: Orbit switching re-initializes the scenario parameters with the full Keplerian element set; "
+            "it is not a live transfer maneuver. A real LEO-550 → GEO transfer requires ~3.8 km/s delta-v and ~5.3 h. "
             "This simulation re-initializes to the selected orbit."
         ),
         "telemetry": telem,
@@ -1784,7 +1823,7 @@ def set_time_warp(cmd: TimeWarpCommand):
 
 class HandoverConfigRequest(BaseModel):
     enable:               bool  = True
-    min_elevation_deg:    float = 5.0
+    min_elevation_deg:    float = 10.0
     lead_time_s:          float = 30.0
     phase_offset_deg:     float = 20.0
     gimbal_pan_limit_deg: float = 60.0

@@ -41,8 +41,8 @@ from backend.app.orbital.link_geometry import (
 @dataclass
 class HandoverConfig:
     """All tunable parameters for the handover algorithm."""
-    # Minimum elevation of beacon in satellite body frame before link is valid
-    min_elevation_deg: float = 5.0
+    # Minimum elevation of beacon in satellite body frame before link is valid (default 10°)
+    min_elevation_deg: float = 10.0
     # How far ahead to look when predicting loss (seconds)
     lead_time_s: float = 120.0
     # Phase offset between active and backup satellite (degrees along-track)
@@ -148,6 +148,7 @@ class HandoverTelemetry:
     backup_link_az_deg:      float           = 0.0
     backup_link_el_deg:      float           = 0.0
     backup_range_km:         float           = 0.0
+    min_elevation_deg:       float           = 10.0
     sim_time_s:              float           = 0.0
 
     def to_dict(self) -> dict:
@@ -165,6 +166,7 @@ class HandoverTelemetry:
             "backup_vis_el_deg":        self.backup_vis.el_body_deg,
             "backup_vis_az_deg":        self.backup_vis.az_body_deg,
             "backup_range_km":          self.backup_range_km,
+            "min_elevation_deg":        self.min_elevation_deg,
             "backup_acquire_progress":  self.backup_acquire_progress,
             "will_lose_soon":           self.active_vis.will_lose_soon,
             "metrics":                  self.metrics.to_dict(),
@@ -435,5 +437,6 @@ class HandoverManager:
             backup_link_az_deg      = backup_vis.az_body_deg,
             backup_link_el_deg      = backup_vis.el_body_deg,
             backup_range_km         = backup_vis.range_km,
+            min_elevation_deg       = self._cfg.min_elevation_deg,
             sim_time_s              = self._sim_time,
         )

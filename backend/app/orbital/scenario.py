@@ -32,6 +32,7 @@ from backend.app.orbital.constants import (
 )
 from backend.app.orbital.platform import Platform, Vec3
 from backend.app.orbital.orbital_mechanics import (
+    KeplerianOrbitIntegrator,
     CircularOrbitIntegrator,
     UAVLocalMotion,
     make_satellite_integrator,
@@ -95,12 +96,16 @@ class OrbitalTelemetry:
 
 @dataclass
 class SatelliteConfig:
-    """Configuration for a satellite platform."""
-    preset:          str   = "LEO-550"
-    altitude_km:     Optional[float] = None   # overrides preset if provided
-    inclination_deg: float = 53.0
-    phase_deg:       float = 0.0
-    raan_deg:        float = 0.0
+    """Configuration for a satellite platform with full Keplerian elements."""
+    preset:           str             = "LEO-550"
+    altitude_km:      Optional[float] = None   # legacy circular alias
+    perigee_alt_km:   Optional[float] = None
+    apogee_alt_km:    Optional[float] = None
+    inclination_deg:  float           = 53.0
+    phase_deg:        float           = 0.0   # alias for true_anomaly_deg
+    raan_deg:         float           = 0.0
+    arg_perigee_deg:  float           = 0.0
+    true_anomaly_deg: float           = 0.0
 
 
 @dataclass
@@ -187,12 +192,15 @@ class OrbitalScenario:
         # Camera integrator
         if cfg.camera_type == "SATELLITE":
             self._camera_integ: object = make_satellite_integrator(
-                platform        = self._camera_plat,
-                preset          = cfg.camera_sat.preset,
-                altitude_km     = cfg.camera_sat.altitude_km,
-                inclination_deg = cfg.camera_sat.inclination_deg,
-                phase_deg       = cfg.camera_sat.phase_deg,
-                raan_deg        = cfg.camera_sat.raan_deg,
+                platform         = self._camera_plat,
+                preset           = cfg.camera_sat.preset,
+                perigee_alt_km   = cfg.camera_sat.perigee_alt_km,
+                apogee_alt_km    = cfg.camera_sat.apogee_alt_km,
+                altitude_km      = cfg.camera_sat.altitude_km,
+                inclination_deg  = cfg.camera_sat.inclination_deg,
+                raan_deg         = cfg.camera_sat.raan_deg,
+                arg_perigee_deg  = cfg.camera_sat.arg_perigee_deg,
+                true_anomaly_deg = cfg.camera_sat.true_anomaly_deg if cfg.camera_sat.true_anomaly_deg != 0.0 else cfg.camera_sat.phase_deg,
             )
         else:
             c = cfg.camera_uav
@@ -210,12 +218,15 @@ class OrbitalScenario:
         # Beacon integrator
         if cfg.beacon_type == "SATELLITE":
             self._beacon_integ: object = make_satellite_integrator(
-                platform        = self._beacon_plat,
-                preset          = cfg.beacon_sat.preset,
-                altitude_km     = cfg.beacon_sat.altitude_km,
-                inclination_deg = cfg.beacon_sat.inclination_deg,
-                phase_deg       = cfg.beacon_sat.phase_deg,
-                raan_deg        = cfg.beacon_sat.raan_deg,
+                platform         = self._beacon_plat,
+                preset           = cfg.beacon_sat.preset,
+                perigee_alt_km   = cfg.beacon_sat.perigee_alt_km,
+                apogee_alt_km    = cfg.beacon_sat.apogee_alt_km,
+                altitude_km      = cfg.beacon_sat.altitude_km,
+                inclination_deg  = cfg.beacon_sat.inclination_deg,
+                raan_deg         = cfg.beacon_sat.raan_deg,
+                arg_perigee_deg  = cfg.beacon_sat.arg_perigee_deg,
+                true_anomaly_deg = cfg.beacon_sat.true_anomaly_deg if cfg.beacon_sat.true_anomaly_deg != 0.0 else cfg.beacon_sat.phase_deg,
             )
         else:
             b = cfg.beacon_uav
@@ -233,18 +244,24 @@ class OrbitalScenario:
         # ── Backup satellite for handover ─────────────────────────────────────
         if cfg.enable_handover and cfg.camera_type == "SATELLITE":
             self._backup_plat = Platform()
-            # Same orbit, same inclination/RAAN, but phase offset by
+            # Same orbit, same inclination/RAAN/arg_p, but phase offset by
             # handover_config.phase_offset_deg
-            backup_phase = (
-                cfg.camera_sat.phase_deg + cfg.handover_config.phase_offset_deg
-            ) % 360.0
+            base_ano = (
+                cfg.camera_sat.true_anomaly_deg
+                if cfg.camera_sat.true_anomaly_deg != 0.0
+                else cfg.camera_sat.phase_deg
+            )
+            backup_phase = (base_ano + cfg.handover_config.phase_offset_deg) % 360.0
             self._backup_integ = make_satellite_integrator(
-                platform        = self._backup_plat,
-                preset          = cfg.camera_sat.preset,
-                altitude_km     = cfg.camera_sat.altitude_km,
-                inclination_deg = cfg.camera_sat.inclination_deg,
-                phase_deg       = backup_phase,
-                raan_deg        = cfg.camera_sat.raan_deg,
+                platform         = self._backup_plat,
+                preset           = cfg.camera_sat.preset,
+                perigee_alt_km   = cfg.camera_sat.perigee_alt_km,
+                apogee_alt_km    = cfg.camera_sat.apogee_alt_km,
+                altitude_km      = cfg.camera_sat.altitude_km,
+                inclination_deg  = cfg.camera_sat.inclination_deg,
+                raan_deg         = cfg.camera_sat.raan_deg,
+                arg_perigee_deg  = cfg.camera_sat.arg_perigee_deg,
+                true_anomaly_deg = backup_phase,
             )
             self._handover_mgr = HandoverManager(cfg.handover_config)
 
@@ -318,11 +335,11 @@ class OrbitalScenario:
 
         # Orbital integrator state (None if UAV)
         cam_orbit = None
-        if isinstance(self._camera_integ, CircularOrbitIntegrator):
+        if isinstance(self._camera_integ, (KeplerianOrbitIntegrator, CircularOrbitIntegrator)):
             cam_orbit = self._camera_integ.to_dict()
 
         bea_orbit = None
-        if isinstance(self._beacon_integ, CircularOrbitIntegrator):
+        if isinstance(self._beacon_integ, (KeplerianOrbitIntegrator, CircularOrbitIntegrator)):
             bea_orbit = self._beacon_integ.to_dict()
 
         # Backup orbit state
@@ -330,7 +347,7 @@ class OrbitalScenario:
         backup_orbit_dict  = None
         if self._backup_plat is not None:
             backup_camera_dict = self._backup_plat.to_dict()
-        if self._backup_integ is not None and isinstance(self._backup_integ, CircularOrbitIntegrator):
+        if self._backup_integ is not None and isinstance(self._backup_integ, (KeplerianOrbitIntegrator, CircularOrbitIntegrator)):
             backup_orbit_dict = self._backup_integ.to_dict()
 
         # is_in_fov uses 2°/1.5° thresholds (camera FOV half-angles)

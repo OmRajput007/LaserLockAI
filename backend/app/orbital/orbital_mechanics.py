@@ -21,7 +21,7 @@ from typing import Tuple, Optional, Dict, Any, Literal
 
 from backend.app.orbital.constants import (
     GM_KM3_S2, EARTH_RADIUS_KM,
-    UAV_MAX_ALT_KM, ORBIT_MIN_ALT_KM,
+    UAV_MAX_ALT_KM, ORBIT_MIN_ALT_KM, ORBIT_DRAG_LIMIT_KM,
     ORBIT_PRESETS,
 )
 from backend.app.orbital.platform import Platform, Vec3
@@ -74,117 +74,237 @@ def enu_basis(lat_deg: float, lon_deg: float) -> Tuple[Vec3, Vec3, Vec3]:
 # Altitude validation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def validate_satellite_altitude(alt_km: float) -> None:
+# Kepler's equation solver and anomaly converters
+# ─────────────────────────────────────────────────────────────────────────────
+
+def solve_kepler(M: float, e: float, tol: float = 1e-12, max_iter: int = 50) -> float:
     """
-    Raises ValueError if the altitude is in the unstable gap (20–300 km).
-    Rule 5 from design spec.
+    Solves Kepler's equation M = E - e*sin(E) for Eccentric Anomaly E (radians).
+    Uses Newton-Raphson iteration with a robust initial guess.
     """
-    if UAV_MAX_ALT_KM < alt_km < ORBIT_MIN_ALT_KM:
+    M = M % (2.0 * math.pi)
+    if e == 0.0:
+        return M
+
+    # Robust initial guess for eccentric anomaly
+    if e < 0.8:
+        E = M
+    else:
+        E = math.pi if M == 0.0 else M + e * math.sin(M) + 0.5 * (e ** 2) * math.sin(2.0 * M)
+
+    for _ in range(max_iter):
+        f = E - e * math.sin(E) - M
+        f_prime = 1.0 - e * math.cos(E)
+        if abs(f_prime) < 1e-14:
+            break
+        delta = f / f_prime
+        E -= delta
+        if abs(delta) < tol:
+            break
+
+    return E % (2.0 * math.pi)
+
+
+def eccentric_to_true_anomaly(E: float, e: float) -> float:
+    """Computes true anomaly nu (radians) from eccentric anomaly E (radians)."""
+    if e == 0.0:
+        return E % (2.0 * math.pi)
+    cos_E = math.cos(E)
+    sin_E = math.sin(E)
+    cos_nu = (cos_E - e) / (1.0 - e * cos_E)
+    sin_nu = (math.sqrt(max(0.0, 1.0 - e * e)) * sin_E) / (1.0 - e * cos_E)
+    return math.atan2(sin_nu, cos_nu) % (2.0 * math.pi)
+
+
+def true_to_eccentric_anomaly(nu: float, e: float) -> float:
+    """Computes eccentric anomaly E (radians) from true anomaly nu (radians)."""
+    if e == 0.0:
+        return nu % (2.0 * math.pi)
+    cos_nu = math.cos(nu)
+    sin_nu = math.sin(nu)
+    cos_E = (e + cos_nu) / (1.0 + e * cos_nu)
+    sin_E = (math.sqrt(max(0.0, 1.0 - e * e)) * sin_nu) / (1.0 + e * cos_nu)
+    return math.atan2(sin_E, cos_E) % (2.0 * math.pi)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Altitude & Orbit Validation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def validate_satellite_altitude(
+    perigee_alt_km: float,
+    apogee_alt_km: Optional[float] = None
+) -> None:
+    """
+    Validates orbital elements:
+    - Perigee altitude must be >= 150 km (drag limit).
+    - Apogee altitude must be >= perigee altitude.
+    - Rejects unstable boundary between UAV (<= 20 km) and orbit (>= 150 km).
+    """
+    if apogee_alt_km is None:
+        apogee_alt_km = perigee_alt_km
+
+    # If within unstable atmospheric gap or below drag limit
+    if perigee_alt_km < ORBIT_DRAG_LIMIT_KM:
         raise ValueError(
-            f"No stable orbit in the range {UAV_MAX_ALT_KM}–{ORBIT_MIN_ALT_KM} km. "
-            f"Requested altitude: {alt_km:.1f} km. "
-            f"Use UAV (≤ {UAV_MAX_ALT_KM} km) or orbit (≥ {ORBIT_MIN_ALT_KM} km)."
+            f"No stable orbit with perigee {perigee_alt_km:.1f} km below drag limit {ORBIT_DRAG_LIMIT_KM:.1f} km. "
+            f"Perigee altitude must be >= {ORBIT_DRAG_LIMIT_KM:.1f} km."
+        )
+    if apogee_alt_km < perigee_alt_km:
+        raise ValueError(
+            f"Invalid apogee altitude ({apogee_alt_km:.1f} km): "
+            f"Apogee altitude must be >= perigee altitude ({perigee_alt_km:.1f} km)."
         )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Circular Orbit Integrator (Satellite)
+# General Keplerian Orbit Integrator (Satellite)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class CircularOrbitIntegrator:
+class KeplerianOrbitIntegrator:
     """
-    Analytic propagator for a circular ECI orbit.
+    Analytic propagator for general Keplerian ECI orbits (circular e=0 and elliptical 0 < e < 1).
 
-    State:
-        phase_rad  : current argument of latitude (radians)
-        inclination: orbital plane inclination (radians)
-        r_km       : orbital radius from Earth centre (km)
+    Elements:
+      - Perigee altitude (km), Apogee altitude (km) -> derive semi-major axis a, eccentricity e
+      - Inclination (deg)
+      - RAAN (deg)
+      - Argument of perigee (deg)
+      - True anomaly at epoch (deg)
 
-    step(dt) updates the Platform passed at construction.
-
-    NOTE: Orbit switching is a re-initialisation, NOT a live transfer.
-    A real LEO-550 → GEO transfer costs ~3.8 km/s delta-v and ~5.3 hours.
-    This simulator simply reinitialises to the new orbit.
+    Speed at every point is computed with the full vis-viva equation:
+        v = sqrt(GM * (2/r - 1/a))
     """
 
     def __init__(
         self,
         platform: Platform,
-        altitude_km: float        = 550.0,
-        inclination_deg: float    = 53.0,
-        phase_deg: float          = 0.0,
-        raan_deg: float           = 0.0,      # right ascension of ascending node
+        perigee_alt_km: Optional[float] = None,
+        apogee_alt_km: Optional[float]  = None,
+        altitude_km: Optional[float]    = None,   # backward compatibility for circular presets
+        inclination_deg: float          = 53.0,
+        raan_deg: float                 = 0.0,
+        arg_perigee_deg: float          = 0.0,
+        true_anomaly_deg: float         = 0.0,
+        phase_deg: Optional[float]      = None,   # alias for true_anomaly_deg / starting phase
     ):
-        validate_satellite_altitude(altitude_km)
+        # Resolve legacy circular altitude_km if passed
+        if perigee_alt_km is None and altitude_km is not None:
+            perigee_alt_km = altitude_km
+        if perigee_alt_km is None:
+            perigee_alt_km = 550.0
 
-        self.platform    = platform
-        self.altitude_km = altitude_km
-        self.r_km        = EARTH_RADIUS_KM + altitude_km
-        self.incl_rad    = math.radians(inclination_deg)
-        self.raan_rad    = math.radians(raan_deg)
-        self.phase_rad   = math.radians(phase_deg)
+        if apogee_alt_km is None and altitude_km is not None:
+            apogee_alt_km = altitude_km
+        if apogee_alt_km is None:
+            apogee_alt_km = perigee_alt_km
 
-        # Circular orbit speed (vis-viva with e=0)
-        self.speed_km_s  = math.sqrt(GM_KM3_S2 / self.r_km)
+        if phase_deg is not None and true_anomaly_deg == 0.0:
+            true_anomaly_deg = phase_deg
 
-        # Angular velocity (rad/s)
-        self.omega_rad_s = math.sqrt(GM_KM3_S2 / self.r_km**3)
+        validate_satellite_altitude(perigee_alt_km, apogee_alt_km)
 
-        # Orbital period (s)
-        self.period_s    = 2.0 * math.pi / self.omega_rad_s
+        self.platform = platform
+        self.perigee_alt_km = float(perigee_alt_km)
+        self.apogee_alt_km  = float(apogee_alt_km)
+
+        # Radii from Earth center (km)
+        self.r_p_km = EARTH_RADIUS_KM + self.perigee_alt_km
+        self.r_a_km = EARTH_RADIUS_KM + self.apogee_alt_km
+
+        # Standard Keplerian orbital elements
+        self.a_km = (self.r_p_km + self.r_a_km) / 2.0
+        self.e    = (self.r_a_km - self.r_p_km) / (self.r_a_km + self.r_p_km)
+        self.p_km = self.a_km * (1.0 - self.e ** 2)
+
+        self.incl_rad  = math.radians(inclination_deg)
+        self.raan_rad  = math.radians(raan_deg)
+        self.arg_p_rad = math.radians(arg_perigee_deg)
+
+        # Mean motion n (rad/s) and orbital period (s)
+        self.mean_motion_rad_s = math.sqrt(GM_KM3_S2 / (self.a_km ** 3))
+        self.period_s          = 2.0 * math.pi / self.mean_motion_rad_s
+
+        # Epoch anomaly state
+        self.nu_rad = math.radians(true_anomaly_deg) % (2.0 * math.pi)
+        self.E_rad  = true_to_eccentric_anomaly(self.nu_rad, self.e)
+        self.M_rad  = (self.E_rad - self.e * math.sin(self.E_rad)) % (2.0 * math.pi)
+
+        # Dynamic state (radius, altitude, speed from vis-viva)
+        self.r_km = self.a_km * (1.0 - self.e * math.cos(self.E_rad))
+        self.altitude_km = self.r_km - EARTH_RADIUS_KM
+        self.speed_km_s  = math.sqrt(GM_KM3_S2 * (2.0 / self.r_km - 1.0 / self.a_km))
+        self.omega_rad_s = math.sqrt(GM_KM3_S2 * max(1e-9, self.p_km)) / (self.r_km ** 2)
+
+        # Legacy alias for phase
+        self.phase_rad = self.nu_rad
 
         # Initialise platform
         platform.platform_type = "SATELLITE"
         self._update_platform()
 
-    # ── Orbital basis vectors (inertial) ──────────────────────────────────────
+    # ── Orbital basis vectors (inertial ECI) ───────────────────────────────────
 
     def _orbit_basis(self) -> Tuple[Vec3, Vec3]:
         """
-        Returns (p_hat, q_hat): unit vectors in the orbital plane.
-        p_hat points toward ascending node crossing.
-        q_hat = normal_hat × p_hat (90° ahead in orbit).
-
-        Using RAAN and inclination to rotate from equatorial plane.
+        Returns (p_hat, q_hat): unit vectors in ECI frame for the orbital plane.
+        p_hat points toward perigee (true anomaly = 0).
+        q_hat is in the orbit plane 90 deg ahead of perigee in direction of motion.
         """
-        i   = self.incl_rad
         ra  = self.raan_rad
+        inc = self.incl_rad
+        w   = self.arg_p_rad
 
-        # p_hat: direction of ascending node
-        px = math.cos(ra)
-        py = math.sin(ra)
-        pz = 0.0
+        px = math.cos(ra) * math.cos(w) - math.sin(ra) * math.sin(w) * math.cos(inc)
+        py = math.sin(ra) * math.cos(w) + math.cos(ra) * math.sin(w) * math.cos(inc)
+        pz = math.sin(w) * math.sin(inc)
 
-        # q_hat = (−sin i sin ra, sin i cos ra, cos i) rotated appropriately
-        # q_hat = (−sin ra cos i... ) — standard derivation:
-        qx = -math.sin(ra) * math.cos(i)
-        qy =  math.cos(ra) * math.cos(i)
-        qz =  math.sin(i)
+        qx = -math.cos(ra) * math.sin(w) - math.sin(ra) * math.cos(w) * math.cos(inc)
+        qy = -math.sin(ra) * math.sin(w) + math.cos(ra) * math.cos(w) * math.cos(inc)
+        qz =  math.cos(w) * math.sin(inc)
 
         return (px, py, pz), (qx, qy, qz)
 
     def _update_platform(self) -> None:
-        """Recomputes ECI pos/vel from current phase and stores into platform."""
+        """Computes current ECI position and velocity using Keplerian geometry and full vis-viva."""
         p_hat, q_hat = self._orbit_basis()
-        ph = self.phase_rad
+        nu = self.nu_rad
 
-        # Position: r * (cos θ · p̂ + sin θ · q̂)
-        cos_ph, sin_ph = math.cos(ph), math.sin(ph)
-        x = self.r_km * (cos_ph * p_hat[0] + sin_ph * q_hat[0])
-        y = self.r_km * (cos_ph * p_hat[1] + sin_ph * q_hat[1])
-        z = self.r_km * (cos_ph * p_hat[2] + sin_ph * q_hat[2])
+        # Radius from eccentric anomaly: r = a * (1 - e * cos(E))
+        self.r_km = self.a_km * (1.0 - self.e * math.cos(self.E_rad))
+        self.altitude_km = self.r_km - EARTH_RADIUS_KM
+
+        # ECI Position vector
+        cos_nu, sin_nu = math.cos(nu), math.sin(nu)
+        x = self.r_km * (cos_nu * p_hat[0] + sin_nu * q_hat[0])
+        y = self.r_km * (cos_nu * p_hat[1] + sin_nu * q_hat[1])
+        z = self.r_km * (cos_nu * p_hat[2] + sin_nu * q_hat[2])
         self.platform.pos_eci = (x, y, z)
 
-        # Velocity: r·ω * (−sin θ · p̂ + cos θ · q̂)
-        v = self.r_km * self.omega_rad_s
-        vx = v * (-sin_ph * p_hat[0] + cos_ph * q_hat[0])
-        vy = v * (-sin_ph * p_hat[1] + cos_ph * q_hat[1])
-        vz = v * (-sin_ph * p_hat[2] + cos_ph * q_hat[2])
+        # Full vis-viva equation: v = sqrt(GM * (2/r - 1/a))
+        self.speed_km_s = math.sqrt(GM_KM3_S2 * (2.0 / self.r_km - 1.0 / self.a_km))
+        self.omega_rad_s = math.sqrt(GM_KM3_S2 * max(1e-9, self.p_km)) / (self.r_km ** 2)
+
+        # Velocity components in orbital plane (perifocal)
+        v_scale = math.sqrt(GM_KM3_S2 / max(1e-9, self.p_km))
+        vp = -v_scale * sin_nu
+        vq =  v_scale * (self.e + cos_nu)
+
+        vx = vp * p_hat[0] + vq * q_hat[0]
+        vy = vp * p_hat[1] + vq * q_hat[1]
+        vz = vp * p_hat[2] + vq * q_hat[2]
         self.platform.vel_eci = (vx, vy, vz)
 
+        self.phase_rad = self.nu_rad
+
     def step(self, dt: float) -> None:
-        """Advances the orbit by dt seconds (analytic, no numerical drift)."""
-        self.phase_rad = (self.phase_rad + self.omega_rad_s * dt) % (2.0 * math.pi)
+        """
+        Advances the Keplerian orbit by dt seconds.
+        Mean anomaly -> Eccentric anomaly (Kepler) -> True anomaly -> r -> vis-viva speed.
+        """
+        self.M_rad  = (self.M_rad + self.mean_motion_rad_s * dt) % (2.0 * math.pi)
+        self.E_rad  = solve_kepler(self.M_rad, self.e)
+        self.nu_rad = eccentric_to_true_anomaly(self.E_rad, self.e)
         self._update_platform()
         self.platform.append_trail()
 
@@ -196,15 +316,26 @@ class CircularOrbitIntegrator:
 
     def to_dict(self) -> dict:
         return {
-            "altitude_km":     round(self.altitude_km, 3),
-            "radius_km":       round(self.r_km, 3),
-            "speed_km_s":      round(self.speed_km_s, 6),
-            "omega_deg_s":     round(self.omega_deg_s, 6),
-            "period_s":        round(self.period_s, 2),
-            "inclination_deg": round(math.degrees(self.incl_rad), 3),
-            "raan_deg":        round(math.degrees(self.raan_rad), 3),
-            "phase_deg":       round(math.degrees(self.phase_rad), 3),
+            "altitude_km":         round(self.altitude_km, 3),
+            "perigee_alt_km":      round(self.perigee_alt_km, 3),
+            "apogee_alt_km":       round(self.apogee_alt_km, 3),
+            "semi_major_axis_km":  round(self.a_km, 3),
+            "eccentricity":        round(self.e, 6),
+            "radius_km":           round(self.r_km, 3),
+            "speed_km_s":          round(self.speed_km_s, 6),
+            "omega_deg_s":         round(self.omega_deg_s, 6),
+            "period_s":            round(self.period_s, 2),
+            "inclination_deg":     round(math.degrees(self.incl_rad), 3),
+            "raan_deg":            round(math.degrees(self.raan_rad), 3),
+            "arg_perigee_deg":     round(math.degrees(self.arg_p_rad), 3),
+            "true_anomaly_deg":    round(math.degrees(self.nu_rad), 3),
+            "mean_anomaly_deg":    round(math.degrees(self.M_rad), 3),
+            "phase_deg":           round(math.degrees(self.nu_rad), 3),
         }
+
+
+# Backward compatibility alias
+CircularOrbitIntegrator = KeplerianOrbitIntegrator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -374,24 +505,54 @@ class UAVLocalMotion:
 
 def make_satellite_integrator(
     platform: Platform,
-    preset: str  = "LEO-550",
-    altitude_km: Optional[float]  = None,
-    inclination_deg: float = 53.0,
-    phase_deg:       float = 0.0,
-    raan_deg:        float = 0.0,
-) -> CircularOrbitIntegrator:
+    preset: str = "LEO-550",
+    perigee_alt_km: Optional[float] = None,
+    apogee_alt_km: Optional[float]  = None,
+    altitude_km: Optional[float]    = None,
+    inclination_deg: Optional[float]= None,
+    raan_deg: Optional[float]       = None,
+    arg_perigee_deg: Optional[float]= None,
+    true_anomaly_deg: float         = 0.0,
+    phase_deg: Optional[float]      = None,
+) -> KeplerianOrbitIntegrator:
     """
-    Creates a CircularOrbitIntegrator from a named preset or explicit altitude.
-    Preset keys: "LEO-300", "LEO-550", "LEO-2000", "MEO", "GEO".
+    Creates a KeplerianOrbitIntegrator from a named preset or explicit Keplerian elements.
+    Presets: "LEO-300", "LEO-550", "LEO-2000", "MEO", "GEO", "GTO".
     """
-    if altitude_km is None:
-        info = ORBIT_PRESETS.get(preset, ORBIT_PRESETS["LEO-550"])
-        altitude_km = info["altitude_km"]
-    validate_satellite_altitude(altitude_km)
-    return CircularOrbitIntegrator(
+    info = ORBIT_PRESETS.get(preset, ORBIT_PRESETS["LEO-550"])
+
+    # Resolve perigee altitude
+    if perigee_alt_km is None and altitude_km is None:
+        perigee_alt_km = info.get("perigee_alt_km", info.get("altitude_km", 550.0))
+    elif perigee_alt_km is None:
+        perigee_alt_km = altitude_km
+
+    # Resolve apogee altitude
+    if apogee_alt_km is None and altitude_km is not None and perigee_alt_km == altitude_km:
+        apogee_alt_km = altitude_km
+    elif apogee_alt_km is None:
+        apogee_alt_km = info.get("apogee_alt_km", perigee_alt_km)
+
+    if inclination_deg is None:
+        inclination_deg = info.get("inclination_deg", 53.0)
+
+    if raan_deg is None:
+        raan_deg = info.get("raan_deg", 0.0)
+
+    if arg_perigee_deg is None:
+        arg_perigee_deg = info.get("arg_perigee_deg", 0.0)
+
+    if phase_deg is not None and true_anomaly_deg == 0.0:
+        true_anomaly_deg = phase_deg
+
+    validate_satellite_altitude(perigee_alt_km, apogee_alt_km)
+
+    return KeplerianOrbitIntegrator(
         platform        = platform,
-        altitude_km     = altitude_km,
+        perigee_alt_km  = perigee_alt_km,
+        apogee_alt_km   = apogee_alt_km,
         inclination_deg = inclination_deg,
-        phase_deg       = phase_deg,
         raan_deg        = raan_deg,
+        arg_perigee_deg = arg_perigee_deg,
+        true_anomaly_deg= true_anomaly_deg,
     )
