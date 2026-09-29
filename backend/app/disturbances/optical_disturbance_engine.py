@@ -376,29 +376,32 @@ class OpticalDisturbanceEngine:
             return transmittance, contrast_scale, path_radiance, eff_intensity
 
         cond = self.config.atmospheric_condition
-        range_km = max(0.1, depth_m / 1000.0)
+        # Slant path through troposphere / atmosphere is physically limited (up to ~30 km)
+        range_km = min(max(0.1, depth_m / 1000.0), 30.0)
 
         if cond == "Clear":
             beta = 0.05
             contrast_scale = 1.0
             path_radiance = 0.0
-            amb_factor = self.config.ambient_light_factor
+            amb_factor = self.config.ambient_light_factor if self.config.ambient_light_factor is not None else 1.0
 
         elif cond == "Haze":
-            beta = 0.45 * (self.config.atmospheric_extinction_coeff / 0.05)
+            ext = self.config.atmospheric_extinction_coeff if (self.config.atmospheric_extinction_coeff and self.config.atmospheric_extinction_coeff > 0.05) else 0.45
+            beta = 0.45 * (ext / 0.05)
             contrast_scale = 0.68
             path_radiance = 25.0
-            amb_factor = 0.95 * self.config.ambient_light_factor
+            amb_factor = 0.95 * (self.config.ambient_light_factor if self.config.ambient_light_factor is not None else 1.0)
 
         elif cond == "Fog":
-            beta = 1.85 * (self.config.fog_density / 0.5)
+            fog_d = self.config.fog_density if (self.config.fog_density and self.config.fog_density > 0.05) else 0.65
+            beta = 1.85 * (fog_d / 0.5)
             contrast_scale = 0.38
             path_radiance = 60.0  # Intense diffuse path radiance wash
             amb_factor = 0.80
 
         elif cond == "Rain":
             # Marshall-Palmer empirical extinction: beta = 0.25 * (R_mm_hr ** 0.63)
-            r_rate = self.config.rain_rate_mm_hr
+            r_rate = self.config.rain_rate_mm_hr if (self.config.rain_rate_mm_hr and self.config.rain_rate_mm_hr > 1.0) else 35.0
             beta = 0.25 * (r_rate ** 0.63)
             contrast_scale = 0.60
             path_radiance = 35.0
@@ -408,7 +411,7 @@ class OpticalDisturbanceEngine:
             beta = 0.08
             contrast_scale = 0.50
             path_radiance = -10.0  # Very dark ambient background
-            amb_factor = max(0.05, self.config.ambient_light_factor * 0.18)
+            amb_factor = max(0.05, (self.config.ambient_light_factor if self.config.ambient_light_factor is not None else 1.0) * 0.18)
 
         else:
             beta = 0.05
@@ -527,13 +530,15 @@ class OpticalDisturbanceEngine:
             frame = np.clip(f_float, 0, 255).astype(np.uint8)
 
         # 2. Fog Mie Scattering Blur (scaled by atmosphere_path_frac)
-        eff_fog = self.config.fog_density * atmosphere_path_frac
-        if cond == "Fog" and eff_fog > 0.2:
+        fog_d = self.config.fog_density if (self.config.fog_density and self.config.fog_density > 0.05) else 0.65
+        eff_fog = fog_d * atmosphere_path_frac
+        if cond == "Fog" and eff_fog > 0.1:
             ksize = int(round(eff_fog * 6)) * 2 + 1
             frame = cv2.GaussianBlur(frame, (ksize, ksize), sigmaX=ksize / 2.5)
 
         # 3. Falling Rain Streaks Simulation
-        if cond == "Rain" and self.config.rain_rate_mm_hr * atmosphere_path_frac > 5.0:
+        r_rate = self.config.rain_rate_mm_hr if (self.config.rain_rate_mm_hr and self.config.rain_rate_mm_hr > 1.0) else 35.0
+        if cond == "Rain" and r_rate * atmosphere_path_frac > 3.0:
             frame = self._render_rain_streaks(frame)
 
         # 4. Brightness Fluctuation Drift
@@ -717,9 +722,15 @@ class OpticalDisturbanceEngine:
             gaussian_active=gauss_active,
             salt_pepper_active=sp_active,
             poisson_active=poisson_active,
+            noise_type=self.config.noise_type,
             noise_level_sigma=round(self.config.noise_std_dev if gauss_active else 0.0, 2),
+            salt_pepper_ratio=round(self.config.salt_pepper_ratio, 4),
+            snr_reduction_db=round(self.config.snr_reduction_db, 1),
             effective_snr_db=round(eff_snr, 1),
             motion_blur_applied=self.config.motion_blur_enabled,
+            motion_blur_enabled=self.config.motion_blur_enabled,
+            beacon_flicker_enabled=self.config.beacon_flicker_enabled,
+            beacon_flicker_frequency_hz=self.config.beacon_flicker_frequency_hz,
         )
 
         self.last_telemetry = telemetry

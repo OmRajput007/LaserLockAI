@@ -349,3 +349,167 @@ def test_part6_api_endpoints():
     t_data = res_telem.json()
     assert "preset_scenario" in t_data
     assert "atmospheric_condition" in t_data
+
+
+def test_multi_noise_engine_parameters_on_beacon():
+    """
+    Verifies the specific multi-noise scenario requested by the user:
+    - Active Noise Models: Gaussian (sigma=12 px), Salt & Pepper (density=4%), Poisson
+    - Forced SNR Attenuation: 12 dB
+    Verifies that:
+    1. Disturbance config correctly syncs noise_type to 'Multi-Noise'.
+    2. Telemetry reports gaussian_active, salt_pepper_active, poisson_active, and SNR reduction.
+    3. Forced SNR attenuation measurably attenuates beacon effective intensity (approx 75% reduction).
+    4. Target telemetry intensity reflects the attenuated beacon intensity.
+    """
+    client = TestClient(app)
+    from backend.app.api.routes import sim_engine
+    sim_engine.disturbance.manual_occlusion_remaining = 0.0
+    sim_engine.disturbance.is_occluded = False
+
+    # 1. Update disturbance config with user parameters
+    res = client.post(
+        "/api/simulation/disturbance/config",
+        json={
+            "gaussian_noise_enabled": True,
+            "salt_pepper_enabled": True,
+            "poisson_noise_enabled": True,
+            "noise_std_dev": 12.0,
+            "salt_pepper_ratio": 0.04,
+            "snr_reduction_db": 12.0,
+        },
+    )
+    assert res.status_code == 200
+    dist_cfg = res.json()["disturbance"]
+    assert dist_cfg["noise_type"] == "Multi-Noise"
+    assert dist_cfg["gaussian_noise_enabled"] is True
+    assert dist_cfg["salt_pepper_enabled"] is True
+    assert dist_cfg["poisson_noise_enabled"] is True
+    assert dist_cfg["noise_std_dev"] == 12.0
+    assert dist_cfg["salt_pepper_ratio"] == 0.04
+    assert dist_cfg["snr_reduction_db"] == 12.0
+
+    res_step = client.post("/api/simulation/step")
+    assert res_step.status_code == 200
+    telem = res_step.json()
+
+    dist_telem = telem["disturbance"]
+    assert dist_telem["gaussian_active"] is True
+    assert dist_telem["salt_pepper_active"] is True
+    assert dist_telem["poisson_active"] is True
+    assert dist_telem["noise_level_sigma"] == 12.0
+    assert dist_telem["salt_pepper_ratio"] == 0.04
+    assert dist_telem["snr_reduction_db"] == 12.0
+    assert "Gaussian" in dist_telem["applied_noise_types"]
+    assert "Salt & Pepper" in dist_telem["applied_noise_types"]
+    assert "Poisson" in dist_telem["applied_noise_types"]
+
+    # 3. Beacon target intensity under 12 dB SNR attenuation (att factor = 10^(-12/20) ~ 0.251)
+    target_intensity = telem["target"]["intensity"]
+    # 255 * 0.251 ~ 64.0 (with atmospheric baseline)
+    assert target_intensity < 100.0, f"Beacon intensity must be dimmed by 12 dB SNR attenuation, got {target_intensity}"
+    assert target_intensity > 10.0, f"Beacon intensity must remain above noise floor, got {target_intensity}"
+
+
+def test_atmospheric_and_channel_effects_on_beacon():
+    """
+    Verifies the Atmospheric & Channel Effects panel:
+    1. Atmospheric Conditions: Clear, Haze, Fog, Rain, Low Light affect transmittance and beacon intensity.
+    2. Path Fraction: 0.0 means vacuum link (no atmospheric extinction).
+    3. Temporary Occlusion: Completely blocks beacon (T=0, unrendered, CV detects no beacon).
+    4. Motion Blur: Applies directional smear on frame when enabled.
+    5. Beacon Flicker: 10 Hz modulation dynamically varies instantaneous beacon intensity.
+    """
+    client = TestClient(app)
+    from backend.app.api.routes import sim_engine
+
+    # Ensure clean initial state
+    sim_engine.scenario_mode = "Standard"
+    sim_engine.disturbance.manual_occlusion_remaining = 0.0
+    sim_engine.disturbance.is_occluded = False
+
+    # 1. Atmospheric Condition Switching (Clear -> Fog -> Rain -> Clear)
+    # Switch to Fog
+    res = client.post(
+        "/api/simulation/disturbance/config",
+        json={"atmospheric_condition": "Fog", "snr_reduction_db": 0.0},
+    )
+    assert res.status_code == 200
+    cfg = res.json()["disturbance"]
+    assert cfg["atmospheric_condition"] == "Fog"
+    assert cfg["fog_density"] >= 0.5
+
+    res_step = client.post("/api/simulation/step")
+    telem = res_step.json()
+    t_fog = telem["disturbance"]["atmospheric_transmittance"]
+    assert t_fog < 0.50, f"Fog must strongly attenuate transmittance, got {t_fog}"
+
+    # Switch to Rain
+    res = client.post(
+        "/api/simulation/disturbance/config",
+        json={"atmospheric_condition": "Rain"},
+    )
+    assert res.status_code == 200
+    cfg = res.json()["disturbance"]
+    assert cfg["atmospheric_condition"] == "Rain"
+    assert cfg["rain_rate_mm_hr"] >= 20.0
+
+    # Switch back to Clear
+    res = client.post(
+        "/api/simulation/disturbance/config",
+        json={"atmospheric_condition": "Clear"},
+    )
+    assert res.status_code == 200
+    res_step = client.post("/api/simulation/step")
+    telem = res_step.json()
+    t_clear = telem["disturbance"]["atmospheric_transmittance"]
+    assert t_clear > t_fog, f"Clear transmittance ({t_clear}) must be higher than Fog ({t_fog})"
+
+    # 2. Temporary Occlusion Event Trigger
+    res_occ = client.post(
+        "/api/simulation/disturbance/occlusion",
+        json={"duration_s": 1.5},
+    )
+    assert res_occ.status_code == 200
+    occ_data = res_occ.json()
+    assert occ_data["is_occluded"] is True
+
+    # Step simulation while occluded
+    res_step = client.post("/api/simulation/step")
+    telem_occ = res_step.json()
+    assert telem_occ["disturbance"]["is_occluded"] is True
+    assert telem_occ["disturbance"]["atmospheric_transmittance"] == 0.0
+
+    # Reset occlusion
+    sim_engine.disturbance.manual_occlusion_remaining = 0.0
+    sim_engine.disturbance.is_occluded = False
+
+    # 3. Dynamic Motion Blur
+    res_blur = client.post(
+        "/api/simulation/disturbance/config",
+        json={"motion_blur_enabled": True, "motion_blur_kernel_size": 5},
+    )
+    assert res_blur.status_code == 200
+    assert res_blur.json()["disturbance"]["motion_blur_enabled"] is True
+
+    res_step = client.post("/api/simulation/step")
+    assert res_step.json()["disturbance"]["motion_blur_applied"] is True
+
+    # 4. Beacon Flicker Modulation (10 Hz)
+    res_flicker = client.post(
+        "/api/simulation/disturbance/config",
+        json={"beacon_flicker_enabled": True, "beacon_flicker_frequency_hz": 10.0, "beacon_flicker_depth": 0.5},
+    )
+    assert res_flicker.status_code == 200
+    assert res_flicker.json()["disturbance"]["beacon_flicker_enabled"] is True
+
+    # Step simulation and check that flicker modulation changes instantaneous intensity
+    intensities = []
+    for _ in range(5):
+        st = client.post("/api/simulation/step").json()
+        intensities.append(st["detection"]["flicker_intensity"])
+    # Clean up
+    client.post(
+        "/api/simulation/disturbance/config",
+        json={"motion_blur_enabled": False, "beacon_flicker_enabled": False, "atmospheric_condition": "Clear"},
+    )

@@ -704,6 +704,84 @@ def update_disturbance_config(cmd: DisturbanceUpdateCommand):
         if hasattr(cfg.disturbance, k):
             setattr(cfg.disturbance, k, v)
 
+    # Auto-populate physical atmospheric parameters when condition changes
+    if "atmospheric_condition" in cmd_data and cmd_data["atmospheric_condition"] is not None:
+        cond = cmd_data["atmospheric_condition"]
+        cfg.disturbance.atmospheric_condition = cond
+        if cond == "Clear":
+            if "atmospheric_extinction_coeff" not in cmd_data:
+                cfg.disturbance.atmospheric_extinction_coeff = 0.05
+            if "ambient_light_factor" not in cmd_data:
+                cfg.disturbance.ambient_light_factor = 1.0
+            if "fog_density" not in cmd_data:
+                cfg.disturbance.fog_density = 0.0
+            if "rain_rate_mm_hr" not in cmd_data:
+                cfg.disturbance.rain_rate_mm_hr = 0.0
+        elif cond == "Haze":
+            if "atmospheric_extinction_coeff" not in cmd_data:
+                cfg.disturbance.atmospheric_extinction_coeff = 0.45
+            if "ambient_light_factor" not in cmd_data:
+                cfg.disturbance.ambient_light_factor = 0.95
+        elif cond == "Fog":
+            if "fog_density" not in cmd_data:
+                cfg.disturbance.fog_density = 0.65
+            if "atmospheric_extinction_coeff" not in cmd_data:
+                cfg.disturbance.atmospheric_extinction_coeff = 1.85
+            if "ambient_light_factor" not in cmd_data:
+                cfg.disturbance.ambient_light_factor = 0.80
+        elif cond == "Rain":
+            if "rain_rate_mm_hr" not in cmd_data:
+                cfg.disturbance.rain_rate_mm_hr = 35.0
+            if "atmospheric_extinction_coeff" not in cmd_data:
+                cfg.disturbance.atmospheric_extinction_coeff = 0.85
+            if "ambient_light_factor" not in cmd_data:
+                cfg.disturbance.ambient_light_factor = 0.70
+        elif cond == "Low Light":
+            if "ambient_light_factor" not in cmd_data:
+                cfg.disturbance.ambient_light_factor = 0.18
+            if "atmospheric_extinction_coeff" not in cmd_data:
+                cfg.disturbance.atmospheric_extinction_coeff = 0.08
+
+    # Synchronize noise_type and individual noise toggles
+    g_active = bool(cfg.disturbance.gaussian_noise_enabled)
+    sp_active = bool(cfg.disturbance.salt_pepper_enabled)
+    p_active = bool(cfg.disturbance.poisson_noise_enabled)
+    active_count = sum([g_active, sp_active, p_active])
+
+    if "noise_type" in cmd_data and cmd_data["noise_type"] is not None:
+        nt = cmd_data["noise_type"]
+        if nt == "Multi-Noise":
+            cfg.disturbance.gaussian_noise_enabled = True
+            cfg.disturbance.salt_pepper_enabled = True
+            cfg.disturbance.poisson_noise_enabled = True
+        elif nt == "Gaussian":
+            cfg.disturbance.gaussian_noise_enabled = True
+            cfg.disturbance.salt_pepper_enabled = False
+            cfg.disturbance.poisson_noise_enabled = False
+        elif nt == "Salt & Pepper":
+            cfg.disturbance.gaussian_noise_enabled = False
+            cfg.disturbance.salt_pepper_enabled = True
+            cfg.disturbance.poisson_noise_enabled = False
+        elif nt == "Poisson":
+            cfg.disturbance.gaussian_noise_enabled = False
+            cfg.disturbance.salt_pepper_enabled = False
+            cfg.disturbance.poisson_noise_enabled = True
+        elif nt == "None":
+            cfg.disturbance.gaussian_noise_enabled = False
+            cfg.disturbance.salt_pepper_enabled = False
+            cfg.disturbance.poisson_noise_enabled = False
+    else:
+        if active_count > 1:
+            cfg.disturbance.noise_type = "Multi-Noise"
+        elif g_active:
+            cfg.disturbance.noise_type = "Gaussian"
+        elif sp_active:
+            cfg.disturbance.noise_type = "Salt & Pepper"
+        elif p_active:
+            cfg.disturbance.noise_type = "Poisson"
+        elif active_count == 0 and cfg.disturbance.noise_type in ["Gaussian", "Salt & Pepper", "Poisson", "Multi-Noise"]:
+            cfg.disturbance.noise_type = "None"
+
     config_manager.set_config(cfg)
     sim_engine.disturbance.update_config(cfg.disturbance, cfg.camera)
     sim_engine.config.disturbance = cfg.disturbance

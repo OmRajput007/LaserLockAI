@@ -47,6 +47,16 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [viewMode, setViewMode] = useState<'canvas' | 'opencv_annotated' | 'opencv_raw'>('canvas');
   const [streamTick, setStreamTick] = useState(0);
+
+  // Periodic stream tick for live OpenCV video feed
+  useEffect(() => {
+    if (viewMode === 'canvas') return;
+    const interval = setInterval(() => {
+      setStreamTick((t) => (t + 1) % 1000000);
+    }, 50);
+    return () => clearInterval(interval);
+  }, [viewMode]);
+
   const [autoLOS, setAutoLOS] = useState(false);
   const autoLOSRef = useRef(false);
   autoLOSRef.current = autoLOS;
@@ -119,6 +129,9 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   const threeRendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const globeMeshRef = useRef<THREE.Mesh | null>(null);
   const beaconGroupRef = useRef<THREE.Group | null>(null);
+  const emitterMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const coreMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const beamMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
 
   // Sync refs so 60 FPS animation loop always reads latest prop values without restarting Three.js scene
   const cameraPropRef = useRef(camera);
@@ -244,6 +257,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     // Beacon optical emitter head (Red glowing box)
     const emitterGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
     const emitterMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+    emitterMatRef.current = emitterMat;
     const emitterMesh = new THREE.Mesh(emitterGeo, emitterMat);
     emitterMesh.position.y = 1.0;
     beaconGroup.add(emitterMesh);
@@ -251,6 +265,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     // Pulsing bright core point
     const coreGeo = new THREE.SphereGeometry(0.5, 12, 12);
     const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    coreMatRef.current = coreMat;
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     coreMesh.position.y = 1.0;
     beaconGroup.add(coreMesh);
@@ -262,6 +277,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       transparent: true,
       opacity: 0.5,
     });
+    beamMatRef.current = beamMat;
     const beamMesh = new THREE.Mesh(beamGeo, beamMat);
     beamMesh.position.y = 10.0;
     beaconGroup.add(beamMesh);
@@ -376,10 +392,41 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         }
       }
 
-      // Check occlusion state changes
-      if (povData.isOccluded !== lastOccluded) {
-        lastOccluded = povData.isOccluded;
-        setIsOccludedState(povData.isOccluded);
+      // Modulate 3D beacon optical intensity with SNR attenuation, atmosphere, flicker, and Poisson noise
+      const currentDist = disturbancePropRef.current;
+      const isChannelOcc = Boolean(currentDist?.is_occluded || currentDist?.occlusion_active);
+      const isTotalOcc = povData.isOccluded || isChannelOcc;
+      const snrAttDb = currentDist?.snr_reduction_db ?? 0.0;
+      const atmoTrans = currentDist?.atmospheric_transmittance ?? currentDist?.transmission_factor ?? 1.0;
+      const snrFactor = Math.pow(10, -snrAttDb / 20.0);
+      let effBeaconFrac = isTotalOcc ? 0.0 : Math.max(0.06, Math.min(1.0, snrFactor * atmoTrans));
+
+      if (!isTotalOcc && currentDist?.beacon_flicker_enabled) {
+        const fHz = currentDist?.beacon_flicker_frequency_hz ?? 10.0;
+        const tSec = performance.now() / 1000.0;
+        const flick = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(2.0 * Math.PI * fHz * tSec));
+        effBeaconFrac *= flick;
+      }
+
+      if (!isTotalOcc && (currentDist?.poisson_active || currentDist?.applied_noise_types?.includes('Poisson'))) {
+        const fluct = (Math.random() - 0.5) * 0.35;
+        effBeaconFrac = Math.max(0.04, Math.min(1.3, effBeaconFrac * (1.0 + fluct)));
+      }
+
+      if (emitterMatRef.current) {
+        emitterMatRef.current.color.setRGB(0.957 * effBeaconFrac, 0.247 * effBeaconFrac, 0.369 * effBeaconFrac);
+      }
+      if (coreMatRef.current) {
+        coreMatRef.current.color.setRGB(effBeaconFrac, effBeaconFrac, effBeaconFrac);
+      }
+      if (beamMatRef.current) {
+        beamMatRef.current.opacity = isTotalOcc ? 0.0 : Math.max(0.04, 0.5 * effBeaconFrac);
+      }
+
+      // Check occlusion state changes (combines orbital Earth limb and temporary channel obstruction)
+      if (isTotalOcc !== lastOccluded) {
+        lastOccluded = isTotalOcc;
+        setIsOccludedState(isTotalOcc);
       }
 
       renderer.render(scene, povCamera);
@@ -398,6 +445,16 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       atmoMat.dispose();
       starGeo.dispose();
       starMat.dispose();
+      padGeo.dispose();
+      padMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      emitterGeo.dispose();
+      emitterMat.dispose();
+      coreGeo.dispose();
+      coreMat.dispose();
+      beamGeo.dispose();
+      beamMat.dispose();
     };
   }, []);
 
@@ -509,6 +566,89 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       }
     }
 
+    const dist = disturbance;
+    const isChannelOccluded = Boolean(dist?.is_occluded || dist?.occlusion_active);
+    const isEffectiveOccluded = isOccludedState || isChannelOccluded;
+
+    // Atmospheric Channel Environmental Effects on Sensor
+    const atmoCond = dist?.atmospheric_condition || 'Clear';
+    const atmoFrac = Math.max(0.0, Math.min(1.0, tracking?.atmosphere_path_frac ?? 1.0));
+
+    if (atmoFrac > 0.001) {
+      if (atmoCond === 'Fog') {
+        // Diffuse milky path radiance wash
+        ctx.fillStyle = `rgba(200, 215, 230, ${(0.16 * atmoFrac).toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      } else if (atmoCond === 'Haze') {
+        // Aerosol contrast attenuation wash
+        ctx.fillStyle = `rgba(215, 200, 160, ${(0.08 * atmoFrac).toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      } else if (atmoCond === 'Rain') {
+        // Precipitation darkening
+        ctx.fillStyle = `rgba(15, 23, 42, ${(0.12 * atmoFrac).toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+        // Falling slanted rain precipitation streaks
+        ctx.strokeStyle = `rgba(186, 230, 253, ${(0.40 * atmoFrac).toFixed(3)})`;
+        ctx.lineWidth = 1;
+        const rainCount = Math.round(50 * atmoFrac);
+        for (let r = 0; r < rainCount; r++) {
+          const rx = (Math.random() * (w + 40)) - 20;
+          const ry = Math.random() * (h - 20);
+          const rLen = 8 + Math.random() * 14;
+          ctx.beginPath();
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 3, ry + rLen);
+          ctx.stroke();
+        }
+      } else if (atmoCond === 'Low Light') {
+        // Deep ambient sensor darkness
+        ctx.fillStyle = 'rgba(2, 4, 8, 0.45)';
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+
+    const isGaussian = Boolean(dist?.gaussian_active || dist?.applied_noise_types?.includes('Gaussian') || (dist?.noise_level_sigma ?? 0) > 0.1);
+    const noiseSigma = Math.min(20, Math.max(0, dist?.noise_level_sigma ?? (isGaussian ? 12.0 : 0.0)));
+
+    const isSaltPepper = Boolean(dist?.salt_pepper_active || dist?.applied_noise_types?.includes('Salt & Pepper') || (dist?.salt_pepper_ratio ?? 0) > 0.001);
+    const spDensity = Math.min(0.20, Math.max(0, dist?.salt_pepper_ratio ?? (isSaltPepper ? 0.04 : 0.0)));
+
+    const isPoisson = Boolean(dist?.poisson_active || dist?.applied_noise_types?.includes('Poisson'));
+
+    const snrReductionDb = Math.max(0, dist?.snr_reduction_db ?? 0.0);
+    const atmoTransmittance = Math.max(0.01, Math.min(1.0, dist?.atmospheric_transmittance ?? dist?.transmission_factor ?? 1.0));
+
+    // Forced SNR reduction attenuation factor: 10^(-SNR_dB / 20)
+    const snrAttFactor = Math.pow(10, -snrReductionDb / 20.0);
+    const totalTransmittance = Math.min(1.0, Math.max(0.03, snrAttFactor * atmoTransmittance));
+
+    // Target intensity (properly incorporates atmospheric transmittance & SNR reduction)
+    const targetRawIntensity = target?.intensity ?? 255.0;
+    const effectiveIntensity = Math.min(255, Math.max(8, targetRawIntensity * totalTransmittance));
+    let intensityFrac = effectiveIntensity / 255.0;
+
+    // Optical Beacon 10 Hz Flicker Modulation
+    const isFlicker = Boolean(dist?.beacon_flicker_enabled);
+    if (isFlicker) {
+      const fHz = dist?.beacon_flicker_frequency_hz ?? 10.0;
+      const tSec = Date.now() / 1000.0;
+      const flickerFactor = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(2.0 * Math.PI * fHz * tSec));
+      intensityFrac = Math.max(0.04, Math.min(1.0, intensityFrac * flickerFactor));
+    }
+
+    // Ambient sensor grain under Gaussian noise
+    if (isGaussian && noiseSigma > 0.5) {
+      const grainCount = Math.min(160, Math.round(noiseSigma * 8));
+      for (let i = 0; i < grainCount; i++) {
+        const gx = Math.floor(Math.random() * w);
+        const gy = Math.floor(Math.random() * h);
+        const isBright = Math.random() >= 0.5;
+        const gAlpha = Math.min(0.25, (noiseSigma / 20.0) * 0.20);
+        ctx.fillStyle = isBright ? `rgba(255, 255, 255, ${gAlpha.toFixed(3)})` : `rgba(0, 0, 0, ${gAlpha.toFixed(3)})`;
+        ctx.fillRect(gx, gy, 1.5, 1.5);
+      }
+    }
+
     const cx = w / 2; // 320
     const cy = h / 2; // 240
 
@@ -585,51 +725,186 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       && beaconPx >= 0 && beaconPx <= 640
       && beaconPy >= 0 && beaconPy <= 480;
 
-    if (target && beaconInSensor && !isOccludedState && beaconPx !== null && beaconPy !== null) {
+    if (target && beaconInSensor && !isEffectiveOccluded && beaconPx !== null && beaconPy !== null) {
       const px = beaconPx;
       const py = beaconPy;
       const sz = target.size_pixels; // 10 px default
       const shape = target.shape || 'Square';
 
-      // Spot halo glow
-      const glow = ctx.createRadialGradient(px, py, 1, px, py, 22);
-      glow.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-      glow.addColorStop(0.35, 'rgba(6, 182, 212, 0.65)');
+      // (a) Quantum photon shot scintillation (temporal variance ~ sqrt(mean))
+      let poissonScint = 1.0;
+      if (isPoisson) {
+        const relVariance = Math.min(0.40, 0.12 + (1.0 - intensityFrac) * 0.28);
+        poissonScint = Math.max(0.25, Math.min(1.5, 1.0 + (Math.random() - 0.5) * 2.0 * relVariance));
+      }
+      const finalIntensityFrac = Math.max(0.04, Math.min(1.0, intensityFrac * poissonScint));
+
+      // (b) Gaussian spatial dispersion of the readout centroid
+      let effPx = px;
+      let effPy = py;
+      if (isGaussian && noiseSigma > 0.5) {
+        const u1 = Math.max(1e-6, Math.random());
+        const u2 = Math.random();
+        const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        const z1 = Math.sqrt(-2.0 * Math.log(u1)) * Math.sin(2.0 * Math.PI * u2);
+        const jitterAmp = Math.min(noiseSigma / 4.5, 3.8); // std dev in pixels
+        effPx += z0 * jitterAmp;
+        effPy += z1 * jitterAmp;
+      }
+
+      // (c) Spot halo glow (attenuated by forced SNR reduction and Poisson scintillation)
+      const haloRadius = Math.max(8, 22 * (0.45 + 0.55 * finalIntensityFrac));
+      const glow = ctx.createRadialGradient(effPx, effPy, 1, effPx, effPy, haloRadius);
+      const coreGlowAlpha = Math.max(0.08, 0.95 * finalIntensityFrac);
+      const midGlowAlpha = Math.max(0.04, 0.65 * finalIntensityFrac);
+      glow.addColorStop(0, `rgba(255, 255, 255, ${coreGlowAlpha.toFixed(3)})`);
+      glow.addColorStop(0.35, `rgba(6, 182, 212, ${midGlowAlpha.toFixed(3)})`);
       glow.addColorStop(1, 'rgba(6, 182, 212, 0)');
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(px, py, 22, 0, Math.PI * 2);
+      ctx.arc(effPx, effPy, haloRadius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Optical Spot based on shape (Square, Circle, Gaussian)
+      // Atmospheric Fog Mie Scattering Diffusion Halo
+      if (atmoCond === 'Fog' && atmoFrac > 0.05) {
+        const fogHaloRadius = Math.max(25, 45 * atmoFrac);
+        const fogGlow = ctx.createRadialGradient(effPx, effPy, 2, effPx, effPy, fogHaloRadius);
+        fogGlow.addColorStop(0, `rgba(225, 235, 250, ${(0.30 * atmoFrac * finalIntensityFrac).toFixed(3)})`);
+        fogGlow.addColorStop(0.5, `rgba(180, 205, 235, ${(0.12 * atmoFrac * finalIntensityFrac).toFixed(3)})`);
+        fogGlow.addColorStop(1, 'rgba(180, 205, 235, 0)');
+        ctx.fillStyle = fogGlow;
+        ctx.beginPath();
+        ctx.arc(effPx, effPy, fogHaloRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // (d) Spot geometry with Gaussian dispersion layers and SNR dimming
+      const rVal = Math.round(244 * (0.35 + 0.65 * finalIntensityFrac));
+      const gVal = Math.round(63 * (0.25 + 0.75 * finalIntensityFrac));
+      const bVal = Math.round(94 * (0.25 + 0.75 * finalIntensityFrac));
+      const spotAlpha = Math.max(0.20, finalIntensityFrac);
+
+      // (e) Dynamic Motion Blur Slices (Kernel 5x5) along camera pan/tilt & platform velocity
+      const isMotionBlur = Boolean(dist?.motion_blur_applied || dist?.motion_blur_enabled);
+      if (isMotionBlur) {
+        const panRate = camera?.pan_rate_deg_s ?? 0;
+        const tiltRate = camera?.tilt_rate_deg_s ?? 0;
+        const platDx = dist?.platform_dx_px ?? 0;
+        const platDy = dist?.platform_dy_px ?? 0;
+        let blurVx = 3.5;
+        let blurVy = 2.5;
+        if (Math.abs(panRate) > 0.02 || Math.abs(tiltRate) > 0.02) {
+          const speed = Math.sqrt(panRate * panRate + tiltRate * tiltRate);
+          const blurLen = Math.min(10, Math.max(3.5, speed * 2.0));
+          blurVx = (panRate / speed) * blurLen;
+          blurVy = (-tiltRate / speed) * blurLen;
+        } else if (Math.abs(platDx) > 0.1 || Math.abs(platDy) > 0.1) {
+          const pSpeed = Math.sqrt(platDx * platDx + platDy * platDy);
+          const blurLen = Math.min(8, Math.max(3.5, pSpeed * 1.5));
+          blurVx = (platDx / pSpeed) * blurLen;
+          blurVy = (platDy / pSpeed) * blurLen;
+        }
+        const blurSlices = 5;
+        for (let s = 1; s <= blurSlices; s++) {
+          const sFrac = (s / (blurSlices + 1)) - 0.5; // -0.5 to +0.5
+          const sxOff = blurVx * sFrac * 2.2;
+          const syOff = blurVy * sFrac * 2.2;
+          const sAlpha = (spotAlpha * 0.35) * (1.0 - Math.abs(sFrac) * 0.7);
+          ctx.fillStyle = `rgba(${rVal}, ${gVal}, ${bVal}, ${sAlpha.toFixed(3)})`;
+          if (shape === 'Square') {
+            ctx.fillRect(effPx - sz / 2 + sxOff, effPy - sz / 2 + syOff, sz, sz);
+          } else {
+            ctx.beginPath();
+            ctx.arc(effPx + sxOff, effPy + syOff, sz / 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
       if (shape === 'Square') {
         // Problem Statement 4 Default: Square 10x10 px (Red square beacon)
-        ctx.fillStyle = '#f43f5e';
-        ctx.strokeStyle = '#ffffff';
+        // If Gaussian noise active: render subtle dispersion / blur layers
+        if (isGaussian && noiseSigma > 1.0) {
+          const dispersionLayers = Math.min(4, Math.ceil(noiseSigma / 4));
+          for (let l = 1; l <= dispersionLayers; l++) {
+            const spread = (noiseSigma * 0.18 * l) / dispersionLayers;
+            const layerAlpha = (spotAlpha * 0.22) / l;
+            const lOffX = (Math.random() - 0.5) * spread;
+            const lOffY = (Math.random() - 0.5) * spread;
+            ctx.fillStyle = `rgba(${rVal}, ${gVal}, ${bVal}, ${layerAlpha.toFixed(3)})`;
+            ctx.fillRect(effPx - sz / 2 + lOffX, effPy - sz / 2 + lOffY, sz, sz);
+          }
+        }
+
+        // Primary spot
+        ctx.fillStyle = `rgba(${rVal}, ${gVal}, ${bVal}, ${spotAlpha.toFixed(3)})`;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0.15, finalIntensityFrac).toFixed(3)})`;
         ctx.lineWidth = 1.5;
-        ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
-        ctx.strokeRect(px - sz / 2, py - sz / 2, sz, sz);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+        ctx.fillRect(effPx - sz / 2, effPy - sz / 2, sz, sz);
+        ctx.strokeRect(effPx - sz / 2, effPy - sz / 2, sz, sz);
+
+        // Core white center point (dimmed by SNR attenuation)
+        const coreAlpha = Math.max(0.10, finalIntensityFrac);
+        ctx.fillStyle = `rgba(255, 255, 255, ${coreAlpha.toFixed(3)})`;
+        ctx.fillRect(effPx - 1.5, effPy - 1.5, 3, 3);
       } else if (shape === 'Circle') {
-        // Circular optical aperture disk
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = '#38bdf8';
+        if (isGaussian && noiseSigma > 1.0) {
+          const dispersionLayers = Math.min(4, Math.ceil(noiseSigma / 4));
+          for (let l = 1; l <= dispersionLayers; l++) {
+            const spread = (noiseSigma * 0.18 * l) / dispersionLayers;
+            const layerAlpha = (spotAlpha * 0.22) / l;
+            const lOffX = (Math.random() - 0.5) * spread;
+            const lOffY = (Math.random() - 0.5) * spread;
+            ctx.strokeStyle = `rgba(56, 189, 248, ${layerAlpha.toFixed(3)})`;
+            ctx.beginPath();
+            ctx.arc(effPx + lOffX, effPy + lOffY, sz / 2 + (l * 0.5), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${spotAlpha.toFixed(3)})`;
+        ctx.strokeStyle = `rgba(56, 189, 248, ${spotAlpha.toFixed(3)})`;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(px, py, sz / 2, 0, Math.PI * 2);
+        ctx.arc(effPx, effPy, sz / 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       } else if (shape === 'Gaussian') {
-        // Physical Gaussian intensity beam profile
-        const gGrad = ctx.createRadialGradient(px, py, 0, px, py, sz / 1.5);
-        gGrad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-        gGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.7)');
+        const gGrad = ctx.createRadialGradient(effPx, effPy, 0, effPx, effPy, sz / 1.5);
+        gGrad.addColorStop(0, `rgba(255, 255, 255, ${spotAlpha.toFixed(3)})`);
+        gGrad.addColorStop(0.5, `rgba(56, 189, 248, ${(0.7 * spotAlpha).toFixed(3)})`);
         gGrad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
         ctx.fillStyle = gGrad;
         ctx.beginPath();
-        ctx.arc(px, py, sz / 1.5, 0, Math.PI * 2);
+        ctx.arc(effPx, effPy, sz / 1.5, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // (e) Salt & Pepper Impulsive Noise on Beacon & Sensor
+      if (isSaltPepper && spDensity > 0.002) {
+        // Impulsive bit corruptions directly cutting through the beacon
+        const spotSpeckCount = Math.max(2, Math.round(sz * sz * spDensity * 1.6));
+        for (let i = 0; i < spotSpeckCount; i++) {
+          const spX = effPx - sz / 2 + Math.random() * sz;
+          const spY = effPy - sz / 2 + Math.random() * sz;
+          const isSalt = Math.random() >= 0.5;
+          ctx.fillStyle = isSalt ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.95)';
+          ctx.fillRect(Math.floor(spX), Math.floor(spY), 1.5, 1.5);
+        }
+
+        // Surrounding sensor field specks
+        const sensorSpeckCount = Math.max(8, Math.round(200 * spDensity));
+        for (let i = 0; i < sensorSpeckCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = sz + Math.random() * 85;
+          const sx = Math.floor(effPx + Math.cos(angle) * radius);
+          const sy = Math.floor(effPy + Math.sin(angle) * radius);
+          if (sx >= 0 && sx <= w && sy >= 0 && sy <= h) {
+            const isSalt = Math.random() >= 0.5;
+            ctx.fillStyle = isSalt ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(sx, sy, 1.5, 1.5);
+          }
+        }
       }
 
       // Tracking error line from center boresight to spot
@@ -638,28 +913,70 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(px, py);
+      ctx.lineTo(effPx, effPy);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Pixel readout tag
+      // Pixel readout tag + Disturbance indicators
       ctx.fillStyle = '#38bdf8';
       ctx.font = '10px JetBrains Mono, monospace';
-      ctx.fillText(`BEACON [${px.toFixed(1)}, ${py.toFixed(1)}]`, px + 12, py - 10);
-    } else if (target && isOccludedState) {
-      // Earth horizon occlusion alert badge on sensor
+      const activeList: string[] = [];
+      if (isGaussian) activeList.push(`GAUSS σ=${noiseSigma.toFixed(0)}`);
+      if (isSaltPepper) activeList.push(`S&P ${(spDensity * 100).toFixed(0)}%`);
+      if (isPoisson) activeList.push('POISSON');
+      if (snrReductionDb > 0) activeList.push(`-${snrReductionDb.toFixed(0)}dB`);
+      if (isFlicker) activeList.push('FLICKER 10Hz');
+      if (isMotionBlur) activeList.push('BLUR 5x5');
+      if (atmoCond !== 'Clear' && atmoFrac > 0.05) activeList.push(`${atmoCond.toUpperCase()} T=${((dist?.atmospheric_transmittance ?? 1.0) * 100).toFixed(0)}%`);
+      const distTag = activeList.length > 0 ? ` [${activeList.join(', ')}]` : '';
+      ctx.fillText(`BEACON [${effPx.toFixed(1)}, ${effPy.toFixed(1)}]${distTag}`, effPx + 14, effPy - 10);
+    } else if (target && isEffectiveOccluded) {
+      // Occlusion alert badge & mask on sensor
       ctx.save();
-      ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
-      ctx.strokeStyle = '#f43f5e';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.strokeRect(cx - 130, cy + 30, 260, 26);
-      ctx.fillRect(cx - 130, cy + 30, 260, 26);
-      ctx.fillStyle = '#fca5a5';
-      ctx.font = 'bold 10px JetBrains Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('GROUND BEACON OCCLUDED BY EARTH HORIZON', cx, cy + 43);
+      if (isChannelOccluded) {
+        // Channel Obstacle / Cloud Occlusion Mask
+        const ox = beaconPx ?? cx;
+        const oy = beaconPy ?? cy;
+        // Smoky diffuse cloud gradient over beacon spot
+        const cloudGrad = ctx.createRadialGradient(ox, oy, 4, ox, oy, 44);
+        cloudGrad.addColorStop(0, 'rgba(71, 85, 105, 0.95)');
+        cloudGrad.addColorStop(0.5, 'rgba(51, 65, 85, 0.80)');
+        cloudGrad.addColorStop(1, 'rgba(30, 41, 59, 0)');
+        ctx.fillStyle = cloudGrad;
+        ctx.beginPath();
+        ctx.ellipse(ox, oy, 44, 28, Math.PI / 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Channel occlusion alert badge
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.20)';
+        ctx.fillRect(cx - 145, cy + 30, 290, 26);
+        ctx.strokeStyle = '#f43f5e';
+        ctx.strokeRect(cx - 145, cy + 30, 290, 26);
+        ctx.fillStyle = '#fca5a5';
+        ctx.font = 'bold 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('OPTICAL CHANNEL OCCLUDED (CLOUD / OBSTACLE)', cx, cy + 43);
+      } else {
+        // Earth horizon / limb occlusion
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(cx - 130, cy + 30, 260, 26);
+        ctx.fillRect(cx - 130, cy + 30, 260, 26);
+        ctx.fillStyle = '#fca5a5';
+        ctx.font = 'bold 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('GROUND BEACON OCCLUDED BY EARTH HORIZON', cx, cy + 43);
+      }
       ctx.restore();
     }
 
@@ -803,7 +1120,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
 
       // (d) PAT State Machine Badge on Canvas HUD
       let patState = tracking.state || tracking.mode || 'SEARCHING';
-      if (isOccludedState && patState !== 'NO_COVERAGE') {
+      if (isEffectiveOccluded && patState !== 'NO_COVERAGE') {
         patState = 'LINK_BLOCKED';
       }
       const stateColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -835,7 +1152,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       ctx.fillText(`PAT: ${patState}`, cx, badgeY + badgeH / 2);
       ctx.restore();
     }
-  }, [target, camera, tracking, detection, viewMode, showSatellitePov, fovMode, isOccludedState]);
+  }, [target, camera, tracking, detection, disturbance, viewMode, showSatellitePov, fovMode, isOccludedState]);
 
   const isCvDetected = Boolean(
     detection?.beacon_detected &&
@@ -881,9 +1198,12 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     target.pixel_y <= 480
   );
 
+  const isChannelOccluded = Boolean(disturbance?.is_occluded || disturbance?.occlusion_active);
+  const isEffectiveOccluded = isOccludedState || isChannelOccluded;
+
   // When satellite FOV locks onto beacon (rectangular frustum turns green), beacon is locked in FOV
-  // The moment sight is lost (rectangular frustum turns red), it is lost from FOV
-  const isBeaconVisibleInFov = !isOccludedState && (
+  // The moment sight is lost (rectangular frustum turns red or channel is occluded), it is lost from FOV
+  const isBeaconVisibleInFov = !isEffectiveOccluded && (
     isLockedInFov ||
     (!isLostFromFov && (isCvDetected || isTrackingLocked || isTrackedInSensor || isGroundTruthInSensor))
   );
@@ -1018,10 +1338,10 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           <span className="text-slate-600">|</span>
           <span className="text-slate-400">
             Target: {(() => {
-              if (isOccludedState) {
+              if (isEffectiveOccluded) {
                 return (
                   <span className="text-rose-400 font-bold inline-flex items-center gap-1">
-                    <EyeOff className="w-3 h-3" /> OCCLUDED (EARTH LIMB)
+                    <EyeOff className="w-3 h-3" /> {isChannelOccluded ? 'OCCLUDED (CLOUD / OBSTACLE)' : 'OCCLUDED (EARTH LIMB)'}
                   </span>
                 );
               }
@@ -1102,7 +1422,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           ) : (
             <div className="relative w-full h-full bg-black flex items-center justify-center z-10">
               <img
-                src={`http://127.0.0.1:8000/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${streamTick}`}
+                src={`/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${streamTick}`}
                 alt="Live OpenCV Camera Feed"
                 className="w-full h-full object-contain"
               />
@@ -1129,8 +1449,8 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
             >
               <Volume2 className="w-3.5 h-3.5 text-rose-400 animate-bounce flex-shrink-0" />
               <span>
-                {isOccludedState
-                  ? 'ALARM: BEACON OCCLUDED BY EARTH LIMB'
+                {isEffectiveOccluded
+                  ? (isChannelOccluded ? 'ALARM: OPTICAL CHANNEL OCCLUDED (CLOUD / OBSTACLE)' : 'ALARM: BEACON OCCLUDED BY EARTH LIMB')
                   : 'ALARM: BEACON LOST FROM SATELLITE FOV'}
                 {isAlarmMuted
                   ? ' • [MUTED]'

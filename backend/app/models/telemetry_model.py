@@ -195,9 +195,15 @@ class DisturbanceTelemetry(BaseModel):
     gaussian_active: bool = Field(False, description="Gaussian noise model active")
     salt_pepper_active: bool = Field(False, description="Salt & Pepper noise model active")
     poisson_active: bool = Field(False, description="Poisson noise model active")
+    noise_type: str = Field("None", description="Active noise mode")
     noise_level_sigma: float = Field(0.0, description="Noise standard deviation (px, max 20.0)")
+    salt_pepper_ratio: float = Field(0.02, description="Salt & pepper noise ratio")
+    snr_reduction_db: float = Field(0.0, description="Forced SNR reduction in dB")
     effective_snr_db: Optional[float] = Field(None, description="Signal-to-noise ratio under disturbance")
     motion_blur_applied: bool = Field(False, description="Whether motion blur was applied")
+    motion_blur_enabled: bool = Field(False, description="Whether motion blur disturbance is enabled")
+    beacon_flicker_enabled: bool = Field(False, description="Whether optical beacon flicker modulation is active")
+    beacon_flicker_frequency_hz: float = Field(10.0, description="Flicker modulation frequency in Hz")
 
 
 class SimulationTelemetry(BaseModel):

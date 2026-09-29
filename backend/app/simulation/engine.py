@@ -573,7 +573,7 @@ class SimulationEngine:
                     is_in_fov=in_fov_gt,
                     shape=self.target_manager.primary_target.shape,
                     size_pixels=self.target_manager.primary_target.size_pixels,
-                    intensity=self.target_manager.primary_target.intensity,
+                    intensity=round(self.last_effective_intensity, 1),
                     trajectory_trail=[],
                 )
             ]
@@ -586,6 +586,7 @@ class SimulationEngine:
                 u_t, v_t, in_fov_t, az_t_deg, el_t_deg, depth_t = self.camera.project_3d_target(px_t, py_t, pz_t)
                 u_t_disp = (u_t + jit_dx) if (u_t is not None) else None
                 v_t_disp = (v_t + jit_dy) if (v_t is not None) else None
+                eff_t_intensity = round(self.last_effective_intensity, 1) if t.target_id == primary.target_id else t.intensity
                 target_states.append(
                     TargetState(
                         target_id=t.target_id,
@@ -606,7 +607,7 @@ class SimulationEngine:
                         is_in_fov=in_fov_t,
                         shape=t.shape,
                         size_pixels=t.size_pixels,
-                        intensity=t.intensity,
+                        intensity=eff_t_intensity,
                         trajectory_trail=t.get_trail()[-50:],  # Recent 50 points
                     )
                 )

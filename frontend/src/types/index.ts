@@ -233,13 +233,29 @@ export interface DisturbanceTelemetry {
   jitter_offset_y_px: number;
   platform_offset_x_px: number;
   platform_offset_y_px: number;
+  platform_dx_px?: number;
+  platform_dy_px?: number;
   atmospheric_condition: string;
   atmospheric_transmittance: number;
+  transmission_factor?: number;
+  ambient_light_factor?: number;
+  effective_visibility_km?: number;
   is_occluded: boolean;
+  occlusion_active?: boolean;
   occlusion_remaining_s: number;
   applied_noise_types: string[];
+  gaussian_active?: boolean;
+  salt_pepper_active?: boolean;
+  poisson_active?: boolean;
+  noise_type?: string;
+  noise_level_sigma?: number;
+  salt_pepper_ratio?: number;
+  snr_reduction_db?: number;
   effective_snr_db?: number | null;
   motion_blur_applied: boolean;
+  motion_blur_enabled?: boolean;
+  beacon_flicker_enabled?: boolean;
+  beacon_flicker_frequency_hz?: number;
 }
 
 export interface PerformanceConfig {

@@ -100,8 +100,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
       showFeedback('Note: No atmosphere is on the path (vacuum link, fraction = 0.00). Turbulence and blur do not apply.');
       return;
     }
-    handleUpdateDisturbance({ atmospheric_condition: 'Haze' });
-    showFeedback(`Injected atmospheric turbulence (scaled by path fraction ${(atmoFrac * 100).toFixed(1)}%)!`);
+    const turbAmp = Math.min(14.0, Math.max(5.0, atmoFrac * 10.0));
+    handleUpdateDisturbance({
+      atmospheric_condition: 'Haze',
+      camera_jitter_enabled: true,
+      camera_jitter_max_px: turbAmp,
+      camera_jitter_frequency_hz: 18.0,
+    });
+    showFeedback(`Injected atmospheric turbulence (±${turbAmp.toFixed(1)}px jitter, scaled by path fraction ${(atmoFrac * 100).toFixed(1)}%)!`);
   };
 
   // Atmospheric conditions styling
@@ -268,7 +274,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                   <input
                     type="checkbox"
                     checked={distCfg?.gaussian_noise_enabled ?? false}
-                    onChange={(e) => handleUpdateDisturbance({ gaussian_noise_enabled: e.target.checked })}
+                    onChange={(e) => {
+                      const nextG = e.target.checked;
+                      const nextSP = distCfg?.salt_pepper_enabled ?? false;
+                      const nextP = distCfg?.poisson_noise_enabled ?? false;
+                      const cnt = (nextG ? 1 : 0) + (nextSP ? 1 : 0) + (nextP ? 1 : 0);
+                      const nt = cnt > 1 ? 'Multi-Noise' : nextG ? 'Gaussian' : nextSP ? 'Salt & Pepper' : nextP ? 'Poisson' : 'None';
+                      handleUpdateDisturbance({ gaussian_noise_enabled: nextG, noise_type: nt });
+                    }}
                     className="accent-cyan-500"
                   />
                   <span className="font-bold text-white">Gaussian Readout Noise</span>
@@ -281,7 +294,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                   <input
                     type="checkbox"
                     checked={distCfg?.salt_pepper_enabled ?? false}
-                    onChange={(e) => handleUpdateDisturbance({ salt_pepper_enabled: e.target.checked })}
+                    onChange={(e) => {
+                      const nextG = distCfg?.gaussian_noise_enabled ?? false;
+                      const nextSP = e.target.checked;
+                      const nextP = distCfg?.poisson_noise_enabled ?? false;
+                      const cnt = (nextG ? 1 : 0) + (nextSP ? 1 : 0) + (nextP ? 1 : 0);
+                      const nt = cnt > 1 ? 'Multi-Noise' : nextG ? 'Gaussian' : nextSP ? 'Salt & Pepper' : nextP ? 'Poisson' : 'None';
+                      handleUpdateDisturbance({ salt_pepper_enabled: nextSP, noise_type: nt });
+                    }}
                     className="accent-cyan-500"
                   />
                   <span className="font-bold text-white">Salt & Pepper Noise</span>
@@ -294,7 +314,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                   <input
                     type="checkbox"
                     checked={distCfg?.poisson_noise_enabled ?? false}
-                    onChange={(e) => handleUpdateDisturbance({ poisson_noise_enabled: e.target.checked })}
+                    onChange={(e) => {
+                      const nextG = distCfg?.gaussian_noise_enabled ?? false;
+                      const nextSP = distCfg?.salt_pepper_enabled ?? false;
+                      const nextP = e.target.checked;
+                      const cnt = (nextG ? 1 : 0) + (nextSP ? 1 : 0) + (nextP ? 1 : 0);
+                      const nt = cnt > 1 ? 'Multi-Noise' : nextG ? 'Gaussian' : nextSP ? 'Salt & Pepper' : nextP ? 'Poisson' : 'None';
+                      handleUpdateDisturbance({ poisson_noise_enabled: nextP, noise_type: nt });
+                    }}
                     className="accent-cyan-500"
                   />
                   <span className="font-bold text-white">Poisson Photon Shot Noise</span>
