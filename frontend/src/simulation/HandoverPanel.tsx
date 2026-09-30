@@ -1,4 +1,4 @@
-/**
+﻿/**
  * HandoverPanel.tsx
  * =================
  * Compact HUD panel showing real-time satellite handover status.
@@ -272,7 +272,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   progressTrack: {
     height: 4,
-    background: '#1e293b',
+    background: '#252A2E',
     borderRadius: 2,
     marginTop: 3,
     overflow: 'hidden',

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
   LineChart,
   Line,
@@ -38,7 +38,7 @@ export const TelemetryChart: React.FC<ChartProps> = ({ data, maxThreshold = 10 }
       <div className="flex-1 w-full min-h-[160px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 20, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#252A2E" />
             <XAxis
               dataKey="time"
               stroke="#64748b"

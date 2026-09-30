@@ -1,0 +1,58 @@
+{
+  "name": "laserlockaiapp",
+  "version": "1.0.0",
+  "description": "LaserLockAI — AI-Based Virtual Camera Tracking System for FSOC Coarse Alignment",
+  "main": "main.js",
+  "author": "LaserLockAI Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.9.0"
+  },
+  "build": {
+    "appId": "com.laserlockaiapp.fsoc-tracking",
+    "productName": "LaserLockAI",
+    "copyright": "Copyright © 2026 LaserLockAI Team",
+    "icon": "assets/icon.ico",
+    "directories": {
+      "buildResources": "assets",
+      "output": "../release"
+    },
+    "extraResources": [
+      {
+        "from": "../dist/laserlockaiapp_backend",
+        "to": "sidecar",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LaserLockAI",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    }
+  }
+}

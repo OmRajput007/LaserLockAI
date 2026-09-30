@@ -1,0 +1,1 @@
+frame_number,timestamp_s,centroid_x,centroid_y,reference_x,reference_y,error_x_px,error_y_px,total_error_px,angular_error_deg,confidence,detection_status,tracking_state,pan_deg,tilt_deg,fps,processing_time_ms,slew_saturated,gimbal_limit,is_link_blocked,range_km,angular_rate_deg_s,atmosphere_path_frac

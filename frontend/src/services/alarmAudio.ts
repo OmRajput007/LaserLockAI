@@ -1,6 +1,6 @@
-/**
+﻿/**
  * alarmAudio.ts
- * High-reliability Web Audio API synthesized alarm sound engine for FSOC Optical Testbench.
+ * High-reliability Web Audio API synthesized alarm sound engine for LaserLockAI Platform.
  * Triggers aerospace telemetry alarm beeps when the optical beacon is lost from the satellite camera FOV.
  */
 
@@ -14,7 +14,7 @@ class AlarmAudioService {
 
   constructor() {
     try {
-      const savedMute = localStorage.getItem('fsoc_alarm_muted');
+      const savedMute = localStorage.getItem('laserlockAI_alarm_muted');
       if (savedMute !== null) {
         this.isMuted = savedMute === 'true';
       }
@@ -59,7 +59,7 @@ class AlarmAudioService {
   public setMuted(muted: boolean) {
     this.isMuted = muted;
     try {
-      localStorage.setItem('fsoc_alarm_muted', String(muted));
+      localStorage.setItem('laserlockAI_alarm_muted', String(muted));
     } catch {}
     if (!muted) {
       this.unlock();

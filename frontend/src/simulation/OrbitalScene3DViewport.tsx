@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitalTelemetry } from '../types';
 import { Globe, RefreshCw, Crosshair, Eye, Compass, ShieldAlert, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -95,7 +95,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       // Subtitle
       ctx.font = '14px monospace';
       ctx.fillStyle = color;
-      ctx.fillText('FSOC PLATFORM', 68, 56);
+      ctx.fillText('LaserLockAI', 68, 56);
     }
 
     const texture = new THREE.CanvasTexture(canvas);

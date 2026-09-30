@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Gauge, Zap, Clock } from 'lucide-react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import { Gauge, Clock } from 'lucide-react';
 import { satellitePovSync } from '../simulation/satellitePovSync';
 
 export interface BeaconSpeedControlProps {
@@ -11,10 +11,10 @@ export interface BeaconSpeedControlProps {
 }
 
 export const BEACON_SPEED_PRESETS = [
-  { label: 'Static', value: 0, tag: 'Static (0)', color: 'text-slate-400' },
-  { label: 'Loiter', value: 150, tag: 'Loiter (150)', color: 'text-emerald-400' },
-  { label: 'Cruise', value: 600, tag: 'Cruise (600)', color: 'text-cyan-400' },
-  { label: 'Max', value: 1200, tag: 'Max (1200)', color: 'text-rose-400' },
+  { label: 'Static', value: 0, tag: 'Static (0 km/h)' },
+  { label: 'Loiter', value: 150, tag: 'Loiter (150 km/h)' },
+  { label: 'Cruise', value: 600, tag: 'Cruise (600 km/h)' },
+  { label: 'Max', value: 1200, tag: 'Max (1200 km/h)' },
 ];
 
 /**
@@ -74,39 +74,39 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
   const isAppliedState = speedApplied || internalApplied;
 
   return (
-    <div className={`bg-slate-900/80 border border-slate-800 rounded-lg p-3 font-mono text-xs ${className}`}>
+    <div className={`bg-[#121518] border border-[#252A2E] rounded-lg p-3.5 text-xs ${className}`}>
       {/* Header with Title and Real-time Badge */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider">
-          <Gauge className="w-4 h-4" />
-          <span>Beacon Speed Control</span>
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2 text-slate-200 font-medium">
+          <Gauge className="w-4 h-4 text-slate-400" />
+          <span>Beacon Velocity Control</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <span
-            className={`text-[10px] font-bold px-2 py-0.5 rounded transition border ${
+            className={`text-xs font-medium px-2.5 py-0.5 rounded transition border num-mono ${
               isAppliedState
-                ? 'bg-emerald-900/80 text-emerald-300 border-emerald-700 shadow-sm'
-                : 'bg-slate-800/90 text-cyan-300 border-slate-700 font-mono'
+                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/60'
+                : 'bg-[#1A1D20] text-slate-200 border-[#2D3237]'
             }`}
           >
-            {isAppliedState ? '✓ APPLIED' : `${localSpeed} km/h`}
+            {isAppliedState ? 'Applied' : `${localSpeed} km/h`}
           </span>
         </div>
       </div>
 
       {/* Speed Presets */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-slate-400 text-[10px]">Presets:</span>
-        {BEACON_SPEED_PRESETS.map(({ label, value, tag, color }) => {
+        <span className="text-slate-400 text-xs">Presets:</span>
+        {BEACON_SPEED_PRESETS.map(({ label, value, tag }) => {
           const isActive = localSpeed === value;
           return (
             <button
               key={label}
               onClick={() => handleSpeedCommit(value)}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold border transition ${
+              className={`px-2.5 py-1 rounded text-xs font-medium border transition ${
                 isActive
-                  ? 'bg-slate-700 border-cyan-500 shadow-sm shadow-cyan-950 ' + color
-                  : 'bg-slate-800/90 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'
+                  ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048]'
+                  : 'bg-[#161f30] border-[#222f47] text-slate-300 hover:text-white hover:bg-[#1a253a]'
               }`}
             >
               {tag}
@@ -117,15 +117,11 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
 
       {/* Live Slider Control */}
       <div className="space-y-1.5">
-        <div className="flex justify-between text-[10px] text-slate-400">
-          <span className="flex items-center gap-1 text-slate-300">
-            <Zap className="w-3 h-3 text-cyan-400" />
-            <span>Live Speed Adjustment</span>
-          </span>
-          <span className="font-mono">
-            <span className="text-white font-bold">{localSpeed}</span>
-            <span className="text-slate-500"> km/h</span>
-            <span className="text-slate-600 ml-2">(range: 0 – 1200)</span>
+        <div className="flex justify-between text-xs text-slate-400">
+          <span className="text-slate-300">Live Adjustment</span>
+          <span className="num-mono text-slate-300">
+            <strong className="text-slate-100 font-semibold">{localSpeed}</strong> km/h
+            <span className="text-slate-500 ml-1.5">(0 – 1200 km/h)</span>
           </span>
         </div>
 
@@ -141,11 +137,11 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
           }}
           onMouseUp={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
           onTouchEnd={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
-          className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"
+          className="w-full accent-slate-500 cursor-pointer h-1.5 bg-[#1a2336] rounded appearance-none"
         />
 
         {/* Range boundary tick labels */}
-        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+        <div className="flex justify-between text-[11px] text-slate-500 num-mono">
           <span>0 km/h (Static)</span>
           <span>600 km/h (Cruise)</span>
           <span>1200 km/h (Max)</span>
@@ -154,12 +150,12 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
 
       {/* Physically Grounded Specifications Footnote */}
       {showPhysicalDetails && (
-        <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[9.5px] text-slate-400 flex-wrap gap-1">
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3 text-cyan-400/80" />
+        <div className="mt-2.5 pt-2 border-t border-[#252A2E] flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-1">
+          <span className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-slate-500" />
             <span>Earth 1-Rev (Circumference 40,075 km):</span>
           </span>
-          <span className="font-mono font-bold text-cyan-300">
+          <span className="num-mono font-medium text-slate-300">
             {formatBeaconRevolutionTime(localSpeed)}
           </span>
         </div>

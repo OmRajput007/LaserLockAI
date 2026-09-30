@@ -1,10 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { satellitePovSync, computeBeaconOmegaReal, EARTH_CIRCUMFERENCE_KM } from './satellitePovSync';
 import { formatBeaconRevolutionTime } from '../components/BeaconSpeedControl';
 import { alarmAudio } from '../services/alarmAudio';
 import HandoverPanel from './HandoverPanel';
+import { getOrCreateEarthTexture, createAtmosphereRimMesh } from './earthTexture';
 import {
   Box,
   RefreshCw,
@@ -25,6 +26,16 @@ import {
   Table,
   Gauge,
   Clock,
+  Minus,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  PenTool,
+  CheckCircle,
+  Trash2,
+  Crosshair,
+  Maximize2,
+  Move,
 } from 'lucide-react';
 
 interface Scene3DProps {
@@ -158,6 +169,183 @@ export const computeTerminatorCirclePoints = (
     );
   }
   return pts;
+};
+
+/**
+ * 3D Beacon Path Waypoint on Earth Globe
+ * Anchored to the Earth's geographic surface in local spherical coordinates.
+ * Point 1 is the starting point (Green), Point 4 is the ending point (Orange/Rose).
+ */
+export interface BeaconPathWaypoint {
+  id: number;
+  label: string;
+  localPos: THREE.Vector3;
+  latDeg: number;
+  lonDeg: number;
+}
+
+/**
+ * Spherical SLERP between two vectors on a sphere of radius R
+ */
+export const slerpOnSphere = (
+  pA: THREE.Vector3,
+  pB: THREE.Vector3,
+  t: number,
+  radius: number = EARTH_RENDER_R
+): THREE.Vector3 => {
+  const uA = pA.clone().normalize();
+  const uB = pB.clone().normalize();
+  const cosTheta = THREE.MathUtils.clamp(uA.dot(uB), -1.0, 1.0);
+  const theta = Math.acos(cosTheta);
+  if (theta < 1e-5) {
+    return pA.clone().normalize().multiplyScalar(radius);
+  }
+  const sinTheta = Math.sin(theta);
+  const w1 = Math.sin((1.0 - t) * theta) / sinTheta;
+  const w2 = Math.sin(t * theta) / sinTheta;
+  return new THREE.Vector3()
+    .addScaledVector(uA, w1)
+    .addScaledVector(uB, w2)
+    .normalize()
+    .multiplyScalar(radius);
+};
+
+/**
+ * Generate interpolated spherical points along the great circle between pA and pB
+ */
+export const computeGreatCircleSegments = (
+  pA: THREE.Vector3,
+  pB: THREE.Vector3,
+  segments: number = 24,
+  radius: number = EARTH_RENDER_R
+): THREE.Vector3[] => {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= segments; i++) {
+    pts.push(slerpOnSphere(pA, pB, i / segments, radius));
+  }
+  return pts;
+};
+
+/**
+ * Convert Latitude / Longitude in degrees to 3D Cartesian coordinates on sphere
+ */
+export const latLonToVector3 = (
+  latDeg: number,
+  lonDeg: number,
+  radius: number = EARTH_RENDER_R
+): THREE.Vector3 => {
+  const phi = THREE.MathUtils.degToRad(latDeg);
+  const theta = THREE.MathUtils.degToRad(lonDeg);
+  const cosPhi = Math.cos(phi);
+  const x = radius * cosPhi * Math.sin(theta);
+  const y = radius * Math.sin(phi);
+  const z = radius * cosPhi * Math.cos(theta);
+  return new THREE.Vector3(x, y, z);
+};
+
+/**
+ * Convert 3D Vector on sphere to Latitude / Longitude in degrees
+ */
+export const vector3ToLatLon = (
+  vec: THREE.Vector3,
+  radius: number = EARTH_RENDER_R
+): { latDeg: number; lonDeg: number } => {
+  const latDeg = THREE.MathUtils.radToDeg(
+    Math.asin(THREE.MathUtils.clamp(vec.y / radius, -1.0, 1.0))
+  );
+  const lonDeg = THREE.MathUtils.radToDeg(Math.atan2(vec.x, vec.z));
+  return { latDeg, lonDeg };
+};
+
+/**
+ * Preset 4-Point Ground Track matching the user reference image:
+ * Point 1: Lower-left Starting Point (Green)
+ * Point 2: Upper-middle Apex Waypoint (Amber)
+ * Point 3: Mid-right Waypoint (Amber)
+ * Point 4: Lower-right Ending Point (Orange)
+ * Solid Line connects: 1 -> 2 -> 3 -> 4
+ * Dashed Line connects: 4 -> 1
+ */
+export const PRESET_4POINT_WAYPOINTS: { lat: number; lon: number; label: string }[] = [
+  { lat: 15.0, lon: -45.0, label: '1 (START)' },
+  { lat: 48.0, lon: -10.0, label: '2' },
+  { lat: 36.0, lon: 20.0, label: '3' },
+  { lat: 18.0, lon: 52.0, label: '4 (END)' },
+];
+
+/**
+ * High-resolution canvas billboard badge sprite for 3D waypoints (1, 2, 3, 4)
+ */
+export const createWaypointBadgeSprite = (
+  num: number,
+  isStart: boolean,
+  isEnd: boolean
+): THREE.Sprite => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Background color: Green for Start (Pt 1), Orange for End (Pt 4), Amber for intermediate
+    const bgColor = isStart
+      ? 'rgba(16, 185, 129, 0.95)'
+      : isEnd
+      ? 'rgba(244, 63, 94, 0.95)'
+      : 'rgba(245, 158, 11, 0.95)';
+    const strokeColor = isStart ? '#34d399' : isEnd ? '#fda4af' : '#fde68a';
+
+    // Circular badge
+    ctx.fillStyle = bgColor;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(64, 64, 48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Number inside circle
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 54px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(num), 64, 64);
+
+    // Pill badge for role
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(124, 40, 124, 48, 10);
+    } else {
+      ctx.rect(124, 40, 124, 48);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // Text
+    ctx.font = 'bold 20px monospace';
+    ctx.fillStyle = strokeColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const subText = isStart ? 'START' : isEnd ? 'END' : `WAYPOINT`;
+    ctx.fillText(subText, 186, 64);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(8.0, 4.0, 1.0);
+  sprite.renderOrder = 650;
+  return sprite;
 };
 
 export const FOOTPRINT_SEGMENTS = 64;
@@ -964,6 +1152,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const [beaconElevationDeg, setBeaconElevationDeg] = useState<number>(0.0);
   const [footprintThetaDeg, setFootprintThetaDeg] = useState<number>(14.96);
   const [footprintGroundRadiusKm, setFootprintGroundRadiusKm] = useState<number>(1665.0);
+  const [isLegendMinimized, setIsLegendMinimized] = useState<boolean>(false);
+  const [isTrackerMinimized, setIsTrackerMinimized] = useState<boolean>(false);
+  const [isScaleMinimized, setIsScaleMinimized] = useState<boolean>(false);
+  const [showLayerBar, setShowLayerBar] = useState<boolean>(true);
 
   // Earth Render Radius state (defaults to 100u, dynamically tunable)
   const [earthRenderRadius, setEarthRenderRadius] = useState<number>(EARTH_RENDER_R);
@@ -1002,6 +1194,272 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     beaconMotionRef.current.incDeg = beaconInc;
     beaconMotionRef.current.raanDeg = beaconRaan;
   }, [beaconRevolving, beaconSpeedKmh, beaconInc, beaconRaan]);
+
+  // 3D BEACON GROUND PATH PLANNING (1=Start [Green] -> 4=End [Orange], reference user image)
+  const [beaconPathWaypoints, setBeaconPathWaypoints] = useState<BeaconPathWaypoint[]>(() => {
+    return PRESET_4POINT_WAYPOINTS.map((wp, idx) => ({
+      id: idx + 1,
+      label: wp.label,
+      localPos: latLonToVector3(wp.lat, wp.lon, EARTH_RENDER_R),
+      latDeg: wp.lat,
+      lonDeg: wp.lon,
+    }));
+  });
+  const beaconPathWaypointsRef = useRef<BeaconPathWaypoint[]>(beaconPathWaypoints);
+  beaconPathWaypointsRef.current = beaconPathWaypoints;
+
+  const [pathFollowMode, setPathFollowMode] = useState<boolean>(true);
+  const pathFollowModeRef = useRef<boolean>(true);
+  pathFollowModeRef.current = pathFollowMode;
+
+  const [pathMotionActive, setPathMotionActive] = useState<boolean>(false);
+  const pathMotionActiveRef = useRef<boolean>(false);
+  pathMotionActiveRef.current = pathMotionActive;
+
+  const [isDrawingPath, setIsDrawingPath] = useState<boolean>(false);
+  const isDrawingPathRef = useRef<boolean>(false);
+  isDrawingPathRef.current = isDrawingPath;
+
+  const [showBeaconPathPlanner, setShowBeaconPathPlanner] = useState<boolean>(true);
+  const [isPathPlannerMinimized, setIsPathPlannerMinimized] = useState<boolean>(false);
+  const [pathPlannerPosition, setPathPlannerPosition] = useState<'top-center' | 'top-left' | 'bottom-center'>('top-center');
+
+  const cyclePathPlannerPosition = () => {
+    setPathPlannerPosition((prev) => {
+      if (prev === 'top-center') return 'top-left';
+      if (prev === 'top-left') return 'bottom-center';
+      return 'top-center';
+    });
+  };
+
+  const getPlannerPositionClass = () => {
+    if (pathPlannerPosition === 'top-left') {
+      return showOrbitTuner ? 'top-3 left-[340px]' : 'top-14 left-3';
+    }
+    if (pathPlannerPosition === 'bottom-center') {
+      return 'bottom-3 left-1/2 -translate-x-1/2';
+    }
+    // Default: Top-Center (Zero overlap with Left/Right widgets)
+    return 'top-3 left-1/2 -translate-x-1/2';
+  };
+
+  const pathLegIndexRef = useRef<number>(0);
+  const pathLegProgressRef = useRef<number>(0.0);
+  const pathCurrentLocalPosRef = useRef<THREE.Vector3>(
+    latLonToVector3(PRESET_4POINT_WAYPOINTS[0].lat, PRESET_4POINT_WAYPOINTS[0].lon, EARTH_RENDER_R)
+  );
+
+  const [pathStatusText, setPathStatusText] = useState<string>('Ready at Pt 1 (Starting Point)');
+  const [pathOverallProgressPct, setPathOverallProgressPct] = useState<number>(0);
+  const [pathCurrentLegDisplay, setPathCurrentLegDisplay] = useState<string>('Leg 1→2');
+  const [pathSpeedMultiplier, setPathSpeedMultiplier] = useState<number>(15);
+  const pathSpeedMultiplierRef = useRef<number>(15);
+  pathSpeedMultiplierRef.current = pathSpeedMultiplier;
+
+  // 3D Three.js Objects for Path
+  const beaconPathGroupRef = useRef<THREE.Group | null>(null);
+  const beaconPathSolidLineRef = useRef<THREE.Line | null>(null);
+  const beaconPathDashedLineRef = useRef<THREE.Line | null>(null);
+  const beaconPathMarkersGroupRef = useRef<THREE.Group | null>(null);
+
+  const rebuildBeaconPathVisuals = (
+    waypoints: BeaconPathWaypoint[],
+    radius: number = earthRenderRadiusRef.current
+  ) => {
+    if (!beaconPathSolidLineRef.current || !beaconPathDashedLineRef.current || !beaconPathMarkersGroupRef.current) return;
+
+    const markersGroup = beaconPathMarkersGroupRef.current;
+    while (markersGroup.children.length > 0) {
+      const child = markersGroup.children[0];
+      markersGroup.remove(child);
+      if ((child as any).geometry) (child as any).geometry.dispose();
+      if ((child as any).material) {
+        if (Array.isArray((child as any).material)) {
+          (child as any).material.forEach((m: any) => m.dispose());
+        } else {
+          (child as any).material.dispose();
+        }
+      }
+    }
+
+    if (waypoints.length === 0) {
+      beaconPathSolidLineRef.current.visible = false;
+      beaconPathDashedLineRef.current.visible = false;
+      return;
+    }
+
+    waypoints.forEach((wp, idx) => {
+      const isStart = idx === 0;
+      const isEnd = idx === waypoints.length - 1 && waypoints.length >= 2;
+      const pinColor = isStart ? 0x10b981 : isEnd ? 0xf43f5e : 0xf59e0b;
+
+      const norm = wp.localPos.clone().normalize();
+      const markerPos = norm.clone().multiplyScalar(radius + 0.25);
+
+      const sphereGeo = new THREE.SphereGeometry(0.85, 16, 16);
+      const sphereMat = new THREE.MeshBasicMaterial({ color: pinColor });
+      const pinMesh = new THREE.Mesh(sphereGeo, sphereMat);
+      pinMesh.position.copy(markerPos);
+      pinMesh.renderOrder = 620;
+      markersGroup.add(pinMesh);
+
+      const ringGeo = new THREE.RingGeometry(0.6, 1.4, 24);
+      const ringMat = new THREE.MeshBasicMaterial({ color: pinColor, side: THREE.DoubleSide });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.position.copy(norm.clone().multiplyScalar(radius + 0.12));
+      ringMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), norm);
+      ringMesh.renderOrder = 615;
+      markersGroup.add(ringMesh);
+
+      const badge = createWaypointBadgeSprite(wp.id, isStart, isEnd);
+      badge.position.copy(norm.clone().multiplyScalar(radius + 3.8));
+      markersGroup.add(badge);
+    });
+
+    if (waypoints.length < 2) {
+      beaconPathSolidLineRef.current.visible = false;
+      beaconPathDashedLineRef.current.visible = false;
+      return;
+    }
+
+    const solidPts: THREE.Vector3[] = [];
+    for (let k = 0; k < waypoints.length - 1; k++) {
+      const legPts = computeGreatCircleSegments(
+        waypoints[k].localPos,
+        waypoints[k + 1].localPos,
+        28,
+        radius + 0.22
+      );
+      if (k > 0) legPts.shift();
+      solidPts.push(...legPts);
+    }
+
+    beaconPathSolidLineRef.current.geometry.dispose();
+    beaconPathSolidLineRef.current.geometry = new THREE.BufferGeometry().setFromPoints(solidPts);
+    beaconPathSolidLineRef.current.visible = true;
+
+    const dashedPts = computeGreatCircleSegments(
+      waypoints[waypoints.length - 1].localPos,
+      waypoints[0].localPos,
+      28,
+      radius + 0.22
+    );
+    beaconPathDashedLineRef.current.geometry.dispose();
+    beaconPathDashedLineRef.current.geometry = new THREE.BufferGeometry().setFromPoints(dashedPts);
+    beaconPathDashedLineRef.current.computeLineDistances();
+    beaconPathDashedLineRef.current.visible = true;
+  };
+
+  const handleStartPathMotion = () => {
+    if (beaconPathWaypoints.length < 2) return;
+    if (pathLegIndexRef.current >= beaconPathWaypoints.length - 2 && pathLegProgressRef.current >= 1.0) {
+      pathLegIndexRef.current = 0;
+      pathLegProgressRef.current = 0.0;
+      pathCurrentLocalPosRef.current.copy(beaconPathWaypoints[0].localPos);
+    }
+    pathFollowModeRef.current = true;
+    setPathFollowMode(true);
+    pathMotionActiveRef.current = true;
+    setPathMotionActive(true);
+    setPathStatusText(`Moving: Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2} · ${beaconSpeedKmh} km/h`);
+  };
+
+  const handlePausePathMotion = () => {
+    pathMotionActiveRef.current = false;
+    setPathMotionActive(false);
+    setPathStatusText(`Paused at Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2} (${Math.round(pathLegProgressRef.current * 100)}%)`);
+  };
+
+  const handleResetPathToStart = () => {
+    if (beaconPathWaypoints.length === 0) return;
+    pathLegIndexRef.current = 0;
+    pathLegProgressRef.current = 0.0;
+    pathMotionActiveRef.current = false;
+    setPathMotionActive(false);
+    pathCurrentLocalPosRef.current.copy(beaconPathWaypoints[0].localPos);
+    setPathOverallProgressPct(0);
+    setPathCurrentLegDisplay('Leg 1→2');
+    setPathStatusText('Ready at Pt 1 (Starting Point)');
+  };
+
+  const handleLoadPreset4PointPath = () => {
+    const pts: BeaconPathWaypoint[] = PRESET_4POINT_WAYPOINTS.map((wp, idx) => ({
+      id: idx + 1,
+      label: wp.label,
+      localPos: latLonToVector3(wp.lat, wp.lon, earthRenderRadiusRef.current),
+      latDeg: wp.lat,
+      lonDeg: wp.lon,
+    }));
+    setBeaconPathWaypoints(pts);
+    beaconPathWaypointsRef.current = pts;
+    pathLegIndexRef.current = 0;
+    pathLegProgressRef.current = 0.0;
+    pathMotionActiveRef.current = false;
+    setPathMotionActive(false);
+    pathCurrentLocalPosRef.current.copy(pts[0].localPos);
+    setPathFollowMode(true);
+    pathFollowModeRef.current = true;
+    setPathOverallProgressPct(0);
+    setPathCurrentLegDisplay('Leg 1→2');
+    setPathStatusText('Ready at Pt 1 (Starting Point)');
+    rebuildBeaconPathVisuals(pts, earthRenderRadiusRef.current);
+  };
+
+  const handleClearBeaconPath = () => {
+    setBeaconPathWaypoints([]);
+    beaconPathWaypointsRef.current = [];
+    pathMotionActiveRef.current = false;
+    setPathMotionActive(false);
+    setPathFollowMode(false);
+    pathFollowModeRef.current = false;
+    setPathOverallProgressPct(0);
+    setPathStatusText('Path Cleared (Static Mode)');
+    rebuildBeaconPathVisuals([], earthRenderRadiusRef.current);
+  };
+
+  const handleToggleDrawMode = () => {
+    setIsDrawingPath((prev) => {
+      const next = !prev;
+      isDrawingPathRef.current = next;
+      return next;
+    });
+  };
+
+  const handleAddWaypoint = (localPos: THREE.Vector3, latDeg: number, lonDeg: number) => {
+    setBeaconPathWaypoints((prev) => {
+      const nextId = prev.length + 1;
+      const label = nextId === 1 ? '1 (START)' : `Pt ${nextId}`;
+      const newWp: BeaconPathWaypoint = {
+        id: nextId,
+        label,
+        localPos,
+        latDeg,
+        lonDeg,
+      };
+      const nextList = [...prev, newWp];
+      beaconPathWaypointsRef.current = nextList;
+      if (nextList.length === 1) {
+        pathCurrentLocalPosRef.current.copy(localPos);
+        pathLegIndexRef.current = 0;
+        pathLegProgressRef.current = 0.0;
+        setPathStatusText('Pt 1 (Starting Point) Placed');
+      }
+      rebuildBeaconPathVisuals(nextList, earthRenderRadiusRef.current);
+      return nextList;
+    });
+  };
+
+  const handleCenterTargetOnGlobe = () => {
+    setAutoLOS(true);
+    autoLOSRef.current = true;
+    satellitePovSync.update({ autoLOS: true });
+  };
+
+  const handleDisplaceTargetOutsideFov = () => {
+    setAutoLOS(false);
+    autoLOSRef.current = false;
+    satellitePovSync.update({ autoLOS: false });
+  };
 
   // Interactive Orbit Controller State
   const [selectedPresetId, setSelectedPresetId] = useState<string>('leo-550-p1');
@@ -1347,6 +1805,14 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     updateConstellationScale(scaleMode, newRadius);
     updateSunTerminatorGeometry(newRadius);
     updateBeaconTrackGeometry(beaconInc, beaconRaan);
+    // Scale beacon path waypoints to match new globe radius
+    const scaledWps = beaconPathWaypointsRef.current.map((wp) => ({
+      ...wp,
+      localPos: wp.localPos.clone().normalize().multiplyScalar(newRadius),
+    }));
+    setBeaconPathWaypoints(scaledWps);
+    beaconPathWaypointsRef.current = scaledWps;
+    rebuildBeaconPathVisuals(scaledWps, newRadius);
   };
 
   // Preset Selection Handler (Instant re-initialization with full element set)
@@ -1636,16 +2102,19 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     container.appendChild(renderer.domElement);
 
     // 4. Lighting & Solar Direction Vector (Task 1)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambientLight);
     const sunLight = new THREE.DirectionalLight(0xfffaed, 1.35);
     sunLight.position.copy(FIXED_SUN_DIR.clone().multiplyScalar(600));
     scene.add(sunLight);
 
-    // 5. INJECT THE GLOBE (Earth) AT SCENE ORIGIN (0, 0, 0)
-    const globeGeo = new THREE.SphereGeometry(globeRadius, 36, 18);
-    const globeMat = new THREE.MeshBasicMaterial({
-      color: 0x141a29,
+    // 5. INJECT DUMMY 3D EARTH GLOBE AT SCENE ORIGIN (0, 0, 0)
+    const globeGeo = new THREE.SphereGeometry(globeRadius, 64, 32);
+    const earthTex = getOrCreateEarthTexture();
+    const globeMat = new THREE.MeshStandardMaterial({
+      map: earthTex,
+      roughness: 0.72,
+      metalness: 0.05,
       polygonOffset: true,
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,
@@ -1658,12 +2127,16 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     scene.add(globeMesh);
     globeMeshRef.current = globeMesh;
 
-    // Wireframe overlay grid (latitudinal/longitudinal neon cyan lines)
-    const wireframeGeo = new THREE.WireframeGeometry(globeGeo);
+    // Atmospheric rim glow around Earth
+    const earthRimGlow = createAtmosphereRimMesh(globeRadius);
+    globeMesh.add(earthRimGlow);
+
+    // Subtle latitudinal/longitudinal aerospace coordinate graticule
+    const wireframeGeo = new THREE.WireframeGeometry(new THREE.SphereGeometry(globeRadius + 0.02, 36, 18));
     const wireframeMat = new THREE.LineBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.14,
     });
     const globeWireframe = new THREE.LineSegments(wireframeGeo, wireframeMat);
     globeMesh.add(globeWireframe);
@@ -2184,13 +2657,18 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     beaconGroup.add(beaconLabel);
     beaconLabelRef.current = beaconLabel;
 
-    // Initial position on the ground from beaconMotionRef (R = globeRadius = 100u)
-    const initialBeaconPos = computeOrbitPoint(
-      globeRadius,
-      beaconMotionRef.current.incDeg,
-      beaconMotionRef.current.raanDeg,
-      beaconMotionRef.current.anomaly
-    );
+    // Initial position on the ground from beaconMotionRef or path waypoints (R = globeRadius = 100u)
+    let initialBeaconPos: THREE.Vector3;
+    if (pathFollowModeRef.current && beaconPathWaypointsRef.current.length > 0) {
+      initialBeaconPos = pathCurrentLocalPosRef.current.clone();
+    } else {
+      initialBeaconPos = computeOrbitPoint(
+        globeRadius,
+        beaconMotionRef.current.incDeg,
+        beaconMotionRef.current.raanDeg,
+        beaconMotionRef.current.anomaly
+      );
+    }
     tgtPosRef.current.copy(initialBeaconPos);
 
     // Position and orient the beacon group strictly on top of the globe surface
@@ -2228,8 +2706,53 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     const trackRing = new THREE.Line(trackGeo, trackMat);
     trackRing.computeLineDistances();
     trackRing.renderOrder = 4;
+    trackRing.visible = !pathFollowModeRef.current;
     scene.add(trackRing);
     beaconTrackRingRef.current = trackRing;
+
+    // 9b. 3D BEACON GROUND PATH GROUP (1=Start [Green] -> 4=End [Orange], anchored to Earth)
+    const beaconPathGroup = new THREE.Group();
+    beaconPathGroup.name = 'beaconPathGroup';
+
+    const pathSolidGeo = new THREE.BufferGeometry();
+    const pathSolidMat = new THREE.LineBasicMaterial({
+      color: 0xf59e0b,
+      linewidth: 3,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: true,
+      depthWrite: false,
+    });
+    const pathSolidLine = new THREE.Line(pathSolidGeo, pathSolidMat);
+    pathSolidLine.renderOrder = 610;
+    beaconPathGroup.add(pathSolidLine);
+    beaconPathSolidLineRef.current = pathSolidLine;
+
+    const pathDashedGeo = new THREE.BufferGeometry();
+    const pathDashedMat = new THREE.LineDashedMaterial({
+      color: 0xf59e0b,
+      dashSize: 3,
+      gapSize: 2,
+      transparent: true,
+      opacity: 0.65,
+      depthTest: true,
+      depthWrite: false,
+    });
+    const pathDashedLine = new THREE.Line(pathDashedGeo, pathDashedMat);
+    pathDashedLine.renderOrder = 610;
+    beaconPathGroup.add(pathDashedLine);
+    beaconPathDashedLineRef.current = pathDashedLine;
+
+    const pathMarkersGroup = new THREE.Group();
+    pathMarkersGroup.name = 'pathMarkersGroup';
+    beaconPathGroup.add(pathMarkersGroup);
+    beaconPathMarkersGroupRef.current = pathMarkersGroup;
+
+    scene.add(beaconPathGroup);
+    beaconPathGroupRef.current = beaconPathGroup;
+
+    // Build visual geometry for initial waypoints (preset 1->4)
+    rebuildBeaconPathVisuals(beaconPathWaypointsRef.current, globeRadius);
 
     // 10. LINE OF SIGHT (LOS) RAY (Dashed line, depthTest=true to prevent crossing through Earth)
     const losGeo = new THREE.BufferGeometry();
@@ -2401,7 +2924,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       isDraggingRef.current = false;
     };
 
-    // Raycast click for comfortable marker selection (Task 6)
+    // Raycast click for comfortable marker selection and waypoint plotting
     const onClick = (e: MouseEvent) => {
       if (dragDistance > 5) return;
       const rect = container.getBoundingClientRect();
@@ -2411,6 +2934,27 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       );
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, perspCamera);
+
+      // If Draw Mode is active, raycast directly to 3D Earth to plot custom waypoints
+      if (isDrawingPathRef.current && globeMeshRef.current) {
+        const hits = raycaster.intersectObject(globeMeshRef.current, false);
+        if (hits.length > 0) {
+          const hitPoint = hits[0].point;
+          const currentRotY = globeMeshRef.current.rotation.y;
+          const r = earthRenderRadiusRef.current;
+          const localHit = hitPoint
+            .clone()
+            .normalize()
+            .multiplyScalar(r)
+            .applyAxisAngle(new THREE.Vector3(0, 1, 0), -currentRotY);
+          const latDeg = THREE.MathUtils.radToDeg(
+            Math.asin(THREE.MathUtils.clamp(localHit.y / r, -1.0, 1.0))
+          );
+          const lonDeg = THREE.MathUtils.radToDeg(Math.atan2(localHit.x, localHit.z));
+          handleAddWaypoint(localHit, latDeg, lonDeg);
+          return;
+        }
+      }
 
       const clickables: { obj: THREE.Object3D; action: () => void }[] = [];
       if (satSpriteRef.current) {
@@ -2571,31 +3115,105 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         backupSatMeshRef.current.lookAt(tgtPosRef.current);
       }
 
-      // 3. Advance or maintain beacon ground position (Atmospheric UAV/Drone platform: 0 - 1200 km/h)
-      // omega_real = (2 * Math.PI * speed_kmh) / (40075 * 3600)  // in radians/sec
-      // deltaTheta = (omega_real * SIMULATION_TIME_SCALE) * delta
-      const effectiveBeaconSpeedKmh = beaconMotionRef.current.isRevolving ? beaconMotionRef.current.speedKmh : 0;
-      if (effectiveBeaconSpeedKmh > 0) {
-        const omega_real = (2.0 * Math.PI * effectiveBeaconSpeedKmh) / (EARTH_CIRCUMFERENCE_KM * 3600.0);
-        const deltaTheta = (omega_real * simTimeWarpRef.current) * dtRealSec;
-        beaconMotionRef.current.anomaly = (beaconMotionRef.current.anomaly + deltaTheta) % (2.0 * Math.PI);
+      // Rotate 3D beacon path group with Earth's diurnal spin (15°/hour)
+      if (beaconPathGroupRef.current && globeMeshRef.current) {
+        beaconPathGroupRef.current.rotation.y = globeMeshRef.current.rotation.y;
       }
 
-      // Rotate beacon ground track ring with Earth's diurnal spin (15°/hour)
-      if (beaconTrackRingRef.current && globeMeshRef.current) {
-        beaconTrackRingRef.current.rotation.y = globeMeshRef.current.rotation.y;
+      // 3. Advance or maintain beacon ground position (Custom 3D Ground Path or circular UAV orbit)
+      let currentBeaconGroundPos: THREE.Vector3;
+      const isPathActive = pathFollowModeRef.current && beaconPathWaypointsRef.current.length >= 2;
+      const effectiveBeaconSpeedKmh = isPathActive
+        ? (pathMotionActiveRef.current ? (beaconMotionRef.current.speedKmh || 450) : 0)
+        : (beaconMotionRef.current.isRevolving ? beaconMotionRef.current.speedKmh : 0);
+
+      if (isPathActive) {
+        const waypoints = beaconPathWaypointsRef.current;
+        if (beaconTrackRingRef.current) beaconTrackRingRef.current.visible = false;
+
+        if (pathMotionActiveRef.current) {
+          const legIdx = Math.min(pathLegIndexRef.current, waypoints.length - 2);
+          const pA = waypoints[legIdx].localPos;
+          const pB = waypoints[legIdx + 1].localPos;
+
+          // Great-circle angular distance
+          const uA = pA.clone().normalize();
+          const uB = pB.clone().normalize();
+          const cosTheta = THREE.MathUtils.clamp(uA.dot(uB), -1.0, 1.0);
+          const theta = Math.acos(cosTheta);
+          const legDistKm = EARTH_RADIUS_KM * theta;
+
+          // Physical motion progression
+          const speedKmh = beaconMotionRef.current.speedKmh || 450;
+          const warp = (simTimeWarpRef.current || 60) * (pathSpeedMultiplierRef.current || 1);
+          const dtSim = isRevolving ? dtRealSec * warp : dtRealSec * 15;
+          const deltaS = legDistKm > 0.01 ? (dtSim * (speedKmh / 3600.0)) / legDistKm : 1.0;
+
+          pathLegProgressRef.current += deltaS;
+
+          if (pathLegProgressRef.current >= 1.0) {
+            if (legIdx < waypoints.length - 2) {
+              // Advance to next leg
+              pathLegIndexRef.current += 1;
+              pathLegProgressRef.current = 0.0;
+            } else {
+              // Reached final ending point (Point 4)!
+              // Requirement: "The beacon should start moving from the plotted starting point and stop at the plotted ending point."
+              pathLegProgressRef.current = 1.0;
+              pathMotionActiveRef.current = false;
+              setPathMotionActive(false);
+              setPathStatusText(`Completed: Stopped at Pt ${waypoints.length} (Ending Point)`);
+            }
+          }
+
+          // Local position along the sphere between pA and pB
+          const currentLocalPos = slerpOnSphere(pA, pB, Math.min(1.0, pathLegProgressRef.current), globeRadius);
+          pathCurrentLocalPosRef.current.copy(currentLocalPos);
+
+          // Update HUD telemetry every 6 frames
+          if (frameCount % 6 === 0) {
+            const overallPct = Math.round(
+              ((pathLegIndexRef.current + Math.min(1.0, pathLegProgressRef.current)) / (waypoints.length - 1)) * 100
+            );
+            setPathOverallProgressPct(overallPct);
+            setPathCurrentLegDisplay(`Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2}`);
+            if (pathMotionActiveRef.current) {
+              setPathStatusText(
+                `Moving: Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2} (${Math.round(pathLegProgressRef.current * 100)}%) · ${speedKmh} km/h`
+              );
+            }
+          }
+        }
+
+        // Anchor beacon local position to rotating Earth surface
+        currentBeaconGroundPos = pathCurrentLocalPosRef.current.clone();
+        if (globeMeshRef.current) {
+          currentBeaconGroundPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), globeMeshRef.current.rotation.y);
+        }
+      } else {
+        if (beaconTrackRingRef.current) {
+          beaconTrackRingRef.current.visible = true;
+          if (globeMeshRef.current) {
+            beaconTrackRingRef.current.rotation.y = globeMeshRef.current.rotation.y;
+          }
+        }
+        if (effectiveBeaconSpeedKmh > 0) {
+          const omega_real = (2.0 * Math.PI * effectiveBeaconSpeedKmh) / (EARTH_CIRCUMFERENCE_KM * 3600.0);
+          const deltaTheta = (omega_real * simTimeWarpRef.current) * dtRealSec;
+          beaconMotionRef.current.anomaly = (beaconMotionRef.current.anomaly + deltaTheta) % (2.0 * Math.PI);
+        }
+
+        currentBeaconGroundPos = computeOrbitPoint(
+          globeRadius,
+          beaconMotionRef.current.incDeg,
+          beaconMotionRef.current.raanDeg,
+          beaconMotionRef.current.anomaly
+        );
+        if (globeMeshRef.current) {
+          currentBeaconGroundPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), globeMeshRef.current.rotation.y);
+        }
       }
 
-      const currentBeaconGroundPos = computeOrbitPoint(
-        globeRadius,
-        beaconMotionRef.current.incDeg,
-        beaconMotionRef.current.raanDeg,
-        beaconMotionRef.current.anomaly
-      );
-      // Anchor beacon to the rotating Earth surface (rotates at 15°/hour around polar Y-axis)
-      if (globeMeshRef.current) {
-        currentBeaconGroundPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), globeMeshRef.current.rotation.y);
-      }
       tgtPosRef.current.copy(currentBeaconGroundPos);
 
       // Position and orient the beacon group strictly on top of the globe surface (with platform motion / jitter)
@@ -2790,6 +3408,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         eccentricity: activeOrbitRef.current.eccentricity,
         speedKmS: activeOrbitRef.current.currentSpeedKmS,
         currentRadiusKm: activeOrbitRef.current.currentRadiusKm,
+        boresightDir: boresightDirRef.current,
       });
 
       // 1. Nominal Nadir pointing direction (Earth center 0, 0, 0), modified by manual gimbal pan/tilt
@@ -2982,6 +3601,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         currentRadiusKm: activeOrbitRef.current.currentRadiusKm,
         isLockedInFov,
         isLostFromFov,
+        boresightDir: currBoresight,
       });
 
       // Update telemetry state occasionally
@@ -3213,268 +3833,712 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[#05070e] border border-slate-800 rounded-lg overflow-hidden shadow-2xl">
-      {/* 3D Viewport Header */}
-      <div className="flex flex-wrap items-center justify-between px-3 py-2 bg-slate-900/95 border-b border-slate-800 text-xs font-mono gap-2 z-10">
-        <div className="flex items-center gap-2 text-cyan-400">
-          <Box className="w-4 h-4 text-cyan-400 animate-pulse" />
-          <span className="font-semibold tracking-wider">3D LEO KINEMATICS TESTBENCH</span>
-        </div>
-
-        {/* Orbit Change Controls & Render Scale Toggle */}
-        <div className="flex items-center gap-2">
-          {/* Render Scale Mode Toggle (Rule 4: default TRUE_SCALE) */}
-          <div className="flex items-center bg-slate-950 p-0.5 rounded border border-slate-800 text-[11px]">
-            <button
-              onClick={() => handleScaleModeChange('TRUE_SCALE')}
-              className={`px-2 py-0.5 rounded transition font-mono ${
-                scaleMode === 'TRUE_SCALE'
-                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-600 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
-              }`}
-              title="True Physical Scale: Earth R=100u, LEO 550km = +8.6u, GEO = +561u"
-            >
-              True Scale
-            </button>
-            <button
-              onClick={() => handleScaleModeChange('READABLE_SCALE')}
-              className={`px-2 py-0.5 rounded transition font-mono ${
-                scaleMode === 'READABLE_SCALE'
-                  ? 'bg-amber-950 text-amber-300 border border-amber-600 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
-              }`}
-              title="Readable Logarithmic Scale: Simultaneously view LEO and GEO"
-            >
-              Readable Scale
-            </button>
+      {/* 3D Viewport Header - Space-Optimized Mission Control Header */}
+      <div className="flex flex-col bg-slate-900/95 border-b border-slate-800 text-xs font-mono z-10 shrink-0 select-none">
+        {/* Row 1: Title, Simulation Playback, Time Warp & Quick Camera Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-3 py-1.5 border-b border-slate-800/60">
+          <div className="flex items-center gap-2 text-cyan-400">
+            <Box className="w-4 h-4 text-cyan-400 animate-pulse" />
+            <span className="font-semibold tracking-wider text-[11px] sm:text-xs">3D LEO KINEMATICS — LaserLockAI</span>
           </div>
 
-          {/* Quick Preset Selector Dropdown */}
-          <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded border border-slate-800 text-[11px]">
-            <Compass className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-slate-400 hidden sm:inline">Orbit:</span>
-            <select
-              value={selectedPresetId}
-              onChange={(e) => handlePresetSelect(e.target.value)}
-              className="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer pr-1"
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Play / Pause Auto Revolve */}
+            <button
+              onClick={() => setAutoRevolve(!autoRevolve)}
+              className={`px-2 py-0.5 rounded border text-[10px] flex items-center gap-1 transition ${
+                autoRevolve
+                  ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700'
+                  : 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-800'
+              }`}
+              title={autoRevolve ? 'Pause Satellite Orbit' : 'Resume Satellite Orbit'}
             >
-              {ORBIT_PRESETS.map((p) => (
-                <option key={p.id} value={p.id} className="bg-slate-900 text-slate-200">
-                  {p.name}
+              {autoRevolve ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+              <span>{autoRevolve ? 'Orbiting' : 'Paused'}</span>
+            </button>
+
+            {/* Quick Time Warp Badge in Header */}
+            <div className="flex items-center gap-1 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-[10px]">
+              <Clock className="w-3 h-3 text-cyan-400" />
+              <select
+                value={simTimeWarp}
+                onChange={(e) => setSimTimeWarp(Number(e.target.value))}
+                className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer text-[10px]"
+                title="Simulation Physical Time Warp (Keplerian Rate)"
+              >
+                <option value={1} className="bg-slate-900 text-slate-200">1× (Real)</option>
+                <option value={60} className="bg-slate-900 text-slate-200">60× (1m)</option>
+                <option value={120} className="bg-slate-900 text-slate-200">120× (2m)</option>
+                <option value={360} className="bg-slate-900 text-slate-200">360× (6m)</option>
+                <option value={1440} className="bg-slate-900 text-slate-200">1440× (1d)</option>
+              </select>
+            </div>
+
+            {/* Lower Pole View */}
+            <button
+              onClick={() => {
+                orbitStateRef.current = { theta: 0, phi: -1.35, radius: 340.0 };
+              }}
+              className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[10px] transition"
+              title="Tilt camera directly to Lower Pole (South Pole / Antarctica)"
+            >
+              <Compass className="w-3 h-3 text-cyan-400" /> <span>S-Pole</span>
+            </button>
+
+            {/* Upper Pole View */}
+            <button
+              onClick={() => {
+                orbitStateRef.current = { theta: 0, phi: 1.35, radius: 340.0 };
+              }}
+              className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[10px] transition"
+              title="Tilt camera directly to Upper Pole (North Pole / Arctic)"
+            >
+              <Compass className="w-3 h-3 text-cyan-400 rotate-180" /> <span>N-Pole</span>
+            </button>
+
+            {/* Reset Camera View */}
+            <button
+              onClick={resetCameraView}
+              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[10px] transition"
+              title="Reset 3D Orbit Camera to Default Angle"
+            >
+              <RefreshCw className="w-3 h-3" /> <span>Reset</span>
+            </button>
+
+            {/* Layer / Overlays Toggle Button */}
+            <button
+              onClick={() => setShowLayerBar(!showLayerBar)}
+              className={`px-2 py-0.5 rounded border text-[10px] flex items-center gap-1 transition font-semibold ${
+                showLayerBar
+                  ? 'bg-cyan-950 text-cyan-300 border-cyan-600 shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+              title={showLayerBar ? 'Collapse Scene Overlays Toolbar' : 'Expand Scene Overlays Toolbar (Footprint, Sun, Atmo, Rings, etc.)'}
+            >
+              <Layers className="w-3 h-3 text-cyan-400" />
+              <span>Overlays (7)</span>
+              {showLayerBar ? <ChevronUp className="w-3 h-3 text-cyan-400" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Orbit Selection, Scale Mode, Tune & Speeds */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 px-3 py-1.5 bg-slate-950/60">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Render Scale Mode Toggle (Compact Segmented Pill) */}
+            <div className="flex items-center bg-slate-950 p-0.5 rounded border border-slate-800 text-[10px]">
+              <button
+                onClick={() => handleScaleModeChange('TRUE_SCALE')}
+                className={`px-2 py-0.5 rounded transition font-mono ${
+                  scaleMode === 'TRUE_SCALE'
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-600 font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+                title="True Physical Scale (1:1): Earth R=100u, LEO 550km = +8.6u, GEO = +561u"
+              >
+                True Scale
+              </button>
+              <button
+                onClick={() => handleScaleModeChange('READABLE_SCALE')}
+                className={`px-2 py-0.5 rounded transition font-mono ${
+                  scaleMode === 'READABLE_SCALE'
+                    ? 'bg-amber-950 text-amber-300 border border-amber-600 font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+                title="Readable Logarithmic Scale: Simultaneously view LEO and GEO"
+              >
+                Readable Scale
+              </button>
+            </div>
+
+            {/* Quick Preset Selector Dropdown (Space-Optimized with max-w & truncate) */}
+            <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-[11px] max-w-[240px] sm:max-w-[280px]">
+              <Compass className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-slate-400 text-[10px] shrink-0">Orbit:</span>
+              <select
+                value={selectedPresetId}
+                onChange={(e) => handlePresetSelect(e.target.value)}
+                className="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer truncate text-[11px] w-full"
+                title="Select Orbit Preset or Custom Parameters"
+              >
+                {ORBIT_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-slate-900 text-slate-200">
+                    {p.name}
+                  </option>
+                ))}
+                <option value="custom" className="bg-slate-900 text-amber-400">
+                  [Custom Parameters]
                 </option>
-              ))}
-              <option value="custom" className="bg-slate-900 text-amber-400">
-                [Custom Parameters]
-              </option>
-            </select>
-          </div>
+              </select>
+            </div>
 
-          {/* Toggle Interactive Tuning Drawer */}
-          <button
-            onClick={() => setShowOrbitTuner(!showOrbitTuner)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1.5 transition ${
-              showOrbitTuner
-                ? 'bg-cyan-950 text-cyan-300 border-cyan-700 shadow-sm shadow-cyan-900/40'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-            }`}
-            title="Open Interactive Orbit Parameter Sliders"
-          >
-            <Sliders className="w-3 h-3 text-cyan-400" />
-            <span>Tune Orbit</span>
-          </button>
-
-          {/* Real Orbital Speeds & Revolution Periods Reference Table Modal Toggle */}
-          <button
-            onClick={() => setShowSpecsTable(!showSpecsTable)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1.5 transition ${
-              showSpecsTable
-                ? 'bg-indigo-950 text-indigo-300 border-indigo-600 shadow-sm shadow-indigo-900/40 font-bold'
-                : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border-slate-700'
-            }`}
-            title="View Real Satellite Speeds & Revolution Periods Table (Keplerian Reference)"
-          >
-            <Table className="w-3 h-3 text-indigo-400" />
-            <span className="hidden sm:inline">Speeds & Periods</span>
-          </button>
-
-          {/* Quick Time Warp Badge in Header */}
-          <div className="flex items-center gap-1 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-[10px]">
-            <Clock className="w-3 h-3 text-cyan-400" />
-            <select
-              value={simTimeWarp}
-              onChange={(e) => setSimTimeWarp(Number(e.target.value))}
-              className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
-              title="Simulation Physical Time Warp (Keplerian Rate)"
+            {/* Toggle Interactive Tuning Drawer */}
+            <button
+              onClick={() => setShowOrbitTuner(!showOrbitTuner)}
+              className={`px-2 py-0.5 rounded border text-[11px] flex items-center gap-1 transition ${
+                showOrbitTuner
+                  ? 'bg-cyan-950 text-cyan-300 border-cyan-700 shadow-sm shadow-cyan-900/40 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+              }`}
+              title="Open Interactive Orbit Parameter Sliders"
             >
-              <option value={1} className="bg-slate-900 text-slate-200">1× (Real-Time)</option>
-              <option value={60} className="bg-slate-900 text-slate-200">60× (1s = 1m)</option>
-              <option value={120} className="bg-slate-900 text-slate-200">120× (1s = 2m)</option>
-              <option value={360} className="bg-slate-900 text-slate-200">360× (1s = 6m)</option>
-              <option value={1440} className="bg-slate-900 text-slate-200">1440× (1m = 1d)</option>
-            </select>
+              <Sliders className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span>Tune Orbit</span>
+            </button>
+
+            {/* Real Orbital Speeds & Revolution Periods Reference Table Modal Toggle */}
+            <button
+              onClick={() => setShowSpecsTable(!showSpecsTable)}
+              className={`px-2 py-0.5 rounded border text-[11px] flex items-center gap-1 transition ${
+                showSpecsTable
+                  ? 'bg-indigo-950 text-indigo-300 border-indigo-600 shadow-sm shadow-indigo-900/40 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border-slate-700'
+              }`}
+              title="View Real Satellite Speeds & Revolution Periods Table (Keplerian Reference)"
+            >
+              <Table className="w-3 h-3 text-indigo-400 shrink-0" />
+              <span>Speeds & Periods</span>
+            </button>
+
+            {/* 3D Beacon Ground Path Planner Toggle */}
+            <button
+              onClick={() => setShowBeaconPathPlanner(!showBeaconPathPlanner)}
+              className={`px-2 py-0.5 rounded border text-[11px] flex items-center gap-1 transition ${
+                showBeaconPathPlanner
+                  ? 'bg-amber-950 text-amber-300 border-amber-600 shadow-sm shadow-amber-900/40 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
+              }`}
+              title="Open 3D Beacon Ground Path Planner (Define Waypoints 1→4 on Earth)"
+            >
+              <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+              <span>Beacon Path</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
+                {beaconPathWaypoints.length} pts
+              </span>
+            </button>
           </div>
-
-          {/* Play / Pause Auto Revolve */}
-          <button
-            onClick={() => setAutoRevolve(!autoRevolve)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              autoRevolve
-                ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700'
-                : 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-800'
-            }`}
-            title={autoRevolve ? 'Pause Satellite Orbit' : 'Resume Satellite Orbit'}
-          >
-            {autoRevolve ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-            <span className="hidden sm:inline">{autoRevolve ? 'Orbiting' : 'Paused'}</span>
-          </button>
-
-          {/* Beacon Motion Toggle (Revolve vs Static on Ground) */}
-          <button
-            onClick={() => setBeaconRevolving(!beaconRevolving)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              beaconRevolving
-                ? 'bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-800'
-                : 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-800'
-            }`}
-            title={beaconRevolving ? 'Put Beacon Static on Ground' : 'Revolve Beacon Around Center of Earth on Ground'}
-          >
-            <Radio className={`w-3 h-3 ${beaconRevolving ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`} />
-            <span className="hidden sm:inline">{beaconRevolving ? 'Beacon: Revolving' : 'Beacon: Static'}</span>
-          </button>
-
-          {/* Earth Diurnal Spin Toggle */}
-          <button
-            onClick={() => setEarthSpinEnabled(!earthSpinEnabled)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              earthSpinEnabled
-                ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-slate-700'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
-            }`}
-            title={earthSpinEnabled ? 'Pause Earth Diurnal Spin' : 'Resume Earth Diurnal Spin'}
-          >
-            <Globe className={`w-3 h-3 ${earthSpinEnabled ? 'text-sky-400' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Earth {earthSpinEnabled ? 'Spin (15°/hr)' : 'Static'}</span>
-          </button>
-
-          {/* Atmosphere Shells Toggle (0-20km Turbulence, 20-100km Thin Atmo, 100km Kármán Line) */}
-          <button
-            onClick={() => setShowAtmosphereShells(!showAtmosphereShells)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              showAtmosphereShells
-                ? 'bg-sky-950/80 hover:bg-sky-900 text-sky-300 border-sky-700 shadow-sm shadow-sky-950 font-semibold'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
-            }`}
-            title={showAtmosphereShells ? 'Hide Atmosphere Shells & Kármán Line (0-20 km, 20-100 km, 100 km)' : 'Show Atmosphere Shells & Kármán Line'}
-          >
-            <Layers className={`w-3 h-3 ${showAtmosphereShells ? 'text-sky-400' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Atmosphere: {showAtmosphereShells ? 'Visible' : 'Hidden'}</span>
-          </button>
-
-          {/* Standard Reference Altitude Rings Toggle (100km, 2000km, 20200km, 35786km - Task 3: off by default) */}
-          <button
-            onClick={() => setShowReferenceRings(!showReferenceRings)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              showReferenceRings
-                ? 'bg-purple-950/80 hover:bg-purple-900 text-purple-300 border-purple-700 shadow-sm shadow-purple-950 font-semibold'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
-            }`}
-            title={showReferenceRings ? 'Hide Reference Altitude Rings' : 'Show Standard Reference Altitude Rings (100 km, 2,000 km, 20,200 km, 35,786 km)'}
-          >
-            <Compass className={`w-3 h-3 ${showReferenceRings ? 'text-purple-400' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Ref Rings: {showReferenceRings ? 'Visible' : 'Hidden'}</span>
-          </button>
-
-          {/* Sun / Terminator Toggle (Tasks 1-4) */}
-          <button
-            onClick={() => setShowSunTerminator(!showSunTerminator)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              showSunTerminator
-                ? 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-600/80 font-semibold'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
-            }`}
-            title={showSunTerminator ? 'Hide Sun Direction & Day/Night Terminator Line' : 'Show Sun Direction & Day/Night Terminator Line'}
-          >
-            <Sun className={`w-3 h-3 ${showSunTerminator ? 'text-amber-400' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Sun/Term: {showSunTerminator ? 'Visible' : 'Hidden'}</span>
-          </button>
-
-          {/* Ground Footprint Toggle (Tasks 1-3) */}
-          <button
-            onClick={() => setShowFootprint(!showFootprint)}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              showFootprint
-                ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600/80 font-semibold'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
-            }`}
-            title={showFootprint ? 'Hide Satellite Ground Footprint (Elevation Mask)' : 'Show Satellite Ground Footprint (Elevation Mask)'}
-          >
-            <Target className={`w-3 h-3 ${showFootprint ? 'text-emerald-400' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Footprint: {showFootprint ? 'Visible' : 'Hidden'}</span>
-          </button>
-
-          {/* Auto LOS Alignment Toggle */}
-          <button
-            onClick={handleToggleAutoLOS}
-            className={`px-2 py-1 rounded border text-[11px] flex items-center gap-1 transition ${
-              autoLOS
-                ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-700 animate-pulse'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700'
-            }`}
-            title={autoLOS ? 'Auto LOS is ON (Calibrating FOV to Beacon). Click to turn OFF (Hold Nadir)' : 'Auto LOS is OFF (Nadir / Gimbal Hold). Click to turn ON (Track Beacon)'}
-          >
-            <Locate className={`w-3 h-3 ${autoLOS ? 'text-emerald-400' : 'text-slate-500'}`} />
-            <span className="hidden sm:inline">{autoLOS ? 'Auto LOS: ON' : 'Auto LOS: OFF'}</span>
-          </button>
-
-          {/* Lower Pole View */}
-          <button
-            onClick={() => {
-              orbitStateRef.current = { theta: 0, phi: -1.35, radius: 340.0 };
-            }}
-            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[11px] transition"
-            title="Tilt camera directly to Lower Pole (South Pole / Antarctica)"
-          >
-            <Compass className="w-3 h-3 text-cyan-400" /> <span className="hidden sm:inline">Lower Pole</span>
-          </button>
-
-          {/* Upper Pole View */}
-          <button
-            onClick={() => {
-              orbitStateRef.current = { theta: 0, phi: 1.35, radius: 340.0 };
-            }}
-            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[11px] transition"
-            title="Tilt camera directly to Upper Pole (North Pole / Arctic)"
-          >
-            <Compass className="w-3 h-3 text-cyan-400 rotate-180" /> <span className="hidden sm:inline">Upper Pole</span>
-          </button>
-
-          {/* Reset Camera View */}
-          <button
-            onClick={resetCameraView}
-            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[11px] transition"
-            title="Reset 3D Orbit Camera to Default Angle"
-          >
-            <RefreshCw className="w-3 h-3" /> <span className="hidden sm:inline">Reset View</span>
-          </button>
         </div>
+
+        {/* Row 3: Scene Display & Physics Layer Buttons (Expandable/Collapsible via Overlays Button) */}
+        {showLayerBar && (
+          <div className="flex flex-wrap items-center gap-1 px-3 py-1 bg-slate-950/90 border-t border-slate-800/60 text-[10px] animate-in fade-in duration-150">
+            <span className="text-slate-500 font-bold text-[9px] uppercase tracking-wider mr-1">LAYERS:</span>
+
+            {/* Auto LOS Alignment Toggle */}
+            <button
+              onClick={handleToggleAutoLOS}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                autoLOS
+                  ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-700'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800'
+              }`}
+              title={autoLOS ? 'Auto LOS is ON (Calibrating FOV to Beacon)' : 'Auto LOS is OFF (Nadir / Gimbal Hold)'}
+            >
+              <Locate className={`w-2.5 h-2.5 ${autoLOS ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <span>Auto LOS: {autoLOS ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Ground Footprint Toggle */}
+            <button
+              onClick={() => setShowFootprint(!showFootprint)}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                showFootprint
+                  ? 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600/80'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title={showFootprint ? 'Hide Ground Footprint' : 'Show Ground Footprint'}
+            >
+              <Target className={`w-2.5 h-2.5 ${showFootprint ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <span>Footprint: {showFootprint ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Sun / Terminator Toggle */}
+            <button
+              onClick={() => setShowSunTerminator(!showSunTerminator)}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                showSunTerminator
+                  ? 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-600/80'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title={showSunTerminator ? 'Hide Sun Vector & Terminator' : 'Show Sun Vector & Terminator'}
+            >
+              <Sun className={`w-2.5 h-2.5 ${showSunTerminator ? 'text-amber-400' : 'text-slate-500'}`} />
+              <span>Sun/Term: {showSunTerminator ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Atmosphere Shells Toggle */}
+            <button
+              onClick={() => setShowAtmosphereShells(!showAtmosphereShells)}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                showAtmosphereShells
+                  ? 'bg-sky-950/80 hover:bg-sky-900 text-sky-300 border-sky-700'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title={showAtmosphereShells ? 'Hide Atmosphere Shells (0-20km, 20-100km, Kármán)' : 'Show Atmosphere Shells'}
+            >
+              <Layers className={`w-2.5 h-2.5 ${showAtmosphereShells ? 'text-sky-400' : 'text-slate-500'}`} />
+              <span>Atmo: {showAtmosphereShells ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Standard Reference Altitude Rings Toggle */}
+            <button
+              onClick={() => setShowReferenceRings(!showReferenceRings)}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                showReferenceRings
+                  ? 'bg-purple-950/80 hover:bg-purple-900 text-purple-300 border-purple-700'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title={showReferenceRings ? 'Hide Reference Altitude Rings' : 'Show Reference Altitude Rings (100km, 2000km, 20200km, 35786km)'}
+            >
+              <Compass className={`w-2.5 h-2.5 ${showReferenceRings ? 'text-purple-400' : 'text-slate-500'}`} />
+              <span>Ref Rings: {showReferenceRings ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Beacon Motion Toggle (Revolve vs Static on Ground) */}
+            <button
+              onClick={() => setBeaconRevolving(!beaconRevolving)}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                beaconRevolving
+                  ? 'bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-800'
+                  : 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-800'
+              }`}
+              title={beaconRevolving ? 'Put Beacon Static on Ground' : 'Revolve Beacon Around Center of Earth on Ground'}
+            >
+              <Radio className={`w-2.5 h-2.5 ${beaconRevolving ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`} />
+              <span>Beacon: {beaconRevolving ? 'Revolving' : 'Static'}</span>
+            </button>
+
+            {/* 3D Ground Path Layer Toggle */}
+            <button
+              onClick={() => {
+                const next = !pathFollowMode;
+                setPathFollowMode(next);
+                pathFollowModeRef.current = next;
+                if (!next) {
+                  setPathMotionActive(false);
+                  pathMotionActiveRef.current = false;
+                }
+                if (beaconPathSolidLineRef.current) beaconPathSolidLineRef.current.visible = next;
+                if (beaconPathDashedLineRef.current) beaconPathDashedLineRef.current.visible = next;
+                if (beaconPathMarkersGroupRef.current) beaconPathMarkersGroupRef.current.visible = next;
+                if (beaconTrackRingRef.current) beaconTrackRingRef.current.visible = !next;
+              }}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                pathFollowMode
+                  ? 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-600/80'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title={pathFollowMode ? 'Disable 3D Waypoint Path Mode' : 'Enable 3D Waypoint Path Mode (1→4)'}
+            >
+              <MapPin className={`w-2.5 h-2.5 ${pathFollowMode ? 'text-amber-400' : 'text-slate-500'}`} />
+              <span>Path 1→4: {pathFollowMode ? (pathMotionActive ? 'RUNNING' : 'ON') : 'OFF'}</span>
+            </button>
+
+            {/* Draw Mode Quick Toggle */}
+            <button
+              onClick={handleToggleDrawMode}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                isDrawingPath
+                  ? 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-300 border-amber-500/60 font-bold animate-pulse'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title="Click on Earth to add waypoints in 3D"
+            >
+              <PenTool className={`w-2.5 h-2.5 ${isDrawingPath ? 'text-amber-400' : 'text-slate-500'}`} />
+              <span>Draw: {isDrawingPath ? 'ACTIVE' : 'OFF'}</span>
+            </button>
+
+            {/* Earth Diurnal Spin Toggle */}
+            <button
+              onClick={() => setEarthSpinEnabled(!earthSpinEnabled)}
+              className={`px-1.5 py-0.5 rounded border flex items-center gap-1 transition ${
+                earthSpinEnabled
+                  ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-slate-700'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-500 border-slate-800'
+              }`}
+              title={earthSpinEnabled ? 'Pause Earth Diurnal Spin' : 'Resume Earth Diurnal Spin'}
+            >
+              <Globe className={`w-2.5 h-2.5 ${earthSpinEnabled ? 'text-sky-400' : 'text-slate-600'}`} />
+              <span>Earth Spin: {earthSpinEnabled ? 'ON' : 'OFF'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* WebGL Canvas Container */}
-      <div ref={mountRef} className="relative flex-1 w-full h-full min-h-[380px] cursor-grab active:cursor-grabbing" />
+      {/* 3D Viewport Canvas & Isolated HUD Layer (prevents any HUD overlay from overlapping the header) */}
+      <div className="relative flex-1 w-full h-full min-h-[380px] overflow-hidden">
+        {/* Three.js Canvas Mount */}
+        <div
+          ref={mountRef}
+          className={`w-full h-full ${isDrawingPath ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+        />
 
-      {/* Handover Status Panel — absolute overlay, bottom-right */}
-      <div style={{
-        position: 'absolute',
-        bottom: 8,
-        right: 8,
-        zIndex: 25,
-        pointerEvents: 'none',
-      }}>
-        <HandoverPanel handover={handoverData} backupAcquireSteps={3} />
-      </div>
+        {/* Draw Mode Top Floating Indicator Banner (Only shown if Beacon Path Planner panel is closed) */}
+        {isDrawingPath && !showBeaconPathPlanner && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-slate-950/95 backdrop-blur-md border border-amber-500/70 text-amber-300 text-xs font-mono px-4 py-1.5 rounded-full shadow-2xl z-30 flex items-center gap-3 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+            <span className="font-semibold">
+              Draw Mode Active: Click on 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed) · Pt 1 is Start, Pt {beaconPathWaypoints.length || 4} is End
+            </span>
+            <button
+              onClick={() => setIsDrawingPath(false)}
+              className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition"
+            >
+              Done
+            </button>
+          </div>
+        )}
 
-      {/* Interactive Orbit Tuner Drawer / Popover */}
-      {showOrbitTuner && (
-        <div className="absolute top-12 left-3 w-80 bg-slate-950/95 backdrop-blur-md border border-cyan-800/80 rounded-lg p-3 font-mono text-xs text-slate-300 shadow-2xl z-20 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+        {/* 3D Beacon Ground Path Planner Drawer / Floating Card (Repositioned to Top-Center HUD to eliminate any overlap with LEO Legend) */}
+        {showBeaconPathPlanner && (
+          <div
+            className={`absolute ${getPlannerPositionClass()} z-30 font-mono text-xs text-slate-300 pointer-events-auto select-none transition-all duration-200 ${
+              isPathPlannerMinimized ? 'w-auto' : 'w-84 max-w-[calc(100%-24px)]'
+            }`}
+          >
+            {isPathPlannerMinimized ? (
+              <div
+                className="bg-slate-950/95 backdrop-blur-md border border-amber-500/60 rounded-full px-3 py-1.5 shadow-2xl flex items-center gap-2.5 cursor-pointer hover:border-amber-400 transition"
+                onClick={() => setIsPathPlannerMinimized(false)}
+                title="Click to expand 3D Beacon Ground Path Planner"
+              >
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-[9px] uppercase tracking-wider">
+                  <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>BEACON PATH</span>
+                </div>
+                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-amber-950 text-amber-300 border border-amber-700/60">
+                  {beaconPathWaypoints.length} PTS
+                </span>
+                <span className={`text-[8.5px] font-bold ${isDrawingPath ? 'text-amber-300 animate-pulse' : pathMotionActive ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`}>
+                  {isDrawingPath ? 'DRAWING' : pathMotionActive ? 'RUNNING' : 'STOPPED'}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cyclePathPlannerPosition();
+                  }}
+                  className="p-1 hover:bg-slate-800 text-slate-400 hover:text-amber-300 rounded-full transition cursor-pointer"
+                  title={`Docked at ${pathPlannerPosition}. Click to cycle position (Top-Center, Top-Left, Bottom-Center).`}
+                  aria-label="Cycle panel position"
+                >
+                  <Move className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsPathPlannerMinimized(false);
+                  }}
+                  className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-full transition cursor-pointer"
+                  title="Expand path planner"
+                  aria-label="Expand path planner"
+                >
+                  <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                </button>
+              </div>
+            ) : (
+              <div className="bg-slate-950/95 backdrop-blur-md border border-amber-500/60 rounded-lg p-3 shadow-2xl space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                  <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                    <MapPin className="w-4 h-4 text-amber-400" />
+                    <span>BEACON 3D GROUND PATH</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={cyclePathPlannerPosition}
+                      className="text-slate-400 hover:text-amber-300 p-1 rounded hover:bg-slate-800 transition"
+                      title={`Docked at ${pathPlannerPosition}. Click to cycle position (Top-Center, Top-Left, Bottom-Center).`}
+                      aria-label="Cycle panel position"
+                    >
+                      <Move className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPathPlannerMinimized(true)}
+                      className="text-slate-400 hover:text-white p-0.5 rounded transition"
+                      title="Minimize panel"
+                      aria-label="Minimize panel"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowBeaconPathPlanner(false)}
+                      className="text-slate-400 hover:text-white p-0.5 rounded transition"
+                      title="Close panel"
+                      aria-label="Close panel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Draw Mode Active Banner (Integrated inside card) */}
+                {isDrawingPath && (
+                  <div className="bg-amber-500/15 border border-amber-500/50 rounded p-2 text-amber-300 text-[10.5px] flex items-center justify-between gap-2 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                      <span className="truncate">Click 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed)</span>
+                    </div>
+                    <button
+                      onClick={() => setIsDrawingPath(false)}
+                      className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9.5px] font-bold shrink-0 transition"
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+
+                {/* Primary Motion Controls */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    {!pathMotionActive ? (
+                      <button
+                        onClick={handleStartPathMotion}
+                        disabled={beaconPathWaypoints.length < 2}
+                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs flex items-center justify-center gap-1.5 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+                        <span>
+                          {pathLegIndexRef.current >= beaconPathWaypoints.length - 2 && pathLegProgressRef.current >= 1.0
+                            ? `Restart Path (Pt 1→${beaconPathWaypoints.length})`
+                            : `Start Motion (${beaconPathWaypoints.length} pts)`}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePausePathMotion}
+                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs flex items-center justify-center gap-1.5 font-medium transition shadow-sm"
+                      >
+                        <Pause className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <span>Pause Motion</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleResetPathToStart}
+                      disabled={beaconPathWaypoints.length === 0}
+                      className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs flex items-center gap-1 transition disabled:opacity-40"
+                      title="Reset beacon back to Point 1 (Starting Point)"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Pt 1</span>
+                    </button>
+                  </div>
+
+                  {/* Draw Custom Path & Preset 1->4 Action Strip */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={handleToggleDrawMode}
+                      className={`px-2 py-1 rounded text-[11px] border flex items-center justify-center gap-1 transition ${
+                        isDrawingPath
+                          ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold animate-pulse'
+                          : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      }`}
+                      title="Click anywhere on the 3D Earth globe to plot custom waypoints"
+                    >
+                      <PenTool className="w-3 h-3 text-amber-400" />
+                      <span>{isDrawingPath ? 'Plotting…' : 'Draw Custom'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleLoadPreset4PointPath}
+                      className="px-2 py-1 rounded text-[11px] bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-800 flex items-center justify-center gap-1 transition"
+                      title="Load 4-Point Path from reference image (1=Start, 4=End)"
+                    >
+                      <CheckCircle className="w-3 h-3 text-cyan-400" />
+                      <span>Preset 1→4</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 px-0.5">
+                    <span>Min 2 pts · Stops at end (Pt {beaconPathWaypoints.length || 4})</span>
+                    <button
+                      onClick={handleClearBeaconPath}
+                      className="hover:text-rose-400 flex items-center gap-1 transition text-slate-500"
+                      title="Clear all waypoints"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Clear</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Status Readout */}
+                <div className="bg-slate-900/90 border border-slate-800 p-2 rounded space-y-1">
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-slate-400">Path Status:</span>
+                    <span
+                      className={`font-bold ${
+                        pathMotionActive
+                          ? 'text-amber-400 animate-pulse'
+                          : pathLegProgressRef.current >= 1.0 && pathLegIndexRef.current >= beaconPathWaypoints.length - 2
+                          ? 'text-emerald-400 font-bold'
+                          : 'text-cyan-400'
+                      }`}
+                    >
+                      {pathStatusText}
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-150 ${
+                        pathLegProgressRef.current >= 1.0 && pathLegIndexRef.current >= beaconPathWaypoints.length - 2
+                          ? 'bg-emerald-400'
+                          : 'bg-amber-400'
+                      }`}
+                      style={{ width: `${pathOverallProgressPct}%` }}
+                    />
+                  </div>
+
+                  <div className="flex justify-between items-center text-[9px] text-slate-400">
+                    <span>{pathCurrentLegDisplay}</span>
+                    <span>{pathOverallProgressPct}% Completed</span>
+                  </div>
+                </div>
+
+                {/* Plotted Waypoints List (Ref: 1=Start [Green], 4=End [Orange]) */}
+                <div className="border border-slate-800/80 rounded bg-slate-900/60 p-1.5 space-y-1">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider flex justify-between">
+                    <span>Plotted Waypoints ({beaconPathWaypoints.length})</span>
+                    <span className="text-slate-500 text-[9px]">1=Start (Green) · 4=End</span>
+                  </div>
+                  <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
+                    {beaconPathWaypoints.map((wp, idx) => {
+                      const isStart = idx === 0;
+                      const isEnd = idx === beaconPathWaypoints.length - 1 && beaconPathWaypoints.length >= 2;
+                      const isCurrent = pathLegIndexRef.current === idx && pathMotionActive;
+                      return (
+                        <div
+                          key={wp.id}
+                          className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[9.5px] font-mono border ${
+                            isCurrent
+                              ? 'bg-amber-950/60 border-amber-600 text-amber-200'
+                              : 'bg-slate-950/80 border-slate-800/80 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold ${
+                                isStart
+                                  ? 'bg-emerald-500 text-slate-950'
+                                  : isEnd
+                                  ? 'bg-rose-500 text-white'
+                                  : 'bg-amber-500 text-slate-950'
+                              }`}
+                            >
+                              {wp.id}
+                            </span>
+                            <span className={isStart ? 'text-emerald-300 font-bold' : isEnd ? 'text-rose-300 font-bold' : 'text-slate-300'}>
+                              {isStart ? '1 (START)' : isEnd ? `${wp.id} (END)` : `Point ${wp.id}`}
+                            </span>
+                          </div>
+                          <span className="text-slate-400 text-[8.5px]">
+                            {wp.latDeg.toFixed(1)}°, {wp.lonDeg.toFixed(1)}°
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Speed & Warp Control */}
+                <div className="border-t border-slate-800/80 pt-1.5 space-y-1 text-[10px]">
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Beacon Ground Speed:</span>
+                    <span className="text-amber-300 font-bold">{beaconSpeedKmh} km/h</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="50"
+                    max="1200"
+                    step="25"
+                    value={beaconSpeedKmh}
+                    onChange={(e) => {
+                      const spd = Number(e.target.value);
+                      setBeaconSpeedKmh(spd);
+                      beaconMotionRef.current.speedKmh = spd;
+                      satellitePovSync.update({ beaconSpeedKmh: spd });
+                    }}
+                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                  />
+                  <div className="flex justify-between gap-1 pt-0.5">
+                    {[
+                      { label: 'UAV 150', speed: 150 },
+                      { label: 'Jet 450', speed: 450 },
+                      { label: 'Fast 900', speed: 900 },
+                    ].map((r) => (
+                      <button
+                        key={r.label}
+                        onClick={() => {
+                          setBeaconSpeedKmh(r.speed);
+                          beaconMotionRef.current.speedKmh = r.speed;
+                          satellitePovSync.update({ beaconSpeedKmh: r.speed });
+                        }}
+                        className={`flex-1 py-0.5 rounded text-[9px] border transition ${
+                          beaconSpeedKmh === r.speed
+                            ? 'bg-amber-950 text-amber-300 border-amber-600 font-bold'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quick Reposition & Field of View Status (Matching Reference Image) */}
+                <div className="border-t border-slate-800/80 pt-1.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handleCenterTargetOnGlobe}
+                      className="flex-1 px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] flex items-center justify-center gap-1 font-medium transition"
+                      title="Center target in satellite optical boresight"
+                    >
+                      <Crosshair className="w-3 h-3 text-cyan-400" />
+                      <span>Center Target</span>
+                    </button>
+                    <button
+                      onClick={handleDisplaceTargetOutsideFov}
+                      className="flex-1 px-2 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] flex items-center justify-center gap-1 font-medium transition"
+                      title="Displace target outside optical FOV"
+                    >
+                      <Maximize2 className="w-3 h-3 text-rose-400" />
+                      <span>Displace FOV</span>
+                    </button>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] bg-slate-900/70 p-1.5 rounded border border-slate-800/60">
+                    <span className="text-slate-400">Status:</span>
+                    <span className={`font-bold ${!isOccludedByEarth && isBeaconInFootprint ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {!isOccludedByEarth && isBeaconInFootprint ? 'IN FIELD OF VIEW' : 'OUTSIDE FIELD OF VIEW'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Handover Status Panel — absolute overlay, bottom-right */}
+        <div style={{
+          position: 'absolute',
+          bottom: 12,
+          right: 12,
+          zIndex: 20,
+          pointerEvents: 'none',
+        }}>
+          <HandoverPanel handover={handoverData} backupAcquireSteps={3} />
+        </div>
+
+        {/* Interactive Orbit Tuner Drawer / Popover */}
+        {showOrbitTuner && (
+          <div className="absolute top-3 left-3 w-80 max-h-[calc(100%-24px)] overflow-y-auto bg-slate-950/95 backdrop-blur-md border border-cyan-800/80 rounded-lg p-3 font-mono text-xs text-slate-300 shadow-2xl z-30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
             <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs">
               <Orbit className="w-4 h-4 text-cyan-400" />
@@ -4123,338 +5187,469 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         </div>
       )}
 
-      {/* On-Screen Scale Indicator (Compact Corner HUD Widget) */}
-      <div className="absolute top-14 left-3 z-15 pointer-events-auto select-none bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-lg p-2.5 font-mono text-[10px] text-slate-300 shadow-xl space-y-1.5 w-64 animate-in fade-in duration-200">
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-1">
-          <div className="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
-            <Ruler className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Scale Indicator</span>
-          </div>
-          <span
-            className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
-              scaleMode === 'TRUE_SCALE'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60'
-                : 'bg-amber-950 text-amber-300 border border-amber-700/60'
-            }`}
+      {/* On-Screen Scale Indicator (Compact Corner HUD Widget) with Minimize / Expand Feature */}
+      <div
+        className={`absolute z-20 pointer-events-auto select-none transition-all duration-200 ${
+          showOrbitTuner ? 'top-3 left-[340px]' : 'top-3 left-3'
+        }`}
+      >
+        {isScaleMinimized ? (
+          <div
+            className="bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-300 shadow-xl flex items-center gap-2 cursor-pointer hover:border-slate-700 transition"
+            onClick={() => setIsScaleMinimized(false)}
+            title="Click to expand scale indicator"
           >
-            {scaleMode === 'TRUE_SCALE' ? 'TRUE SCALE' : 'READABLE LOG'}
-          </span>
-        </div>
-
-        {/* Primary Readout */}
-        <div className="flex items-baseline justify-between pt-0.5">
-          <div className="text-white font-bold text-[11px]">
-            {scaleMode === 'TRUE_SCALE' ? (
-              <span className="text-cyan-300">
-                {earthRenderRadius.toFixed(0)}u = {Math.round(EARTH_RADIUS_KM).toLocaleString()} km
-              </span>
-            ) : (
-              <span className="text-amber-300">
-                100u alt = {Math.round(getAltitudeFromRenderOffset(100, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km
-              </span>
-            )}
-          </div>
-          <div className="text-[8.5px] text-slate-400 font-mono">
-            {scaleMode === 'TRUE_SCALE' ? (
-              <span>1u = {(EARTH_RADIUS_KM / earthRenderRadius).toFixed(1)} km</span>
-            ) : (
-              <span>R₀: {earthRenderRadius.toFixed(0)}u = {Math.round(EARTH_RADIUS_KM).toLocaleString()} km</span>
-            )}
-          </div>
-        </div>
-
-        {/* Visual Scale Bar */}
-        <div className="pt-0.5">
-          <div className="relative flex items-center">
-            {/* Left tick */}
-            <div className="w-[1.5px] h-2.5 bg-slate-400" />
-            {/* Left segment */}
-            <div
-              className={`flex-1 h-[2px] ${
+            <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[9px] uppercase tracking-wider">
+              <Ruler className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span>SCALE</span>
+            </div>
+            <span
+              className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
                 scaleMode === 'TRUE_SCALE'
-                  ? 'bg-cyan-400'
-                  : 'bg-gradient-to-r from-amber-400 to-amber-300'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60'
+                  : 'bg-amber-950 text-amber-300 border border-amber-700/60'
               }`}
-            />
-            {/* Center tick */}
-            <div className="w-[1.5px] h-2 bg-slate-400" />
-            {/* Right segment */}
+            >
+              {scaleMode === 'TRUE_SCALE' ? 'TRUE (100u)' : 'LOG SCALE'}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsScaleMinimized(false);
+              }}
+              className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+              title="Expand scale indicator"
+              aria-label="Expand scale indicator"
+            >
+              <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+          </div>
+        ) : (
+          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-lg p-2.5 font-mono text-[10px] text-slate-300 shadow-xl space-y-1.5 w-64 animate-in fade-in duration-200">
             <div
-              className={`flex-1 h-[2px] ${
-                scaleMode === 'TRUE_SCALE'
-                  ? 'bg-cyan-400'
-                  : 'bg-gradient-to-r from-amber-300 to-amber-500'
-              }`}
-            />
-            {/* Right tick */}
-            <div className="w-[1.5px] h-2.5 bg-slate-400" />
-          </div>
-
-          {/* Under-bar tick labels */}
-          <div className="flex justify-between text-[8px] font-mono text-slate-400 pt-0.5">
-            <span>0u</span>
-            <span>
-              {scaleMode === 'TRUE_SCALE'
-                ? `${(earthRenderRadius / 2).toFixed(0)}u (${Math.round(EARTH_RADIUS_KM / 2).toLocaleString()} km)`
-                : `50u (${Math.round(getAltitudeFromRenderOffset(50, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km)`}
-            </span>
-            <span>
-              {scaleMode === 'TRUE_SCALE'
-                ? `${earthRenderRadius.toFixed(0)}u (${Math.round(EARTH_RADIUS_KM).toLocaleString()} km)`
-                : `100u (${Math.round(getAltitudeFromRenderOffset(100, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km)`}
-            </span>
-          </div>
-        </div>
-
-        {/* Dynamic active orbit readout and not-to-scale warning in READABLE_SCALE */}
-        {scaleMode === 'READABLE_SCALE' && (
-          <div className="text-[8.5px] pt-1 border-t border-amber-900/40 text-amber-300/90 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>Active Orbit:</span>
-            </span>
-            <span className="font-bold font-mono">
-              {getRenderAltitudeOffset(orbitAltitudeKm, scaleMode, READABLE_K, earthRenderRadius).toFixed(1)}u = {Math.round(orbitAltitudeKm).toLocaleString()} km
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Overlay HUD Telemetry in 3D */}
-      <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[10px] space-y-1 text-slate-300 pointer-events-none z-10">
-        <div className="text-cyan-400 font-bold border-b border-slate-800 pb-1 flex justify-between items-center">
-          <span>ORBITAL CONSTELLATION TRACKER</span>
-          <span className={scaleMode === 'TRUE_SCALE' ? 'text-cyan-300 text-[9px] font-bold' : 'text-amber-300 text-[9px] font-bold'}>
-            [{scaleMode}]
-          </span>
-        </div>
-        <div>Central Body: <span className="text-white">Earth ({formatDistAndUnits(EARTH_RADIUS_KM, globeRadius)})</span></div>
-        <div>
-          Active Satellite: <span className="text-cyan-300 font-bold">{activePreset ? activePreset.shortName : 'Custom Orbit'}</span>
-        </div>
-        <div>
-          Orbit Shape:{' '}
-          <span className="text-sky-300 font-bold">
-            {formatAltAndUnits(orbitPerigeeKm, scaleMode)} × {formatAltAndUnits(orbitApogeeKm, scaleMode)} (e={derivedE.toFixed(4)}) | Inc: {orbitInc.toFixed(1)}°
-          </span>
-        </div>
-        <div>
-          Orbital Speed & Period (1 Rev):{' '}
-          <span className="text-emerald-400 font-bold">
-            {formatOrbitalSpeed(derivedSpeed)}
-          </span>{' '}
-          |{' '}
-          <span className="text-cyan-300 font-bold">
-            1 Rev: {formatOrbitalPeriod(derivedPeriodSec)}
-          </span>
-        </div>
-        <div className="text-[9px] text-slate-400">
-          Kepler Orbit: a = {formatDistAndUnits(derivedA, getRenderOrbitRadius(derivedA - EARTH_RADIUS_KM, scaleMode))} | r = {formatDistAndUnits(derivedR, getRenderOrbitRadius(derivedR - EARTH_RADIUS_KM, scaleMode))}
-        </div>
-        <div>Target Entity: <span className="text-emerald-400 font-bold">Ground Station ({formatAltAndUnits(0, scaleMode)})</span></div>
-        <div>
-          Beacon Platform:{' '}
-          <span className={beaconSpeedKmh > 0 ? 'text-rose-300 font-bold' : 'text-amber-400 font-bold'}>
-            {beaconSpeedKmh > 0
-              ? `ATMOSPHERIC UAV (${beaconSpeedKmh} km/h [1 Rev = ${formatBeaconRevolutionTime(beaconSpeedKmh)}])`
-              : 'STATIC GROUND STATION (HOVER / LOCKED)'}
-          </span>
-        </div>
-        <div>
-          Earth Spin & Clock:{' '}
-          <span className={earthSpinEnabled ? 'text-sky-300 font-bold' : 'text-slate-500 font-bold'}>
-            {earthSpinEnabled
-              ? `SIDEREAL SPIN (${simTimeWarp}× Time Warp [${simTimeWarp === 1 ? '1s=1s Real-Time' : `1s = ${simTimeWarp >= 60 ? `${simTimeWarp / 60}m` : `${simTimeWarp}s`}`}])`
-              : 'INERTIAL LOCKED (PAUSED)'}
-          </span>
-        </div>
-        <div>
-          Slant Range:{' '}
-          <span className="text-cyan-300 font-bold">{formatDistAndUnits(currentSlantRangeKm, currentSlantRange)}</span>
-        </div>
-        <div>
-          PAT State:{' '}
-          {isOccludedByEarth ? (
-            <span className="text-rose-400 font-bold animate-pulse">OCCLUDED BY EARTH LIMB (NO LOS)</span>
-          ) : !autoLOS ? (
-            <span className="text-slate-400 font-bold">AUTO LOS OFF (HOLDING NADIR ATTITUDE)</span>
-          ) : slewAngularError > 1.5 ? (
-            <span className="text-amber-400 font-bold animate-pulse">
-              SLEWING TO BEACON LOS ({slewAngularError.toFixed(1)}° OFF-AXIS)
-            </span>
-          ) : autoRevolve ? (
-            <span className="text-emerald-400 font-bold">ACTIVE PAT TRACKING (CLEAR LOS)</span>
-          ) : (
-            <span className="text-emerald-400 font-bold">LOCKED ON BEACON (CLEAR LOS)</span>
-          )}
-        </div>
-        {showAtmosphereShells && (
-          <div className="pt-1 border-t border-slate-800/80 text-[10px]">
-            Atmospheric Shells:{' '}
-            <span className="text-sky-300 font-bold">
-              Turbulence ({formatAltAndUnits(20, scaleMode)})
-            </span>{' '}
-            |{' '}
-            <span className="text-indigo-300 font-bold">
-              Thin ({formatAltAndUnits(100, scaleMode)})
-            </span>{' '}
-            |{' '}
-            <span className="text-emerald-300 font-bold">
-              Kármán Line ({formatAltAndUnits(100, scaleMode)})
-            </span>
-          </div>
-        )}
-        {showReferenceRings && (
-          <div className="pt-1 border-t border-slate-800/80 text-[10px]">
-            Reference Rings:{' '}
-            {REFERENCE_ALTITUDES.map((spec, i) => (
-              <span key={spec.id} style={{ color: spec.cssColor }}>
-                {spec.name} ({formatAltAndUnits(spec.altKm, scaleMode)}){i < REFERENCE_ALTITUDES.length - 1 ? ' | ' : ''}
-              </span>
-            ))}
-          </div>
-        )}
-        {showSunTerminator && (
-          <div className="pt-1 border-t border-slate-800/80 text-[10px]">
-            Solar Illumination:{' '}
-            <span className="text-amber-300 font-bold">
-              Sun Vector [{FIXED_SUN_DIR.x.toFixed(2)}, {FIXED_SUN_DIR.y.toFixed(2)}, {FIXED_SUN_DIR.z.toFixed(2)}]
-            </span>{' '}
-            |{' '}
-            <span className="text-yellow-300 font-bold">
-              Terminator Great Circle
-            </span>{' '}
-            |{' '}
-            <span className="text-slate-400 font-bold">
-              Night Shading
-            </span>
-          </div>
-        )}
-        {showFootprint && (
-          <div className="pt-1 border-t border-slate-800/80 text-[10px]">
-            Ground Footprint ({`El ≥ ${(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°`}):{' '}
-            <span className={isBeaconInFootprint ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-              {isBeaconInFootprint
-                ? `BEACON IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)`
-                : `BEACON OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
-            </span>{' '}
-            |{' '}
-            <span className="text-slate-400">
-              Radius θ = {footprintThetaDeg.toFixed(1)}° ({Math.round(footprintGroundRadiusKm).toLocaleString()} km)
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Legend */}
-      <div className="absolute top-14 right-3 bg-slate-950/85 backdrop-blur border border-slate-800 px-3 py-2 rounded font-mono text-[10px] text-slate-400 pointer-events-none space-y-1.5 shadow-xl hidden sm:block z-10">
-        <div className="text-[11px] font-bold text-slate-200 border-b border-slate-800 pb-1">LEO CONSTELLATION</div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-cyan-400 inline-block border-dashed"></span>
-          <span className="text-cyan-300 font-medium">Active Optical LOS Beam</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-rose-500 inline-block border-dashed"></span>
-          <span className="text-rose-400 font-medium">Earth Limb Blocked LOS</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-sky-400 inline-block"></span>
-          <span>Selected Satellite Orbit ({formatAltAndUnits(orbitAltitudeKm, scaleMode)})</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-blue-500 inline-block border-dashed"></span>
-          <span>Walker Constellation Shells ({formatAltAndUnits(550, scaleMode)})</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-indigo-400 inline-block border-dashed"></span>
-          <span>Polar Sun-Synchronous SSO ({formatAltAndUnits(700, scaleMode)}, 97.8°)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-rose-500 inline-block border-dashed"></span>
-          <span className="text-rose-300">Beacon Ground Track ({formatAltAndUnits(0, scaleMode)})</span>
-        </div>
-
-        {/* Scene Markers (Fixed Screen-Space Billboards - Tasks 1-6) */}
-        <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">SCENE MARKERS (SCREEN-SPACE)</div>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span>
-          <span>Satellite Marker ({BASE_MARKER_PX}px / {ACTIVE_MARKER_PX}px active)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-          <span>Beacon Target Marker ({BASE_MARKER_PX}px / {ACTIVE_MARKER_PX}px active)</span>
-        </div>
-
-        {/* Atmospheric Shells in Legend */}
-        {showAtmosphereShells && (
-          <>
-            <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">ATMOSPHERIC LAYERS</div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-2 bg-sky-600/50 border border-sky-400/80 rounded-[2px] inline-block"></span>
-              <span className="text-sky-300">Turbulence Zone (0–20 km, {formatAltAndUnits(20, scaleMode)})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-2 bg-indigo-500/30 border border-indigo-400/50 rounded-[2px] inline-block"></span>
-              <span className="text-indigo-200">Thin Atmosphere (20–100 km, {formatAltAndUnits(100, scaleMode)})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-emerald-400 border-dashed inline-block"></span>
-              <span className="text-emerald-300">Kármán Line — Edge of Space ({formatAltAndUnits(100, scaleMode)})</span>
-            </div>
-          </>
-        )}
-
-        {/* Ground Footprint in Legend (Tasks 1-3) */}
-        {showFootprint && (
-          <>
-            <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">GROUND FOOTPRINT</div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-emerald-400 inline-block"></span>
-              <span className="text-emerald-300 font-medium">In Coverage (El ≥ {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-rose-500 inline-block"></span>
-              <span className="text-rose-400 font-medium">Outside Mask (El &lt; {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
-            </div>
-          </>
-        )}
-
-        {/* Solar Direction & Day/Night Terminator in Legend (Tasks 1-4) */}
-        {showSunTerminator && (
-          <>
-            <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">SOLAR ILLUMINATION</div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-amber-400 border-dashed inline-block"></span>
-              <span className="text-amber-300 font-medium">Day/Night Terminator (Dawn/Dusk)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-yellow-300 inline-block"></span>
-              <span className="text-yellow-300">Sun Direction Vector (ECI Fixed)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-2 bg-slate-900 border border-slate-700/80 rounded-[2px] inline-block"></span>
-              <span className="text-slate-400">Night-Side Shaded Hemisphere</span>
-            </div>
-          </>
-        )}
-
-        {/* Standard Reference Altitude Rings in Legend (Task 2 & 3) */}
-        {showReferenceRings && (
-          <>
-            <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">REFERENCE ALTITUDES</div>
-            {REFERENCE_ALTITUDES.map((spec) => (
-              <div key={spec.id} className="flex items-center gap-2">
+              className="flex items-center justify-between border-b border-slate-800/80 pb-1 cursor-pointer"
+              onClick={() => setIsScaleMinimized(true)}
+              title="Click to minimize scale indicator"
+            >
+              <div className="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                <Ruler className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Scale Indicator</span>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <span
-                  className="w-3 h-0.5 border-dashed inline-block"
-                  style={{ backgroundColor: spec.cssColor }}
-                ></span>
-                <span style={{ color: spec.cssColor }}>
-                  {spec.name} ({formatAltAndUnits(spec.altKm, scaleMode)})
+                  className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
+                    scaleMode === 'TRUE_SCALE'
+                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60'
+                      : 'bg-amber-950 text-amber-300 border border-amber-700/60'
+                  }`}
+                >
+                  {scaleMode === 'TRUE_SCALE' ? 'TRUE SCALE' : 'READABLE LOG'}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsScaleMinimized(true);
+                  }}
+                  className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+                  title="Minimize scale indicator"
+                  aria-label="Minimize scale indicator"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Primary Readout */}
+            <div className="flex items-baseline justify-between pt-0.5">
+              <div className="text-white font-bold text-[11px]">
+                {scaleMode === 'TRUE_SCALE' ? (
+                  <span className="text-cyan-300">
+                    {earthRenderRadius.toFixed(0)}u = {Math.round(EARTH_RADIUS_KM).toLocaleString()} km
+                  </span>
+                ) : (
+                  <span className="text-amber-300">
+                    100u alt = {Math.round(getAltitudeFromRenderOffset(100, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km
+                  </span>
+                )}
+              </div>
+              <div className="text-[8.5px] text-slate-400 font-mono">
+                {scaleMode === 'TRUE_SCALE' ? (
+                  <span>1u = {(EARTH_RADIUS_KM / earthRenderRadius).toFixed(1)} km</span>
+                ) : (
+                  <span>R₀: {earthRenderRadius.toFixed(0)}u = {Math.round(EARTH_RADIUS_KM).toLocaleString()} km</span>
+                )}
+              </div>
+            </div>
+
+            {/* Visual Scale Bar */}
+            <div className="pt-0.5">
+              <div className="relative flex items-center">
+                {/* Left tick */}
+                <div className="w-[1.5px] h-2.5 bg-slate-400" />
+                {/* Left segment */}
+                <div
+                  className={`flex-1 h-[2px] ${
+                    scaleMode === 'TRUE_SCALE'
+                      ? 'bg-cyan-400'
+                      : 'bg-gradient-to-r from-amber-400 to-amber-300'
+                  }`}
+                />
+                {/* Center tick */}
+                <div className="w-[1.5px] h-2 bg-slate-400" />
+                {/* Right segment */}
+                <div
+                  className={`flex-1 h-[2px] ${
+                    scaleMode === 'TRUE_SCALE'
+                      ? 'bg-cyan-400'
+                      : 'bg-gradient-to-r from-amber-300 to-amber-500'
+                  }`}
+                />
+                {/* Right tick */}
+                <div className="w-[1.5px] h-2.5 bg-slate-400" />
+              </div>
+
+              {/* Under-bar tick labels */}
+              <div className="flex justify-between text-[8px] font-mono text-slate-400 pt-0.5">
+                <span>0u</span>
+                <span>
+                  {scaleMode === 'TRUE_SCALE'
+                    ? `${(earthRenderRadius / 2).toFixed(0)}u (${Math.round(EARTH_RADIUS_KM / 2).toLocaleString()} km)`
+                    : `50u (${Math.round(getAltitudeFromRenderOffset(50, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km)`}
+                </span>
+                <span>
+                  {scaleMode === 'TRUE_SCALE'
+                    ? `${earthRenderRadius.toFixed(0)}u (${Math.round(EARTH_RADIUS_KM).toLocaleString()} km)`
+                    : `100u (${Math.round(getAltitudeFromRenderOffset(100, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km)`}
                 </span>
               </div>
-            ))}
-          </>
+            </div>
+
+            {/* Dynamic active orbit readout and not-to-scale warning in READABLE_SCALE */}
+            {scaleMode === 'READABLE_SCALE' && (
+              <div className="text-[8.5px] pt-1 border-t border-amber-900/40 text-amber-300/90 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span>Active Orbit:</span>
+                </span>
+                <span className="font-bold font-mono">
+                  {getRenderAltitudeOffset(orbitAltitudeKm, scaleMode, READABLE_K, earthRenderRadius).toFixed(1)}u = {Math.round(orbitAltitudeKm).toLocaleString()} km
+                </span>
+              </div>
+            )}
+          </div>
         )}
+      </div>
+
+      {/* Overlay HUD Telemetry in 3D with Minimize / Expand Feature */}
+      <div
+        className={`absolute bottom-3 left-3 bg-slate-950/90 backdrop-blur border border-slate-800 p-2.5 rounded-lg font-mono text-[10px] space-y-1 text-slate-300 pointer-events-auto shadow-xl z-20 select-none transition-all duration-200 ${
+          isTrackerMinimized ? 'max-w-[280px]' : 'max-w-[min(540px,calc(100%-320px))]'
+        }`}
+      >
+        <div
+          className={`text-cyan-400 font-bold flex justify-between items-center gap-3 cursor-pointer ${
+            !isTrackerMinimized ? 'border-b border-slate-800 pb-1.5 mb-1.5' : ''
+          }`}
+          onClick={() => setIsTrackerMinimized((prev) => !prev)}
+          title={isTrackerMinimized ? 'Click to expand constellation tracker' : 'Click to minimize constellation tracker'}
+        >
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+            <span className="tracking-wider truncate">ORBITAL CONSTELLATION TRACKER</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={scaleMode === 'TRUE_SCALE' ? 'text-cyan-300 text-[9px] font-bold' : 'text-amber-300 text-[9px] font-bold'}>
+              [{scaleMode}]
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsTrackerMinimized((prev) => !prev);
+              }}
+              className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+              title={isTrackerMinimized ? 'Expand tracker' : 'Minimize tracker'}
+              aria-label={isTrackerMinimized ? 'Expand tracker' : 'Minimize tracker'}
+            >
+              {isTrackerMinimized ? (
+                <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+              ) : (
+                <Minus className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {!isTrackerMinimized && (
+          <div className="space-y-1 max-h-[55vh] overflow-y-auto pr-1">
+            <div>Central Body: <span className="text-white">Earth ({formatDistAndUnits(EARTH_RADIUS_KM, globeRadius)})</span></div>
+            <div>
+              Active Satellite: <span className="text-cyan-300 font-bold">{activePreset ? activePreset.shortName : 'Custom Orbit'}</span>
+            </div>
+            <div>
+              Orbit Shape:{' '}
+              <span className="text-sky-300 font-bold">
+                {formatAltAndUnits(orbitPerigeeKm, scaleMode)} × {formatAltAndUnits(orbitApogeeKm, scaleMode)} (e={derivedE.toFixed(4)}) | Inc: {orbitInc.toFixed(1)}°
+              </span>
+            </div>
+            <div>
+              Orbital Speed & Period (1 Rev):{' '}
+              <span className="text-emerald-400 font-bold">
+                {formatOrbitalSpeed(derivedSpeed)}
+              </span>{' '}
+              |{' '}
+              <span className="text-cyan-300 font-bold">
+                1 Rev: {formatOrbitalPeriod(derivedPeriodSec)}
+              </span>
+            </div>
+            <div className="text-[9px] text-slate-400">
+              Kepler Orbit: a = {formatDistAndUnits(derivedA, getRenderOrbitRadius(derivedA - EARTH_RADIUS_KM, scaleMode))} | r = {formatDistAndUnits(derivedR, getRenderOrbitRadius(derivedR - EARTH_RADIUS_KM, scaleMode))}
+            </div>
+            <div>Target Entity: <span className="text-emerald-400 font-bold">Ground Station ({formatAltAndUnits(0, scaleMode)})</span></div>
+            <div>
+              Beacon Platform:{' '}
+              <span className={beaconSpeedKmh > 0 ? 'text-rose-300 font-bold' : 'text-amber-400 font-bold'}>
+                {beaconSpeedKmh > 0
+                  ? `ATMOSPHERIC UAV (${beaconSpeedKmh} km/h [1 Rev = ${formatBeaconRevolutionTime(beaconSpeedKmh)}])`
+                  : 'STATIC GROUND STATION (HOVER / LOCKED)'}
+              </span>
+            </div>
+            <div>
+              Earth Spin & Clock:{' '}
+              <span className={earthSpinEnabled ? 'text-sky-300 font-bold' : 'text-slate-500 font-bold'}>
+                {earthSpinEnabled
+                  ? `SIDEREAL SPIN (${simTimeWarp}× Time Warp [${simTimeWarp === 1 ? '1s=1s Real-Time' : `1s = ${simTimeWarp >= 60 ? `${simTimeWarp / 60}m` : `${simTimeWarp}s`}`}])`
+                  : 'INERTIAL LOCKED (PAUSED)'}
+              </span>
+            </div>
+            <div>
+              Slant Range:{' '}
+              <span className="text-cyan-300 font-bold">{formatDistAndUnits(currentSlantRangeKm, currentSlantRange)}</span>
+            </div>
+            <div>
+              PAT State:{' '}
+              {isOccludedByEarth ? (
+                <span className="text-rose-400 font-bold animate-pulse">OCCLUDED BY EARTH LIMB (NO LOS)</span>
+              ) : !autoLOS ? (
+                <span className="text-slate-400 font-bold">AUTO LOS OFF (HOLDING NADIR ATTITUDE)</span>
+              ) : slewAngularError > 1.5 ? (
+                <span className="text-amber-400 font-bold animate-pulse">
+                  SLEWING TO BEACON LOS ({slewAngularError.toFixed(1)}° OFF-AXIS)
+                </span>
+              ) : autoRevolve ? (
+                <span className="text-emerald-400 font-bold">ACTIVE PAT TRACKING (CLEAR LOS)</span>
+              ) : (
+                <span className="text-emerald-400 font-bold">LOCKED ON BEACON (CLEAR LOS)</span>
+              )}
+            </div>
+            {showAtmosphereShells && (
+              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+                Atmospheric Shells:{' '}
+                <span className="text-sky-300 font-bold">
+                  Turbulence ({formatAltAndUnits(20, scaleMode)})
+                </span>{' '}
+                |{' '}
+                <span className="text-indigo-300 font-bold">
+                  Thin ({formatAltAndUnits(100, scaleMode)})
+                </span>{' '}
+                |{' '}
+                <span className="text-emerald-300 font-bold">
+                  Kármán Line ({formatAltAndUnits(100, scaleMode)})
+                </span>
+              </div>
+            )}
+            {showReferenceRings && (
+              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+                Reference Rings:{' '}
+                {REFERENCE_ALTITUDES.map((spec, i) => (
+                  <span key={spec.id} style={{ color: spec.cssColor }}>
+                    {spec.name} ({formatAltAndUnits(spec.altKm, scaleMode)}){i < REFERENCE_ALTITUDES.length - 1 ? ' | ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+            {showSunTerminator && (
+              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+                Solar Illumination:{' '}
+                <span className="text-amber-300 font-bold">
+                  Sun Vector [{FIXED_SUN_DIR.x.toFixed(2)}, {FIXED_SUN_DIR.y.toFixed(2)}, {FIXED_SUN_DIR.z.toFixed(2)}]
+                </span>{' '}
+                |{' '}
+                <span className="text-yellow-300 font-bold">
+                  Terminator Great Circle
+                </span>{' '}
+                |{' '}
+                <span className="text-slate-400 font-bold">
+                  Night Shading
+                </span>
+              </div>
+            )}
+            {showFootprint && (
+              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+                Ground Footprint ({`El ≥ ${(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°`}):{' '}
+                <span className={isBeaconInFootprint ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                  {isBeaconInFootprint
+                    ? `BEACON IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)`
+                    : `BEACON OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
+                </span>{' '}
+                |{' '}
+                <span className="text-slate-400">
+                  Radius θ = {footprintThetaDeg.toFixed(1)}° ({Math.round(footprintGroundRadiusKm).toLocaleString()} km)
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Legend with Minimize / Expand Feature */}
+      <div
+        className={`absolute top-3 right-3 bg-slate-950/90 backdrop-blur border border-slate-800 px-3 py-2 rounded-lg font-mono text-[10px] text-slate-400 pointer-events-auto shadow-xl hidden sm:block z-20 transition-all duration-200 select-none ${
+          isLegendMinimized ? 'max-w-[195px]' : 'max-w-[340px]'
+        }`}
+      >
+        <div
+          className={`flex items-center justify-between gap-3 cursor-pointer ${
+            !isLegendMinimized ? 'border-b border-slate-800 pb-1.5 mb-1.5' : ''
+          }`}
+          onClick={() => setIsLegendMinimized((prev) => !prev)}
+          title={isLegendMinimized ? 'Click to expand legend' : 'Click to minimize legend'}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+            <span className="text-[11px] font-bold text-slate-200 tracking-wider">LEO CONSTELLATION</span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsLegendMinimized((prev) => !prev);
+            }}
+            className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+            title={isLegendMinimized ? 'Expand legend' : 'Minimize legend'}
+            aria-label={isLegendMinimized ? 'Expand legend' : 'Minimize legend'}
+          >
+            {isLegendMinimized ? (
+              <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+            ) : (
+              <Minus className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+
+        {!isLegendMinimized && (
+          <div className="space-y-1.5 max-h-[min(50vh,calc(100vh-420px))] overflow-y-auto pr-1">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-cyan-400 inline-block border-dashed"></span>
+              <span className="text-cyan-300 font-medium">Active Optical LOS Beam</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-rose-500 inline-block border-dashed"></span>
+              <span className="text-rose-400 font-medium">Earth Limb Blocked LOS</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-sky-400 inline-block"></span>
+              <span>Selected Satellite Orbit ({formatAltAndUnits(orbitAltitudeKm, scaleMode)})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-[#252A2E] inline-block border-dashed"></span>
+              <span>Walker Constellation Shells ({formatAltAndUnits(550, scaleMode)})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-indigo-400 inline-block border-dashed"></span>
+              <span>Polar Sun-Synchronous SSO ({formatAltAndUnits(700, scaleMode)}, 97.8°)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-rose-500 inline-block border-dashed"></span>
+              <span className="text-rose-300">Beacon Ground Track ({formatAltAndUnits(0, scaleMode)})</span>
+            </div>
+
+            {/* Scene Markers (Fixed Screen-Space Billboards - Tasks 1-6) */}
+            <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">SCENE MARKERS (SCREEN-SPACE)</div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span>
+              <span>Satellite Marker ({BASE_MARKER_PX}px / {ACTIVE_MARKER_PX}px active)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+              <span>Beacon Target Marker ({BASE_MARKER_PX}px / {ACTIVE_MARKER_PX}px active)</span>
+            </div>
+
+            {/* Atmospheric Shells in Legend */}
+            {showAtmosphereShells && (
+              <>
+                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">ATMOSPHERIC LAYERS</div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-2 bg-sky-600/50 border border-sky-400/80 rounded-[2px] inline-block"></span>
+                  <span className="text-sky-300">Turbulence Zone (0–20 km, {formatAltAndUnits(20, scaleMode)})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-2 bg-indigo-500/30 border border-indigo-400/50 rounded-[2px] inline-block"></span>
+                  <span className="text-indigo-200">Thin Atmosphere (20–100 km, {formatAltAndUnits(100, scaleMode)})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-0.5 bg-emerald-400 border-dashed inline-block"></span>
+                  <span className="text-emerald-300">Kármán Line — Edge of Space ({formatAltAndUnits(100, scaleMode)})</span>
+                </div>
+              </>
+            )}
+
+            {/* Ground Footprint in Legend (Tasks 1-3) */}
+            {showFootprint && (
+              <>
+                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">GROUND FOOTPRINT</div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-0.5 bg-emerald-400 inline-block"></span>
+                  <span className="text-emerald-300 font-medium">In Coverage (El ≥ {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-0.5 bg-rose-500 inline-block"></span>
+                  <span className="text-rose-400 font-medium">Outside Mask (El &lt; {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
+                </div>
+              </>
+            )}
+
+            {/* Solar Direction & Day/Night Terminator in Legend (Tasks 1-4) */}
+            {showSunTerminator && (
+              <>
+                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">SOLAR ILLUMINATION</div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-0.5 bg-amber-400 border-dashed inline-block"></span>
+                  <span className="text-amber-300 font-medium">Day/Night Terminator (Dawn/Dusk)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-0.5 bg-yellow-300 inline-block"></span>
+                  <span className="text-yellow-300">Sun Direction Vector (ECI Fixed)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-2 bg-slate-900 border border-slate-700/80 rounded-[2px] inline-block"></span>
+                  <span className="text-slate-400">Night-Side Shaded Hemisphere</span>
+                </div>
+              </>
+            )}
+
+            {/* Standard Reference Altitude Rings in Legend (Task 2 & 3) */}
+            {showReferenceRings && (
+              <>
+                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">REFERENCE ALTITUDES</div>
+                {REFERENCE_ALTITUDES.map((spec) => (
+                  <div key={spec.id} className="flex items-center gap-2">
+                    <span
+                      className="w-3 h-0.5 border-dashed inline-block"
+                      style={{ backgroundColor: spec.cssColor }}
+                    ></span>
+                    <span style={{ color: spec.cssColor }}>
+                      {spec.name} ({formatAltAndUnits(spec.altKm, scaleMode)})
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
       </div>
 
       {/* Real Satellite Speeds & Revolution Periods Reference Modal (Images 1 & 2) */}

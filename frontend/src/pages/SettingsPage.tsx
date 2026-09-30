@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Settings, Save, RotateCcw, Upload, Download, CheckCircle2 } from 'lucide-react';
 import { SystemConfig } from '../types';
 import { api } from '../services/api';
@@ -44,7 +44,7 @@ export const SettingsPage: React.FC<Props> = ({ config, onConfigChange }) => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(config, null, 2));
     const a = document.createElement('a');
     a.setAttribute('href', dataStr);
-    a.setAttribute('download', `fsoc_config_${Date.now()}.json`);
+    a.setAttribute('download', `laserlockAI_config_${Date.now()}.json`);
     a.click();
   };
 
@@ -67,16 +67,18 @@ export const SettingsPage: React.FC<Props> = ({ config, onConfigChange }) => {
   };
 
   return (
-    <div className="flex flex-col gap-4 font-mono text-xs">
+    <div className="flex flex-col gap-4 font-sans text-xs text-slate-200">
       {/* Header with Save, Load, Reset */}
-      <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Settings className="w-5 h-5 text-cyan-400" />
+          <div className="w-8 h-8 rounded-md bg-[#1E2124] border border-[#3A4048] flex items-center justify-center text-[#D6D9DC]">
+            <Settings className="w-4 h-4" />
+          </div>
           <div>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-              Central Configuration Management
+            <h2 className="text-sm font-semibold text-slate-100">
+              System Configuration & Parameter Store
             </h2>
-            <p className="text-slate-400 text-[11px]">
+            <p className="text-slate-400 text-xs mt-0.5">
               JSON-Backed Persistent Parameter Store (Problem Statement 4 Compliant)
             </p>
           </div>
@@ -85,23 +87,23 @@ export const SettingsPage: React.FC<Props> = ({ config, onConfigChange }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleSave}
-            className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded font-bold flex items-center gap-1.5 transition"
+            className="px-3.5 py-1.5 bg-[#252A2E] hover:bg-[#252A2E] text-white rounded-md font-medium text-xs flex items-center gap-1.5 transition"
           >
-            <Save className="w-4 h-4" /> Save Configuration
+            <Save className="w-4 h-4" /> Save Changes
           </button>
-          <label className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded font-bold flex items-center gap-1.5 cursor-pointer transition">
+          <label className="px-3.5 py-1.5 bg-[#1A1D20] hover:bg-[#202c42] text-slate-300 hover:text-white border border-[#2D3237] rounded-md font-medium text-xs flex items-center gap-1.5 cursor-pointer transition">
             <Upload className="w-4 h-4" /> Load JSON
             <input type="file" accept=".json" onChange={handleImportJSON} className="hidden" />
           </label>
           <button
             onClick={handleExportJSON}
-            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded font-bold flex items-center gap-1.5 transition"
+            className="px-3.5 py-1.5 bg-[#1A1D20] hover:bg-[#202c42] text-slate-300 hover:text-white border border-[#2D3237] rounded-md font-medium text-xs flex items-center gap-1.5 transition"
           >
             <Download className="w-4 h-4" /> Export JSON
           </button>
           <button
             onClick={handleReset}
-            className="px-3.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded font-bold flex items-center gap-1.5 transition ml-2"
+            className="px-3.5 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded-md font-medium text-xs flex items-center gap-1.5 transition ml-1"
           >
             <RotateCcw className="w-4 h-4" /> Reset Defaults
           </button>
@@ -109,22 +111,22 @@ export const SettingsPage: React.FC<Props> = ({ config, onConfigChange }) => {
       </div>
 
       {saveStatus && (
-        <div className="p-3 bg-emerald-950/80 border border-emerald-700 text-emerald-300 rounded flex items-center gap-2 font-bold animate-fadeIn">
+        <div className="p-3 bg-emerald-950/50 border border-emerald-700/60 text-emerald-400 rounded-md flex items-center gap-2 font-medium text-xs">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{saveStatus}</span>
         </div>
       )}
 
       {/* Category Tabs */}
-      <div className="flex flex-wrap gap-1 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
+      <div className="flex flex-wrap gap-1 bg-[#0D1012] p-1 rounded-md border border-[#252A2E]">
         {(['Camera', 'Target', 'Motion', 'Detection', 'Tracking', 'Control', 'Disturbance', 'Performance'] as const).map((cat) => (
           <button
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`px-3 py-1.5 rounded font-bold transition text-xs ${
+            className={`px-3 py-1.5 rounded-md font-medium transition text-xs ${
               activeCategory === cat
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 shadow'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-[#252A2E] text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {cat}
@@ -133,7 +135,7 @@ export const SettingsPage: React.FC<Props> = ({ config, onConfigChange }) => {
       </div>
 
       {/* Category Form Content */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">
+      <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-5">
         {activeCategory === 'Camera' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

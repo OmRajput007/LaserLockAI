@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+﻿import React, { useRef, useEffect } from 'react';
 import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { Compass, Crosshair, Eye, EyeOff } from 'lucide-react';
 
@@ -230,7 +230,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
             <span>Camera 4°×3° FOV Frustum Projection</span>
           </div>
           <div className="flex items-center gap-2">
-            <Crosshair className="w-3 h-3 text-blue-400" />
+            <Crosshair className="w-3 h-3 text-[#D6D9DC]" />
             <span>Camera Boresight (Pan: {camera?.pan_deg.toFixed(2)}°, Tilt: {camera?.tilt_deg.toFixed(2)}°)</span>
           </div>
         </div>

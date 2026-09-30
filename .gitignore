@@ -1,5 +1,28 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.pytest_cache/
+
+# Node / Frontend / Electron
 node_modules/
+frontend/node_modules/
+electron/node_modules/
+frontend/dist/
+
+# Build & Release Artifacts (Releases are published via GitHub Releases, not git history)
+build/
+dist/
+dist_standalone/
+release/
+*.exe
+*.blockmap
+
+# OS & Environment
 .DS_Store
+Thumbs.db
+*.log
+.env
+.env.local
+.env.*.local

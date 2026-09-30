@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 from fastapi import APIRouter, HTTPException, Response, UploadFile, File
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Literal, Optional

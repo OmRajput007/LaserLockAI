@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 
 export interface SatellitePovState {
   satPos: THREE.Vector3;
@@ -21,6 +21,7 @@ export interface SatellitePovState {
   speedKmS?: number;
   currentRadiusKm?: number;
   beaconSpeedKmh?: number;
+  boresightDir?: THREE.Vector3;
 }
 
 // Earth equatorial circumference for atmospheric beacon kinematics
@@ -98,6 +99,7 @@ class SatellitePovSync {
     autoLOS: false,
     isLockedInFov: false,
     isLostFromFov: true,
+    boresightDir: new THREE.Vector3(0, 0, -1),
   };
 
   private listeners: ((data: SatellitePovState) => void)[] = [];
@@ -121,6 +123,14 @@ class SatellitePovSync {
     if (data.eccentricity !== undefined) this.currentData.eccentricity = data.eccentricity;
     if (data.speedKmS !== undefined) this.currentData.speedKmS = data.speedKmS;
     if (data.currentRadiusKm !== undefined) this.currentData.currentRadiusKm = data.currentRadiusKm;
+    if (data.beaconSpeedKmh !== undefined) this.currentData.beaconSpeedKmh = data.beaconSpeedKmh;
+    if (data.boresightDir) {
+      if (!this.currentData.boresightDir) {
+        this.currentData.boresightDir = data.boresightDir.clone();
+      } else {
+        this.currentData.boresightDir.copy(data.boresightDir);
+      }
+    }
     this.currentData.timestamp = Date.now();
 
     for (let i = 0; i < this.listeners.length; i++) {
@@ -151,6 +161,14 @@ class SatellitePovSync {
       if (occ.isOccluded) {
         this.currentData.isLockedInFov = false;
         this.currentData.isLostFromFov = true;
+      }
+      if (!this.currentData.boresightDir) {
+        this.currentData.boresightDir = new THREE.Vector3();
+      }
+      if (this.currentData.autoLOS && !this.currentData.isOccluded) {
+        this.currentData.boresightDir.subVectors(this.currentData.tgtPos, this.currentData.satPos).normalize();
+      } else {
+        this.currentData.boresightDir.copy(this.currentData.satPos).negate().normalize();
       }
       this.currentData.timestamp = now;
     }

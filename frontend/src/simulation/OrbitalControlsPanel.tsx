@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { OrbitalScenarioConfig } from '../types';
 import {
   Satellite,
@@ -714,7 +714,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
             className={`px-4 py-1.5 rounded font-bold transition text-xs flex items-center gap-1.5 ${
               hasValidationError
                 ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-md'
+                : 'bg-gradient-to-r from-cyan-600 to-slate-600 hover:from-cyan-500 hover:to-slate-500 text-white shadow-md'
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />

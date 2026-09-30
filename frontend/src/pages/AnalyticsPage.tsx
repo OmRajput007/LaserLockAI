@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   BarChart3,
   Activity,
@@ -70,7 +70,7 @@ interface ChartMeta {
 const CHARTS: ChartMeta[] = [
   {
     id: 'tracking_error',
-    title: '1. Tracking Error vs Time',
+    title: 'Tracking Error vs Time',
     unit: 'px',
     dataKey: 'tracking_error_px',
     stroke: '#38bdf8', // sky-400
@@ -80,7 +80,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'centroid_error',
-    title: '2. Centroid Error vs Time (vs Ground Truth)',
+    title: 'Centroid Error vs Time (vs Ground Truth)',
     unit: 'px',
     dataKey: 'centroid_error_px',
     stroke: '#10b981', // emerald-500
@@ -90,7 +90,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'angular_error',
-    title: '3. Angular Error vs Time (Azimuth/Elevation)',
+    title: 'Angular Error vs Time (Azimuth/Elevation)',
     unit: 'deg',
     dataKey: 'angular_error_deg',
     stroke: '#a855f7', // purple-500
@@ -100,7 +100,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'centroid_x',
-    title: '4. Centroid X vs Time',
+    title: 'Centroid X vs Time',
     unit: 'px',
     dataKey: 'centroid_x',
     stroke: '#06b6d4', // cyan-500
@@ -110,7 +110,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'centroid_y',
-    title: '5. Centroid Y vs Time',
+    title: 'Centroid Y vs Time',
     unit: 'px',
     dataKey: 'centroid_y',
     stroke: '#0ea5e9', // sky-500
@@ -120,21 +120,21 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'pan',
-    title: '6. Pan Gimbal Angle vs Time',
+    title: 'Pan Gimbal Angle vs Time',
     unit: 'deg',
     dataKey: 'pan_deg',
     stroke: '#f97316', // orange-500
   },
   {
     id: 'tilt',
-    title: '7. Tilt Gimbal Angle vs Time',
+    title: 'Tilt Gimbal Angle vs Time',
     unit: 'deg',
     dataKey: 'tilt_deg',
     stroke: '#f43f5e', // rose-500
   },
   {
     id: 'fps',
-    title: '8. Frame Rate (FPS) vs Time',
+    title: 'Frame Rate (FPS) vs Time',
     unit: 'FPS',
     dataKey: 'fps',
     stroke: '#22c55e', // green-500
@@ -144,7 +144,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'processing_time',
-    title: '9. Processing Time (Latency) vs Time',
+    title: 'Processing Time (Latency) vs Time',
     unit: 'ms',
     dataKey: 'processing_time_ms',
     stroke: '#eab308', // yellow-500
@@ -154,7 +154,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'confidence',
-    title: '10. Detection Confidence vs Time',
+    title: 'Detection Confidence vs Time',
     unit: 'score',
     dataKey: 'confidence',
     stroke: '#6366f1', // indigo-500
@@ -165,7 +165,7 @@ const CHARTS: ChartMeta[] = [
   },
   {
     id: 'snr',
-    title: '11. Signal-to-Noise Ratio (SNR) vs Time',
+    title: 'Signal-to-Noise Ratio (SNR) vs Time',
     unit: 'dB',
     dataKey: 'snr_db',
     stroke: '#14b8a6', // teal-500
@@ -222,19 +222,16 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
   const selectedChart = CHARTS.find((c) => c.id === activeChartId) || CHARTS[0];
 
   return (
-    <div className="flex flex-col gap-4 font-mono text-xs pb-12">
+    <div className="flex flex-col gap-4 font-sans text-xs pb-12">
       {/* Page Header */}
-      <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg backdrop-blur">
+      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-600 to-blue-700 flex items-center justify-center shadow-lg shadow-cyan-950">
-            <BarChart3 className="w-6 h-6 text-white" />
+          <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-[#3A4048]/20 flex items-center justify-center">
+            <BarChart3 className="w-5 h-5 text-[#D6D9DC]" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              Real-Time Performance Analytics & Validation
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
-                PART 8 ENGINE
-              </span>
+            <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
+              Performance Analytics & Validation
             </h2>
             <p className="text-slate-400 text-[11px]">
               Objective Telemetry Evaluation, Problem Statement 4 KPI Compliance & Multi-Stream Time-Series
@@ -245,21 +242,21 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setIsLivePaused(!isLivePaused)}
-            className={`px-3 py-1.5 rounded font-bold text-[11px] flex items-center gap-1.5 transition border ${
+            className={`px-3 py-1.5 rounded-lg font-medium text-xs flex items-center gap-1.5 transition border ${
               isLivePaused
-                ? 'bg-amber-950/80 border-amber-700 text-amber-300 hover:bg-amber-900'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                : 'bg-[#1A1D20] border-[#22324e] text-slate-300 hover:bg-[#1e2b44]'
             }`}
           >
             {isLivePaused ? <Play className="w-3.5 h-3.5 text-amber-400" /> : <Pause className="w-3.5 h-3.5" />}
-            {isLivePaused ? 'RESUME STREAM' : 'PAUSE CHARTS'}
+            {isLivePaused ? 'Resume Stream' : 'Pause Charts'}
           </button>
 
           <button
             onClick={handleResetMetrics}
-            className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800 text-rose-300 rounded font-bold text-[11px] flex items-center gap-1.5 transition"
+            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 rounded-lg font-medium text-xs flex items-center gap-1.5 transition"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> RESET ACCUMULATION
+            <RotateCcw className="w-3.5 h-3.5" /> Reset Accumulation
           </button>
         </div>
       </div>
@@ -267,110 +264,110 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
       {/* Primary KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Tracking Error */}
-        <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow">
-          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+        <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>Tracking Error</span>
-            <Target className="w-3.5 h-3.5 text-cyan-400" />
+            <Target className="w-3.5 h-3.5 text-[#D6D9DC]" />
           </div>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-xl font-bold text-white">
+            <span className="text-xl font-semibold text-slate-100 num-mono">
               {metrics?.average_tracking_error_px !== null && metrics?.average_tracking_error_px !== undefined
                 ? metrics.average_tracking_error_px.toFixed(2)
                 : '--'}
             </span>
-            <span className="text-slate-400 text-[10px]">px avg</span>
+            <span className="text-slate-400 text-[11px]">px avg</span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+          <div className="text-[11px] text-slate-500 mt-1 flex justify-between num-mono">
             <span>Max: {metrics?.max_tracking_error_px?.toFixed(1) ?? '--'} px</span>
             <span>RMSE: {metrics?.rmse_px?.toFixed(1) ?? '--'} px</span>
           </div>
         </div>
 
         {/* Centroid Error */}
-        <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow">
-          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+        <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>Centroid Error</span>
             <Crosshair className="w-3.5 h-3.5 text-emerald-400" />
           </div>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-xl font-bold text-emerald-400">
+            <span className="text-xl font-semibold text-emerald-400 num-mono">
               {metrics?.average_centroid_error_px !== null && metrics?.average_centroid_error_px !== undefined
                 ? metrics.average_centroid_error_px.toFixed(2)
                 : '--'}
             </span>
-            <span className="text-slate-400 text-[10px]">px avg</span>
+            <span className="text-slate-400 text-[11px]">px avg</span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+          <div className="text-[11px] text-slate-500 mt-1 flex justify-between num-mono">
             <span>Max: {metrics?.max_centroid_error_px?.toFixed(1) ?? '--'} px</span>
             <span className="text-emerald-500">vs GT</span>
           </div>
         </div>
 
         {/* Lock Retention */}
-        <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow">
-          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+        <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>Lock Retention</span>
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
+            <Activity className="w-3.5 h-3.5 text-[#D6D9DC]" />
           </div>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-xl font-bold text-cyan-400">
+            <span className="text-xl font-semibold text-[#D6D9DC] num-mono">
               {metrics ? `${metrics.lock_retention_percent.toFixed(1)}%` : '--'}
             </span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
-            <span>Target Loss: {metrics?.target_loss_percent?.toFixed(1) ?? '0'}%</span>
+          <div className="text-[11px] text-slate-500 mt-1 flex justify-between num-mono">
+            <span>Loss: {metrics?.target_loss_percent?.toFixed(1) ?? '0'}%</span>
           </div>
         </div>
 
         {/* Acquisition & Reacquisition */}
-        <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow">
-          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+        <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>Acquisition Time</span>
             <Clock className="w-3.5 h-3.5 text-amber-400" />
           </div>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-xl font-bold text-amber-300">
+            <span className="text-xl font-semibold text-amber-300 num-mono">
               {metrics?.acquisition_time_s !== null && metrics?.acquisition_time_s !== undefined
                 ? `${metrics.acquisition_time_s.toFixed(2)}s`
                 : 'Searching'}
             </span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+          <div className="text-[11px] text-slate-500 mt-1 flex justify-between num-mono">
             <span>Re-acq: {metrics?.reacquisition_time_s ? `${metrics.reacquisition_time_s.toFixed(2)}s` : '0.0s'}</span>
           </div>
         </div>
 
         {/* Processing FPS */}
-        <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow">
-          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+        <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>Throughput Rate</span>
-            <Zap className="w-3.5 h-3.5 text-green-400" />
+            <Zap className="w-3.5 h-3.5 text-emerald-400" />
           </div>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-xl font-bold text-green-400">
+            <span className="text-xl font-semibold text-emerald-400 num-mono">
               {metrics ? `${metrics.average_fps.toFixed(1)}` : '--'}
             </span>
-            <span className="text-slate-400 text-[10px]">FPS</span>
+            <span className="text-slate-400 text-[11px]">FPS</span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+          <div className="text-[11px] text-slate-500 mt-1 flex justify-between num-mono">
             <span>Min: {metrics?.min_fps?.toFixed(0) ?? '--'}</span>
             <span>Max: {metrics?.max_fps?.toFixed(0) ?? '--'}</span>
           </div>
         </div>
 
         {/* Latency & SNR */}
-        <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow">
-          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+        <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>Execution Latency</span>
             <Sliders className="w-3.5 h-3.5 text-purple-400" />
           </div>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-xl font-bold text-purple-300">
+            <span className="text-xl font-semibold text-purple-300 num-mono">
               {metrics ? `${metrics.average_processing_time_ms.toFixed(2)}` : '--'}
             </span>
-            <span className="text-slate-400 text-[10px]">ms</span>
+            <span className="text-slate-400 text-[11px]">ms</span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+          <div className="text-[11px] text-slate-500 mt-1 flex justify-between num-mono">
             <span>SNR: {metrics?.average_snr_db ? `${metrics.average_snr_db.toFixed(1)} dB` : '--'}</span>
             <span>Conf: {metrics?.average_confidence ? `${(metrics.average_confidence * 100).toFixed(0)}%` : '--'}</span>
           </div>
@@ -378,66 +375,66 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
       </div>
 
       {/* Official Requirements Compliance Dashboard */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-lg overflow-hidden shadow">
-        <div className="p-3.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+      <div className="bg-[#121518] border border-[#252A2E] rounded-xl overflow-hidden">
+        <div className="p-3.5 bg-[#121518] border-b border-[#252A2E] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-            <span className="font-bold text-white uppercase tracking-wider text-xs">
-              Official Requirement Validation Dashboard (Problem Statement 4)
+            <CheckCircle2 className="w-4 h-4 text-[#D6D9DC]" />
+            <span className="font-semibold text-slate-100 uppercase tracking-wider text-xs">
+              Official Requirement Validation (Problem Statement 4)
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span
-              className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${
+              className={`px-2.5 py-0.5 rounded text-[10px] font-medium border ${
                 summary?.overall_compliance
-                  ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                  : 'bg-amber-950/80 border-amber-700 text-amber-300'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
               }`}
             >
-              {summary?.overall_compliance ? 'OVERALL: 100% COMPLIANT' : 'OVERALL: ATTENTION NEEDED'}
+              {summary?.overall_compliance ? 'Overall: 100% Compliant' : 'Overall: Attention Needed'}
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
+            <span className="text-[11px] text-slate-400 num-mono">
               Passed {summary?.passed_count ?? 0} / {summary?.total_count ?? 5} Criteria
             </span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-slate-950/60 border-b border-slate-800 text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#0B0D0F] border-b border-[#252A2E] text-[11px] text-slate-400 uppercase tracking-wider">
               <tr>
-                <th className="p-3">Official Parameter</th>
-                <th className="p-3">Required Threshold</th>
-                <th className="p-3">Actual Measured</th>
-                <th className="p-3">Compliance Margin</th>
-                <th className="p-3 text-right">Verification Status</th>
+                <th className="p-3 font-medium">Official Parameter</th>
+                <th className="p-3 font-medium">Required Threshold</th>
+                <th className="p-3 font-medium">Actual Measured</th>
+                <th className="p-3 font-medium">Compliance Margin</th>
+                <th className="p-3 text-right font-medium">Verification Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-xs">
+            <tbody className="divide-y divide-[#252A2E]/50 text-slate-300">
               {requirements.map((req, idx) => {
                 const isPass = req.status === 'PASS';
                 const isFail = req.status === 'FAIL';
                 return (
-                  <tr key={idx} className="hover:bg-slate-800/30 transition">
-                    <td className="p-3 font-semibold text-white flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                  <tr key={idx} className="hover:bg-[#1A1D20]/40 transition">
+                    <td className="p-3 font-medium text-slate-200 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#252A2E]"></span>
                       {req.parameter}
                     </td>
-                    <td className="p-3 font-mono text-slate-300">{req.required}</td>
-                    <td className="p-3 font-mono font-bold text-white">{req.actual}</td>
-                    <td className="p-3 font-mono text-slate-400">
+                    <td className="p-3 text-slate-300 num-mono">{req.required}</td>
+                    <td className="p-3 font-medium text-slate-100 num-mono">{req.actual}</td>
+                    <td className="p-3 text-slate-400 num-mono">
                       {req.margin !== null && req.margin !== undefined
                         ? `${req.margin > 0 ? '+' : ''}${req.margin.toFixed(2)} ${req.unit}`
                         : '--'}
                     </td>
-                    <td className="p-3 text-right font-mono">
+                    <td className="p-3 text-right">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-bold border ${
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border ${
                           isPass
-                            ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
                             : isFail
-                            ? 'bg-rose-950/80 border-rose-700 text-rose-300'
-                            : 'bg-amber-950/80 border-amber-700 text-amber-300'
+                            ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                            : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                         }`}
                       >
                         {isPass ? (
@@ -456,52 +453,52 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
             </tbody>
           </table>
         </div>
-        <div className="p-2.5 bg-slate-950/50 border-t border-slate-800/60 text-[10px] text-slate-400 flex items-center justify-between">
-          <span>* PASS/FAIL status is strictly calculated from real-world telemetry measurements. Never fabricated.</span>
-          <span className="text-cyan-400">Active Testbench Rate: {telemetry?.fps.toFixed(0) || 30} Hz</span>
+        <div className="p-2.5 bg-[#121518] border-t border-[#252A2E] text-[11px] text-slate-400 flex items-center justify-between">
+          <span>PASS/FAIL status is calculated continuously from active telemetry measurements.</span>
+          <span className="text-[#D6D9DC] num-mono">Testbench Rate: {telemetry?.fps.toFixed(0) || 30} Hz</span>
         </div>
       </div>
 
-      {/* Real-Time Multi-Chart Suite (11 Channels) */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-4 shadow">
+      {/* Real-Time Multi-Chart Suite */}
+      <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4">
         {/* Chart Top Bar & Channel Selector */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[#252A2E]">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
-              <Layers className="w-4 h-4 text-cyan-400" />
-              11-Channel Real-Time Telemetry Plotter
+            <span className="font-semibold text-slate-100 text-xs uppercase tracking-wider flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#D6D9DC]" />
+              Telemetry Time-Series Plotter
             </span>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* View Mode Toggle */}
-            <div className="inline-flex rounded-md bg-slate-950 p-0.5 border border-slate-800">
+            <div className="inline-flex rounded-lg bg-[#121518] p-0.5 border border-[#252A2E]">
               <button
                 onClick={() => setViewMode('single')}
-                className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
-                  viewMode === 'single' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                  viewMode === 'single' ? 'bg-[#1E2124] text-[#E8EAED] border border-[#3A4048]' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Focus View
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
-                  viewMode === 'grid' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                  viewMode === 'grid' ? 'bg-[#1E2124] text-[#E8EAED] border border-[#3A4048]' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Multi-Grid (All 11)
+                Multi-Grid
               </button>
             </div>
 
             {/* Time Window Buttons */}
-            <div className="inline-flex rounded-md bg-slate-950 p-0.5 border border-slate-800">
+            <div className="inline-flex rounded-lg bg-[#121518] p-0.5 border border-[#252A2E]">
               {[15, 30, 60, 0].map((w) => (
                 <button
                   key={w}
                   onClick={() => setTimeWindow(w)}
-                  className={`px-2.5 py-1 rounded text-[10px] font-bold transition ${
-                    timeWindow === w ? 'bg-slate-700 text-cyan-300' : 'text-slate-400 hover:text-white'
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${
+                    timeWindow === w ? 'bg-[#1e2b44] text-[#E8EAED]' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {w === 0 ? 'All' : `${w}s`}
@@ -520,10 +517,10 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
                 <button
                   key={c.id}
                   onClick={() => setActiveChartId(c.id)}
-                  className={`px-2.5 py-1 rounded text-[10px] font-bold whitespace-nowrap transition border ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition border ${
                     active
-                      ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      ? 'bg-[#1E2124] border-[#3A4048] text-[#E8EAED]'
+                      : 'bg-[#121518] border-[#252A2E] text-slate-400 hover:border-[#2D3237] hover:text-slate-200'
                   }`}
                 >
                   <span
@@ -540,8 +537,8 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
         {/* Chart Render Area */}
         {viewMode === 'single' ? (
           <div className="h-80 w-full mt-2">
-            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1 px-2">
-              <span className="font-bold text-white">{selectedChart.title}</span>
+            <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 px-2">
+              <span className="font-semibold text-slate-200">{selectedChart.title}</span>
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
                   <span className="w-2.5 h-0.5 inline-block" style={{ backgroundColor: selectedChart.stroke }}></span>
@@ -561,22 +558,23 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
 
             <ResponsiveContainer width="100%" height="90%">
               <LineChart data={chartData} margin={{ top: 10, right: 25, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#252A2E" />
                 <XAxis
                   dataKey="time_s"
-                  stroke="#64748b"
+                  stroke="#475569"
                   tickFormatter={(val) => `${Number(val).toFixed(1)}s`}
                   tick={{ fontSize: 10, fill: '#64748b', fontFamily: 'monospace' }}
                 />
                 <YAxis
-                  stroke="#64748b"
+                  stroke="#475569"
                   domain={selectedChart.domain || ['auto', 'auto']}
                   tick={{ fontSize: 10, fill: '#64748b', fontFamily: 'monospace' }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#090d16',
-                    borderColor: '#334155',
+                    backgroundColor: '#121518',
+                    borderColor: '#252A2E',
+                    borderRadius: '8px',
                     fontSize: '11px',
                     fontFamily: 'monospace',
                     color: '#f8fafc',
@@ -611,17 +609,17 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
           </div>
         ) : (
           /* Multi-Grid 11 Charts */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
             {CHARTS.map((c) => (
-              <div key={c.id} className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-3 flex flex-col h-56">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 mb-1">
+              <div key={c.id} className="bg-[#121518] border border-[#252A2E] rounded-xl p-3 flex flex-col h-56">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-300 mb-1">
                   <span className="truncate">{c.title}</span>
-                  <span className="text-[10px] text-slate-500 font-mono">{c.unit}</span>
+                  <span className="text-[10px] text-slate-500 num-mono">{c.unit}</span>
                 </div>
                 <div className="flex-1 w-full min-h-[140px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
+                      <CartesianGrid strokeDasharray="2 2" stroke="#252A2E" />
                       <XAxis
                         dataKey="time_s"
                         stroke="#475569"
@@ -631,8 +629,9 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
                       <YAxis stroke="#475569" domain={c.domain || ['auto', 'auto']} tick={{ fontSize: 9, fill: '#475569' }} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#070a12',
-                          borderColor: '#334155',
+                          backgroundColor: '#121518',
+                          borderColor: '#252A2E',
+                          borderRadius: '8px',
                           fontSize: '10px',
                         }}
                         formatter={(val: any) => [`${Number(val).toFixed(2)} ${c.unit}`, c.title]}
@@ -659,33 +658,33 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
       </div>
 
       {/* Real-Time Live Telemetry HUD Strip */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3.5 shadow">
-        <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-          <Eye className="w-3.5 h-3.5 text-cyan-400" />
+      <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-3.5">
+        <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <Eye className="w-3.5 h-3.5 text-[#D6D9DC]" />
           <span>Instantaneous Telemetry Stream</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5 text-[11px] font-mono">
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">CENTROID (X, Y)</span>
-            <span className="text-cyan-300 font-bold">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5 text-xs">
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Centroid (X, Y)</span>
+            <span className="text-[#D6D9DC] font-medium num-mono">
               {telemetry?.detection.detected_centroid_x !== null && telemetry?.detection.detected_centroid_x !== undefined
                 ? `(${telemetry.detection.detected_centroid_x.toFixed(1)}, ${telemetry.detection.detected_centroid_y?.toFixed(1)})`
                 : 'Searching'}
             </span>
           </div>
 
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">TOTAL ERROR</span>
-            <span className="text-amber-300 font-bold">
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Total Error</span>
+            <span className="text-amber-300 font-medium num-mono">
               {telemetry?.tracking.total_error_px !== null && telemetry?.tracking.total_error_px !== undefined
                 ? `${telemetry.tracking.total_error_px.toFixed(2)} px`
                 : '--'}
             </span>
           </div>
 
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">ANGULAR ERROR</span>
-            <span className="text-purple-300 font-bold">
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Angular Error</span>
+            <span className="text-purple-300 font-medium num-mono">
               {telemetry?.tracking.error_azimuth_deg !== null && telemetry?.tracking.error_elevation_deg !== null
                 ? `${Math.sqrt(
                     (telemetry?.tracking.error_azimuth_deg || 0) ** 2 +
@@ -695,17 +694,17 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
             </span>
           </div>
 
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">PAN / TILT</span>
-            <span className="text-white font-bold">
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Pan / Tilt</span>
+            <span className="text-slate-100 font-medium num-mono">
               {telemetry?.camera.pan_deg.toFixed(1)}° / {telemetry?.camera.tilt_deg.toFixed(1)}°
             </span>
           </div>
 
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">TARGET STATE</span>
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Target State</span>
             <span
-              className={`font-bold ${
+              className={`font-medium ${
                 telemetry?.tracking.is_locked ? 'text-emerald-400' : 'text-amber-400'
               }`}
             >
@@ -713,17 +712,17 @@ export const AnalyticsPage: React.FC<Props> = ({ telemetry, config }) => {
             </span>
           </div>
 
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">CONFIDENCE / SNR</span>
-            <span className="text-cyan-400 font-bold">
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Confidence / SNR</span>
+            <span className="text-[#D6D9DC] font-medium num-mono">
               {telemetry?.detection.confidence ? `${(telemetry.detection.confidence * 100).toFixed(0)}%` : '0%'} /{' '}
               {telemetry?.detection.snr_db ? `${telemetry.detection.snr_db.toFixed(1)}dB` : '--'}
             </span>
           </div>
 
-          <div className="bg-slate-950 p-2 rounded border border-slate-800/80">
-            <span className="text-slate-500 block text-[9px]">THROUGHPUT</span>
-            <span className="text-green-400 font-bold">
+          <div className="bg-[#121518] p-2.5 rounded-lg border border-[#252A2E]">
+            <span className="text-slate-400 block text-[10px]">Throughput</span>
+            <span className="text-emerald-400 font-medium num-mono">
               {telemetry?.fps.toFixed(1) || '30.0'} FPS
             </span>
           </div>

@@ -45,7 +45,10 @@ from fastapi import HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+dist_dir = os.environ.get(
+    'VISION_FRONTEND_DIST',
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+)
 assets_dir = os.path.join(dist_dir, "assets")
 
 if os.path.exists(assets_dir):

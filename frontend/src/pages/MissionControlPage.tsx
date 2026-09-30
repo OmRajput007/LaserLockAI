@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { VirtualSceneCanvas } from '../simulation/VirtualSceneCanvas';
 import { FPACameraViewport } from '../simulation/FPACameraViewport';
@@ -10,17 +10,11 @@ import {
   Play,
   Pause,
   RotateCcw,
-  Radio,
-  Cpu,
   Box,
   Layers,
-  Sparkles,
-  Sliders,
-  Eye,
-  EyeOff,
   Crosshair,
-  Gauge,
-  Zap,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface Props {
@@ -45,6 +39,7 @@ export const MissionControlPage: React.FC<Props> = ({
   onSelectShape,
 }) => {
   const [viewMode, setViewMode] = useState<'dual' | '3d' | '2d_camera'>('dual');
+  const [showKinematics, setShowKinematics] = useState<boolean>(true);
   const [localSpeed, setLocalSpeed] = useState<number>(
     config?.motion?.speed_kmh ?? config?.motion?.speed_pixels_per_s ?? 150
   );
@@ -67,44 +62,42 @@ export const MissionControlPage: React.FC<Props> = ({
   const target = telemetry?.target ?? null;
 
   return (
-    <div className="flex flex-col gap-4 font-mono">
-      {/* Top Cockpit Telemetry Banner */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex flex-col">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Mission State</span>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`}></span>
-            <span className="font-bold text-sm text-white">
-              {isRunning ? 'ACTIVE RUN' : 'STANDBY'}
+    <div className="flex flex-col gap-4 font-sans text-xs text-slate-200">
+      {/* Top Telemetry Cockpit Strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Mission Status */}
+        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 font-medium">Mission Status</span>
+          <div className="flex items-center gap-2 my-1">
+            <span className={`w-2 h-2 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+            <span className="font-semibold text-sm text-slate-100">
+              {isRunning ? 'Active Run' : 'Standby'}
             </span>
           </div>
-          <span className="text-[10px] text-slate-500 mt-1">Sim Time: {telemetry?.simulation_time_s.toFixed(2)}s</span>
-        </div>
-
-        <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex flex-col">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Target Visibility</span>
-          <div className="flex items-center gap-2 mt-1">
-            {inFov ? (
-              <>
-                <Eye className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold text-sm text-emerald-400">INSIDE FOV</span>
-              </>
-            ) : (
-              <>
-                <EyeOff className="w-4 h-4 text-rose-400" />
-                <span className="font-bold text-sm text-rose-400">OUTSIDE FOV</span>
-              </>
-            )}
-          </div>
-          <span className="text-[10px] text-slate-500 mt-1">
-            {isLocked ? 'Error ≤ 10 px (LOCKED)' : inFov ? 'Acquired in FOV' : 'Searching Target'}
+          <span className="text-[11px] text-slate-500 num-mono">
+            Sim Time: {telemetry?.simulation_time_s.toFixed(2)}s
           </span>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex flex-col">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Tracking Error</span>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className={`font-bold text-xl ${
+        {/* Target Visibility */}
+        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 font-medium">Target Visibility</span>
+          <div className="flex items-center gap-2 my-1">
+            <span className={`w-2 h-2 rounded-full ${inFov ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            <span className={`font-semibold text-sm ${inFov ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {inFov ? 'Inside FOV' : 'Outside FOV'}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500">
+            {isLocked ? 'Locked (≤ 10 px)' : inFov ? 'Acquired in Sensor' : 'Searching Target'}
+          </span>
+        </div>
+
+        {/* Tracking Error */}
+        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 font-medium">Tracking Error</span>
+          <div className="flex items-baseline gap-1 my-1">
+            <span className={`font-semibold text-xl num-mono ${
               telemetry?.tracking.total_error_px !== null && (telemetry?.tracking.total_error_px ?? 99) <= 10
                 ? 'text-emerald-400'
                 : 'text-amber-400'
@@ -113,54 +106,57 @@ export const MissionControlPage: React.FC<Props> = ({
             </span>
             <span className="text-xs text-slate-400">px</span>
           </div>
-          <span className="text-[10px] text-slate-500 mt-1">Limit: ≤ 10.0 px</span>
+          <span className="text-[11px] text-slate-500 num-mono">Gate Limit: ≤ 10.0 px</span>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex flex-col">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Gimbal Slew Rate</span>
-          <div className="flex items-center gap-2 mt-1 text-sm text-white">
-            <span>P: <strong className="text-cyan-400">{telemetry?.camera.pan_deg.toFixed(1)}°</strong></span>
-            <span>T: <strong className="text-cyan-400">{telemetry?.camera.tilt_deg.toFixed(1)}°</strong></span>
+        {/* Gimbal Orientation */}
+        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 font-medium">Gimbal Angles</span>
+          <div className="flex items-center gap-2 my-1 text-sm num-mono text-slate-200">
+            <span>P: <strong className="text-slate-100 font-medium">{telemetry?.camera.pan_deg.toFixed(1)}°</strong></span>
+            <span>•</span>
+            <span>T: <strong className="text-slate-100 font-medium">{telemetry?.camera.tilt_deg.toFixed(1)}°</strong></span>
           </div>
-          <span className="text-[10px] text-slate-500 mt-1">Slew Limit: 5.0°/s</span>
+          <span className="text-[11px] text-slate-500 num-mono">Max Slew: 5.0°/s</span>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex flex-col">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Target Shape</span>
-          <div className="flex items-center gap-1.5 mt-1">
+        {/* Target Shape */}
+        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 font-medium">Beacon Shape</span>
+          <div className="flex items-center gap-1.5 my-1">
             {(['Square', 'Circle', 'Gaussian'] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => onSelectShape(s)}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${
+                className={`px-2 py-0.5 rounded text-xs font-medium border transition ${
                   config?.target.shape === s
-                    ? 'bg-cyan-950 text-cyan-300 border-cyan-500 shadow-sm'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                    ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048]'
+                    : 'bg-[#1A1D20] text-slate-400 border-[#2D3237] hover:text-white'
                 }`}
               >
                 {s}
               </button>
             ))}
           </div>
-          <span className="text-[10px] text-slate-500 mt-1">Size: 10×10 px</span>
+          <span className="text-[11px] text-slate-500 num-mono">Profile: 10×10 px</span>
         </div>
 
-        {/* Global Controls */}
-        <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg flex items-center justify-center gap-2">
+        {/* Quick Simulation Controls */}
+        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex items-center justify-center gap-2">
           <button
             onClick={() => onToggleSim(!isRunning)}
-            className={`flex-1 py-2 px-3 rounded font-bold text-xs flex items-center justify-center gap-1.5 transition ${
+            className={`flex-1 py-2 px-3 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 transition ${
               isRunning
                 ? 'bg-amber-600 hover:bg-amber-500 text-white'
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white'
             }`}
           >
             {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            {isRunning ? 'PAUSE' : 'RUN'}
+            {isRunning ? 'Pause' : 'Run'}
           </button>
           <button
             onClick={onResetSim}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition"
+            className="p-2 bg-[#1A1D20] hover:bg-[#202c42] text-slate-400 hover:text-slate-200 rounded-md border border-[#2D3237] transition"
             title="Reset Simulation State"
           >
             <RotateCcw className="w-4 h-4" />
@@ -168,53 +164,53 @@ export const MissionControlPage: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Viewport Mode Switcher (2D Camera, 3D Scene, Dual View) */}
-      <div className="flex items-center justify-between bg-slate-900/60 p-2 rounded-lg border border-slate-800 text-xs">
+      {/* Viewport Mode Switcher */}
+      <div className="flex items-center justify-between bg-[#121518] px-3 py-2 rounded-lg border border-[#252A2E] text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-slate-400">Viewport Mode:</span>
+          <span className="text-slate-400 font-medium">Viewport:</span>
           <button
             onClick={() => setViewMode('dual')}
-            className={`px-3 py-1 rounded font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === 'dual'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-[#252A2E] text-white border border-slate-700'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D20]'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" /> Dual Viewports (2D + Camera)
+            <Layers className="w-3.5 h-3.5 text-slate-400" /> Dual (2D + Camera)
           </button>
           <button
             onClick={() => setViewMode('3d')}
-            className={`px-3 py-1 rounded font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === '3d'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-[#252A2E] text-white border border-slate-700'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D20]'
             }`}
           >
-            <Box className="w-3.5 h-3.5" /> 3D Virtual Scene
+            <Box className="w-3.5 h-3.5 text-slate-400" /> 3D Virtual Scene
           </button>
           <button
             onClick={() => setViewMode('2d_camera')}
-            className={`px-3 py-1 rounded font-bold transition flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === '2d_camera'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-[#252A2E] text-white border border-slate-700'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D20]'
             }`}
           >
-            <Crosshair className="w-3.5 h-3.5" /> 2D Camera View Only
+            <Crosshair className="w-3.5 h-3.5 text-slate-400" /> 2D Camera Only
           </button>
         </div>
 
-        <div className="text-[11px] text-slate-400 flex items-center gap-3">
-          <span>Target ID: <strong className="text-white">#{target?.target_id ?? 1}</strong></span>
+        <div className="text-[11px] text-slate-400 flex items-center gap-3 num-mono">
+          <span>Target ID: <strong className="text-slate-200">#{target?.target_id ?? 1}</strong></span>
           <span className="text-slate-600">|</span>
-          <span>Target Depth Z: <strong className="text-cyan-300">{target?.world_z.toFixed(0)}m</strong></span>
+          <span>Depth: <strong className="text-[#D6D9DC]">{target?.world_z.toFixed(0)} m</strong></span>
         </div>
       </div>
 
       {/* Main Viewports */}
       {viewMode === 'dual' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="min-h-[520px]">
+          <div className="min-h-[520px] rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
             <VirtualSceneCanvas
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
@@ -225,7 +221,7 @@ export const MissionControlPage: React.FC<Props> = ({
             />
           </div>
 
-          <div className="h-full">
+          <div className="h-full rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
             <FPACameraViewport
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
@@ -241,7 +237,7 @@ export const MissionControlPage: React.FC<Props> = ({
 
       {viewMode === '3d' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 min-h-[560px]">
+          <div className="lg:col-span-2 min-h-[560px] rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
             <Scene3DViewport
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
@@ -252,7 +248,7 @@ export const MissionControlPage: React.FC<Props> = ({
             />
           </div>
 
-          <div className="h-full">
+          <div className="h-full rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
             <FPACameraViewport
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
@@ -267,7 +263,7 @@ export const MissionControlPage: React.FC<Props> = ({
       )}
 
       {viewMode === '2d_camera' && (
-        <div className="max-w-3xl mx-auto w-full">
+        <div className="max-w-3xl mx-auto w-full rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
           <FPACameraViewport
             target={telemetry?.target ?? null}
             camera={telemetry?.camera ?? null}
@@ -280,76 +276,109 @@ export const MissionControlPage: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Mathematical Kinematics Telemetry Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-        <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3 space-y-2">
-          <div className="text-cyan-400 font-bold border-b border-slate-800 pb-1 uppercase tracking-wider">
-            Target 3D Position r(t)
+      {/* Target Kinematics Telemetry (Collapsible) */}
+      <div className="bg-[#121518] border border-[#252A2E] rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowKinematics(!showKinematics)}
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-[#1A1D20] hover:bg-[#1A1D20] transition text-left"
+        >
+          <span className="font-semibold text-xs text-slate-200">
+            Target 3D Kinematics Readout
+          </span>
+          <div className="flex items-center gap-2 text-slate-400">
+            <span className="text-[11px] num-mono">
+              X: {target?.world_x.toFixed(1)}m • Y: {target?.world_y.toFixed(1)}m • Z: {target?.world_z.toFixed(0)}m
+            </span>
+            {showKinematics ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">X (Azimuth):</span>
-            <span className="text-white font-bold">{target?.world_x.toFixed(2)} m</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Y (Elevation):</span>
-            <span className="text-white font-bold">{target?.world_y.toFixed(2)} m</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Z (Range Depth):</span>
-            <span className="text-white font-bold">{target?.world_z.toFixed(2)} m</span>
-          </div>
-        </div>
+        </button>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3 space-y-2">
-          <div className="text-cyan-400 font-bold border-b border-slate-800 pb-1 uppercase tracking-wider">
-            Target 3D Velocity v(t)
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Vx:</span>
-            <span className="text-cyan-300 font-bold">{target?.velocity_x.toFixed(2)} m/s</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Vy:</span>
-            <span className="text-cyan-300 font-bold">{target?.velocity_y.toFixed(2)} m/s</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Vz:</span>
-            <span className="text-cyan-300 font-bold">{target?.velocity_z.toFixed(2)} m/s</span>
-          </div>
-        </div>
+        {showKinematics && (
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-[#252A2E]">
+            {/* Position */}
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#252A2E]">
+                Position r(t)
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">X (Azimuth):</span>
+                <span className="text-slate-100 font-medium">{target?.world_x.toFixed(2)} m</span>
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Y (Elevation):</span>
+                <span className="text-slate-100 font-medium">{target?.world_y.toFixed(2)} m</span>
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Z (Range Depth):</span>
+                <span className="text-slate-100 font-medium">{target?.world_z.toFixed(2)} m</span>
+              </div>
+            </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3 space-y-2">
-          <div className="text-cyan-400 font-bold border-b border-slate-800 pb-1 uppercase tracking-wider">
-            Target 3D Acceleration a(t)
+            {/* Velocity */}
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#252A2E]">
+                Velocity v(t)
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Vx:</span>
+                <span className="text-[#E8EAED] font-medium">{target?.velocity_x.toFixed(2)} m/s</span>
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Vy:</span>
+                <span className="text-[#E8EAED] font-medium">{target?.velocity_y.toFixed(2)} m/s</span>
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Vz:</span>
+                <span className="text-[#E8EAED] font-medium">{target?.velocity_z.toFixed(2)} m/s</span>
+              </div>
+            </div>
+
+            {/* Acceleration */}
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#252A2E]">
+                Acceleration a(t)
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Ax:</span>
+                <span className="text-amber-300 font-medium">{target?.acceleration_x.toFixed(2)} m/s²</span>
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Ay:</span>
+                <span className="text-amber-300 font-medium">{target?.acceleration_y.toFixed(2)} m/s²</span>
+              </div>
+              <div className="flex justify-between num-mono text-xs">
+                <span className="text-slate-400">Az:</span>
+                <span className="text-amber-300 font-medium">{target?.acceleration_z.toFixed(2)} m/s²</span>
+              </div>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Ax:</span>
-            <span className="text-amber-300 font-bold">{target?.acceleration_x.toFixed(2)} m/s²</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Ay:</span>
-            <span className="text-amber-300 font-bold">{target?.acceleration_y.toFixed(2)} m/s²</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-400">Az:</span>
-            <span className="text-amber-300 font-bold">{target?.acceleration_z.toFixed(2)} m/s²</span>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* ─── BEACON SPEED CONTROL (km/h) ─── */}
+      {/* Beacon Velocity Control */}
       <BeaconSpeedControl
         currentSpeed={localSpeed}
         onSpeedChange={applySpeed}
         speedApplied={speedApplied}
       />
 
-      {/* Real-time Tracking Performance Strip */}
-      <div className="h-44">
-        <TelemetryChart
-          data={errorHistory}
-          maxThreshold={config?.performance.max_tracking_error_pixels ?? 10}
-        />
+      {/* Real-time Tracking Performance Chart */}
+      <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-3">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#252A2E]">
+          <span className="font-semibold text-xs text-slate-200">
+            Real-Time Tracking Error History (FPA Centroid Distance)
+          </span>
+          <span className="text-[11px] text-slate-400 num-mono">
+            Lock Limit: ≤ {config?.performance.max_tracking_error_pixels ?? 10} px
+          </span>
+        </div>
+        <div className="h-44">
+          <TelemetryChart
+            data={errorHistory}
+            maxThreshold={config?.performance.max_tracking_error_pixels ?? 10}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-export interface CameraConfig {
+﻿export interface CameraConfig {
   sensor_type: string;
   resolution_width: number;
   resolution_height: number;

@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { TargetState, CameraState, TrackingTelemetry, DetectionTelemetry, DisturbanceTelemetry } from '../types';
 import { satellitePovSync } from './satellitePovSync';
+import { createEarthTexture, createAtmosphereRimMesh } from './earthTexture';
 import {
   Crosshair,
   ArrowUp,
@@ -63,7 +64,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
 
   // Satellite POV 3D Display Controls & State
   const [showSatellitePov, setShowSatellitePov] = useState(true);
-  const [fovMode, setFovMode] = useState<'telephoto' | 'wide'>('telephoto');
+  const [fovMode, setFovMode] = useState<'telephoto' | 'wide'>('wide');
   const [pointingMode, setPointingMode] = useState<'beacon' | 'nadir'>('nadir');
   const [isOccludedState, setIsOccludedState] = useState(false);
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
@@ -156,7 +157,15 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     scene.background = new THREE.Color(0x02050c);
     threeSceneRef.current = scene;
 
-    // 2. Dense Starfield (6000 stars distributed in spherical space shell)
+    // Directional Sunlight & Ambient Illumination (matches Mission Control Sun angle)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambientLight);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.85);
+    const FIXED_SUN_DIR = new THREE.Vector3(1, 0.3, 0.8).normalize();
+    sunLight.position.copy(FIXED_SUN_DIR.clone().multiplyScalar(600));
+    scene.add(sunLight);
+
+    // 2. Dense 3D Starfield (6000 stars distributed in spherical space shell)
     const starCount = 6000;
     const starGeo = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
@@ -169,16 +178,16 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       starPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       starPositions[i * 3 + 2] = r * Math.cos(phi);
 
-      const bright = 0.5 + Math.random() * 0.5;
-      const isCyan = Math.random() > 0.6;
-      starColors[i * 3] = isCyan ? 0.35 * bright : 0.88 * bright;
-      starColors[i * 3 + 1] = isCyan ? 0.85 * bright : 0.92 * bright;
-      starColors[i * 3 + 2] = isCyan ? 1.0 * bright : 0.99 * bright;
+      const bright = 0.6 + Math.random() * 0.4;
+      const isCyan = Math.random() > 0.65;
+      starColors[i * 3] = isCyan ? 0.38 * bright : 0.90 * bright;
+      starColors[i * 3 + 1] = isCyan ? 0.85 * bright : 0.94 * bright;
+      starColors[i * 3 + 2] = isCyan ? 1.0 * bright : 1.0 * bright;
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
     const starMat = new THREE.PointsMaterial({
-      size: 1.8,
+      size: 2.2,
       vertexColors: true,
       transparent: true,
       opacity: 0.95,
@@ -186,11 +195,14 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     const stars = new THREE.Points(starGeo, starMat);
     scene.add(stars);
 
-    // 3. Central Earth Globe with Dense 180x90 Wireframe (2° spacing for vivid telephoto detail)
+    // 3. Central 3D Earth Globe with Continents, Oceans, and Coordinate Graticule
     const globeRadius = 100;
-    const globeGeo = new THREE.SphereGeometry(globeRadius, 180, 90);
-    const globeMat = new THREE.MeshBasicMaterial({
-      color: 0x0c1424,
+    const globeGeo = new THREE.SphereGeometry(globeRadius, 96, 48);
+    const earthTex = createEarthTexture();
+    const globeMat = new THREE.MeshStandardMaterial({
+      map: earthTex,
+      roughness: 0.70,
+      metalness: 0.05,
       polygonOffset: true,
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,
@@ -202,12 +214,12 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     scene.add(globeMesh);
     globeMeshRef.current = globeMesh;
 
-    // Neon cyan latitudinal/longitudinal wireframe grid lines
-    const wireGeo = new THREE.WireframeGeometry(globeGeo);
+    // Latitudinal/longitudinal aerospace wireframe grid lines
+    const wireGeo = new THREE.WireframeGeometry(new THREE.SphereGeometry(globeRadius + 0.04, 48, 24));
     const wireMat = new THREE.LineBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.22,
     });
     const wireMesh = new THREE.LineSegments(wireGeo, wireMat);
     globeMesh.add(wireMesh);
@@ -216,22 +228,24 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     const eqPts: THREE.Vector3[] = [];
     for (let i = 0; i <= 180; i++) {
       const a = (i / 180) * Math.PI * 2;
-      eqPts.push(new THREE.Vector3((globeRadius + 0.15) * Math.cos(a), 0, (globeRadius + 0.15) * Math.sin(a)));
+      eqPts.push(new THREE.Vector3((globeRadius + 0.12) * Math.cos(a), 0, (globeRadius + 0.12) * Math.sin(a)));
     }
     const eqGeo = new THREE.BufferGeometry().setFromPoints(eqPts);
     const eqLine = new THREE.Line(
       eqGeo,
-      new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.9 })
+      new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85 })
     );
     globeMesh.add(eqLine);
 
-    // Atmospheric rim glow
-    const atmoGeo = new THREE.SphereGeometry(globeRadius + 1.2, 72, 36);
+    // Atmospheric outer rim glow
+    const atmoGeo = new THREE.SphereGeometry(globeRadius * 1.018, 64, 32);
     const atmoMat = new THREE.MeshBasicMaterial({
-      color: 0x0ea5e9,
+      color: 0x38bdf8,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.22,
       side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: true,
     });
     const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat);
     scene.add(atmoMesh);
@@ -271,22 +285,22 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     beaconGroup.add(coreMesh);
 
     // Optical guide beam pointing into space from beacon
-    const beamGeo = new THREE.CylinderGeometry(0.1, 0.4, 20, 8);
+    const beamGeo = new THREE.CylinderGeometry(0.12, 0.45, 28, 8);
     const beamMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.65,
     });
     beamMatRef.current = beamMat;
     const beamMesh = new THREE.Mesh(beamGeo, beamMat);
-    beamMesh.position.y = 10.0;
+    beamMesh.position.y = 14.0;
     beaconGroup.add(beamMesh);
 
     scene.add(beaconGroup);
     beaconGroupRef.current = beaconGroup;
 
     // 5. Satellite Onboard Perspective Camera (Mounted directly in scene)
-    const initialFov = fovModeRef.current === 'telephoto' ? (cameraPropRef.current?.fov_vertical_deg ?? 3.0) : 24.0;
+    const initialFov = fovModeRef.current === 'telephoto' ? (cameraPropRef.current?.fov_vertical_deg ?? 3.0) : 42.0;
     const povCamera = new THREE.PerspectiveCamera(initialFov, 640 / 480, 0.5, 4000);
     scene.add(povCamera);
     threeCameraRef.current = povCamera;
@@ -345,47 +359,88 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         const cam = threeCameraRef.current;
         cam.position.copy(satPos);
 
-        // Aim target: Ground station beacon or Earth nadir (0, 0, 0)
-        const desiredAimTarget = pointingModeRef.current === 'nadir' ? new THREE.Vector3(0, 0, 0) : tgtPos;
-        if (!currentAimTargetRef.current) {
-          currentAimTargetRef.current = desiredAimTarget.clone();
+        const currentDist = disturbancePropRef.current;
+        const isChannelOcc = Boolean(currentDist?.is_occluded || currentDist?.occlusion_active);
+        const isTotalOcc = povData.isOccluded || isChannelOcc;
+        const currentCam = cameraPropRef.current;
+        const isWide = fovModeRef.current === 'wide';
+
+        // 1. Nadir direction (downward toward Earth center 0, 0, 0)
+        const nadirDir = satPos.clone().negate().normalize();
+
+        // 2. Orbital velocity / forward direction (perpendicular to nadir)
+        let velDir = new THREE.Vector3(-satPos.z, 0, satPos.x);
+        if (velDir.lengthSq() < 0.001) velDir.set(1, 0, 0);
+        velDir.normalize();
+
+        // 3. Line-of-sight vector to beacon
+        const losDir = tgtPos.clone().sub(satPos).normalize();
+
+        // 4. Use synchronized boresightDir from Scene3DViewport or fallback
+        const boresightDir = povData.boresightDir || (autoLOSRef.current ? losDir : nadirDir);
+
+        let aimDir: THREE.Vector3;
+
+        if (isWide) {
+          // WIDE HORIZON SATELLITE POV (42° FOV):
+          // Provides the authentic, breathtaking orbital horizon view.
+          // Frames the curved Earth limb, radiant cyan atmosphere glow, continents, and space stars!
+          if (autoLOSRef.current && !isTotalOcc) {
+            // Tracking beacon: aim directly at the beacon while keeping the horizon in view
+            aimDir = losDir.clone();
+          } else {
+            // Forward-nadir horizon view: blends nadir (down) and orbital forward track
+            aimDir = new THREE.Vector3()
+              .addScaledVector(nadirDir, 0.45)
+              .addScaledVector(velDir, 0.85)
+              .normalize();
+          }
         } else {
-          // Smoothly shift aim target towards desired aim (Nadir or Beacon) along Line of Sight
-          currentAimTargetRef.current.lerp(desiredAimTarget, 0.055);
-          if (currentAimTargetRef.current.distanceTo(desiredAimTarget) < 0.25) {
-            currentAimTargetRef.current.copy(desiredAimTarget);
+          // TELEPHOTO / FPA SENSOR ZOOM (4.0° FOV):
+          // High-magnification optical payload tracking view
+          if (autoLOSRef.current && !isTotalOcc) {
+            aimDir = losDir.clone();
+          } else {
+            aimDir = boresightDir.clone();
           }
         }
 
-        // Keep camera upright relative to Earth polar axis (0, 1, 0)
-        cam.up.set(0, 1, 0);
-        cam.lookAt(currentAimTargetRef.current);
-
-        // Apply gimbal pan & tilt rotations locally in camera space
-        const currentCam = cameraPropRef.current;
-        const panDeg = currentCam?.pan_deg ?? 0;
-        const tiltDeg = currentCam?.tilt_deg ?? 0;
-        const panRad = THREE.MathUtils.degToRad(panDeg);
-        const tiltRad = THREE.MathUtils.degToRad(tiltDeg);
-
-        // Compute high-frequency jitter & vibration angular displacement
-        const dist = disturbancePropRef.current;
-        const jx = dist?.jitter_offset_x_px ?? 0;
-        const jy = dist?.jitter_offset_y_px ?? 0;
-        const px = dist?.platform_offset_x_px ?? 0;
-        const py = dist?.platform_offset_y_px ?? 0;
-        const fovH = currentCam?.fov_horizontal_deg ?? 4.0;
-        const fovV = currentCam?.fov_vertical_deg ?? 3.0;
+        // Apply fine disturbance jitter & vibration
+        const jx = currentDist?.jitter_offset_x_px ?? 0;
+        const jy = currentDist?.jitter_offset_y_px ?? 0;
+        const px = currentDist?.platform_offset_x_px ?? 0;
+        const py = currentDist?.platform_offset_y_px ?? 0;
+        const fovH = isWide ? 45.0 : (currentCam?.fov_horizontal_deg ?? 4.0);
+        const fovV = isWide ? 34.0 : (currentCam?.fov_vertical_deg ?? 3.0);
         const jitPanRad = THREE.MathUtils.degToRad(((jx + px) * fovH) / 640);
         const jitTiltRad = THREE.MathUtils.degToRad(((jy + py) * fovV) / 480);
 
-        // rotateY(-panRad - jitPanRad): panning right shifts view right, targets move left
-        // rotateX(tiltRad + jitTiltRad): tilting up shifts view up, targets move down
-        cam.rotateY(-panRad - jitPanRad);
-        cam.rotateX(tiltRad + jitTiltRad);
+        // Compute stable camera Up vector (Earth polar / orbital plane)
+        let upRef = new THREE.Vector3(0, 1, 0);
+        if (Math.abs(aimDir.dot(upRef)) > 0.90) {
+          upRef = new THREE.Vector3(1, 0, 0);
+        }
+        const rightVec = new THREE.Vector3().crossVectors(aimDir, upRef).normalize();
+        const realUpVec = new THREE.Vector3().crossVectors(rightVec, aimDir).normalize();
+
+        if (Math.abs(jitPanRad) > 0.0001 || Math.abs(jitTiltRad) > 0.0001) {
+          aimDir.applyAxisAngle(realUpVec, -jitPanRad);
+          aimDir.applyAxisAngle(rightVec, jitTiltRad);
+        }
+
+        const targetLookPoint = satPos.clone().add(aimDir.multiplyScalar(100));
+
+        if (!currentAimTargetRef.current) {
+          currentAimTargetRef.current = targetLookPoint.clone();
+        } else {
+          currentAimTargetRef.current.lerp(targetLookPoint, 0.08);
+        }
+
+        cam.up.copy(realUpVec);
+        cam.lookAt(currentAimTargetRef.current);
 
         // Smooth FOV zoom transition between telephoto and wide
-        const targetFov = fovModeRef.current === 'telephoto' ? (currentCam?.fov_vertical_deg ?? 3.0) : 24.0;
+        const targetFov = isWide ? 42.0 : (currentCam?.fov_vertical_deg ?? 3.0);
         if (Math.abs(cam.fov - targetFov) > 0.05) {
           cam.fov += (targetFov - cam.fov) * 0.15;
           cam.updateProjectionMatrix();
@@ -420,7 +475,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         coreMatRef.current.color.setRGB(effBeaconFrac, effBeaconFrac, effBeaconFrac);
       }
       if (beamMatRef.current) {
-        beamMatRef.current.opacity = isTotalOcc ? 0.0 : Math.max(0.04, 0.5 * effBeaconFrac);
+        beamMatRef.current.opacity = isTotalOcc ? 0.0 : Math.max(0.04, 0.65 * effBeaconFrac);
       }
 
       // Check occlusion state changes (combines orbital Earth limb and temporary channel obstruction)
@@ -455,6 +510,9 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       coreMat.dispose();
       beamGeo.dispose();
       beamMat.dispose();
+      eqGeo.dispose();
+      (eqLine.material as THREE.Material).dispose();
+      earthTex.dispose();
     };
   }, []);
 
@@ -1281,18 +1339,18 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           {showSatellitePov && (
             <button
               onClick={() => setFovMode((m) => (m === 'telephoto' ? 'wide' : 'telephoto'))}
-              title={fovMode === 'telephoto' ? 'Switch to Wide Horizon View (24°)' : 'Switch to Narrow Telescope View (4°)'}
+              title={fovMode === 'telephoto' ? 'Switch to Wide Horizon View (42°)' : 'Switch to Narrow FPA Sensor View (4.0°)'}
               className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] transition"
             >
               {fovMode === 'telephoto' ? (
                 <>
                   <ZoomIn className="w-3 h-3 text-amber-400" />
-                  <span>4° Telephoto</span>
+                  <span>4.0° FPA Zoom</span>
                 </>
               ) : (
                 <>
                   <ZoomOut className="w-3 h-3 text-emerald-400" />
-                  <span>24° Wide</span>
+                  <span>42° Wide Horizon</span>
                 </>
               )}
             </button>
@@ -1333,7 +1391,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           <span className="text-slate-600">|</span>
 
           <span className="text-slate-400">
-            FOV: <span className="text-white font-bold">{fovMode === 'telephoto' ? `${camera?.fov_horizontal_deg.toFixed(1)}° × ${camera?.fov_vertical_deg.toFixed(1)}°` : '32.0° × 24.0°'}</span>
+            FOV: <span className="text-white font-bold">{fovMode === 'telephoto' ? `${camera?.fov_horizontal_deg.toFixed(1)}° × ${camera?.fov_vertical_deg.toFixed(1)}°` : '56.0° × 42.0°'}</span>
           </span>
           <span className="text-slate-600">|</span>
           <span className="text-slate-400">
@@ -1436,7 +1494,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           {showSatellitePov && viewMode === 'canvas' && (
             <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 px-2 py-0.5 bg-slate-950/85 border border-cyan-800/60 rounded text-[9px] font-mono text-cyan-300 backdrop-blur-sm pointer-events-none select-none">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-              <span>SATELLITE POV • {fovMode === 'telephoto' ? '4.0° FPA' : '24.0° WIDE'} • {pointingMode === 'beacon' ? 'BEACON TRACK' : 'EARTH NADIR'}</span>
+              <span>SATELLITE POV • {fovMode === 'telephoto' ? '4.0° FPA SENSOR' : '42.0° WIDE HORIZON'} • {autoLOS ? 'BEACON TRACK' : 'EARTH HORIZON'}</span>
             </div>
           )}
 

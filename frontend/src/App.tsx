@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Compass,
   Video,
@@ -25,6 +25,11 @@ import {
   Volume2,
   VolumeX,
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 import { NavTabId, SystemConfig } from './types';
@@ -50,10 +55,101 @@ import { DocumentationPage } from './pages/DocumentationPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DemoModal } from './pages/DemoModal';
 
+const NAV_GROUPS = [
+  'OPERATIONS',
+  'PIPELINE & CONTROL',
+  'VALIDATION',
+  'SPECIFICATION',
+] as const;
+
+type NavGroup = (typeof NAV_GROUPS)[number];
+
+interface NavItem {
+  id: NavTabId;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  group?: NavGroup;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'mission_control', label: 'Mission Control', icon: Radar, group: 'OPERATIONS' },
+  { id: 'virtual_simulation', label: 'Virtual Simulation', icon: Compass, group: 'OPERATIONS' },
+  { id: 'camera_view', label: 'Camera View', icon: Video, group: 'OPERATIONS' },
+  { id: 'video_benchmark', label: 'Video Benchmark', icon: Film, group: 'OPERATIONS' },
+  { id: 'target_environment', label: 'Target & Environment', icon: Crosshair, group: 'OPERATIONS' },
+  { id: 'detection_ai', label: 'Detection & AI', icon: Cpu, group: 'PIPELINE & CONTROL' },
+  { id: 'tracking_control', label: 'Tracking & Control', icon: Activity, group: 'PIPELINE & CONTROL' },
+  { id: 'disturbances', label: 'Disturbances', icon: CloudRain, group: 'PIPELINE & CONTROL' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, group: 'VALIDATION' },
+  { id: 'experiments', label: 'Experiments', icon: FlaskConical, group: 'VALIDATION' },
+  { id: 'performance_reports', label: 'Performance Reports', icon: FileText, group: 'VALIDATION' },
+  { id: 'requirements', label: 'Official Requirements', icon: CheckSquare, group: 'SPECIFICATION' },
+  { id: 'architecture', label: 'Architecture', icon: Network, group: 'SPECIFICATION' },
+  { id: 'documentation', label: 'Documentation', icon: BookOpen, group: 'SPECIFICATION' },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTabId>('mission_control');
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState<boolean>(false);
+
+  // Left Navigation Sidebar Minimize / Expand state (persisted in localStorage)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('laserlockAI_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('laserlockAI_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Keyboard shortcut Ctrl+B or Cmd+B to toggle sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Top-level dropdown group collapse/expand state (OPERATIONS expanded initially)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    OPERATIONS: true,
+    'PIPELINE & CONTROL': false,
+    VALIDATION: false,
+    SPECIFICATION: false,
+  });
+
+  const toggleGroup = (group: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [group]: !prev[group],
+    }));
+  };
+
+  // Ensure parent dropdown remains expanded when active tab changes so active item is visible
+  useEffect(() => {
+    const activeItem = NAV_ITEMS.find((item) => item.id === activeTab);
+    if (activeItem && activeItem.group && !expandedGroups[activeItem.group]) {
+      setExpandedGroups((prev) => ({
+        ...prev,
+        [activeItem.group!]: true,
+      }));
+    }
+  }, [activeTab]);
 
   const {
     telemetry,
@@ -230,199 +326,246 @@ export const App: React.FC = () => {
     }
   };
 
-  const navItems: { id: NavTabId; label: string; icon: React.ComponentType<{ className?: string }>; group: string }[] = [
-    { id: 'mission_control', label: '1. Mission Control', icon: Radar, group: 'OPERATIONS' },
-    { id: 'virtual_simulation', label: '2. Virtual Simulation', icon: Compass, group: 'OPERATIONS' },
-    { id: 'camera_view', label: '3. Camera View', icon: Video, group: 'OPERATIONS' },
-    { id: 'video_benchmark', label: '4. Video Benchmark', icon: Film, group: 'OPERATIONS' },
-    { id: 'target_environment', label: '5. Target & Environment', icon: Crosshair, group: 'OPERATIONS' },
-    { id: 'detection_ai', label: '6. Detection & AI', icon: Cpu, group: 'PIPELINE & CONTROL' },
-    { id: 'tracking_control', label: '7. Tracking & Control', icon: Activity, group: 'PIPELINE & CONTROL' },
-    { id: 'disturbances', label: '8. Disturbances', icon: CloudRain, group: 'PIPELINE & CONTROL' },
-    { id: 'analytics', label: '9. Analytics', icon: BarChart3, group: 'VALIDATION' },
-    { id: 'experiments', label: '10. Experiments', icon: FlaskConical, group: 'VALIDATION' },
-    { id: 'performance_reports', label: '11. Performance Reports', icon: FileText, group: 'VALIDATION' },
-    { id: 'requirements', label: '12. Official Requirements', icon: CheckSquare, group: 'SPECIFICATION' },
-    { id: 'architecture', label: '13. Architecture', icon: Network, group: 'SPECIFICATION' },
-    { id: 'documentation', label: '14. Documentation', icon: BookOpen, group: 'SPECIFICATION' },
-    { id: 'settings', label: '15. Settings', icon: Settings, group: 'SPECIFICATION' },
-  ];
+  const navItems = NAV_ITEMS;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#07090e] text-slate-100 font-sans">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-[#0a0d16] border-r border-slate-800 flex flex-col flex-shrink-0 select-none">
-        {/* Brand / Title Header */}
-        <div className="p-4 border-b border-slate-800 bg-slate-950/60">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center shadow-lg shadow-cyan-950">
-              <Crosshair className="w-5 h-5 text-white" />
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0B0D0F] text-[#E8EAED] antialiased" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+
+      {/* ── Sidebar ── */}
+      <aside
+        className={`${isSidebarCollapsed ? 'w-14' : 'w-56'} flex flex-col flex-shrink-0 bg-[#0F1113] border-r border-[#1A1C1F] transition-all duration-200 ease-in-out select-none`}
+      >
+        {/* Brand */}
+        <div className={`flex items-center border-b border-[#1A1C1F] ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
+          {!isSidebarCollapsed && (
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-6 h-6 rounded flex items-center justify-center bg-[#1E2023] border border-[#2A2D31] shrink-0">
+                <Crosshair className="w-3.5 h-3.5 text-[#8B949E]" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-[11px] font-semibold text-[#E8EAED] tracking-wide truncate leading-none">LaserLockAI</h1>
+                <p className="text-[10px] text-[#525A63] truncate leading-none mt-0.5">Optical Tracking</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-mono text-xs font-bold text-white tracking-wider">FSOC TESTBENCH</h1>
-              <p className="text-[10px] text-cyan-400 font-mono">Mobile PAT Coarse Alignment</p>
-            </div>
-          </div>
-          <div className="mt-3 inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-950/70 border border-blue-800/60 text-[10px] font-mono text-cyan-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-            Part 10: Final System Integration
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1A1C1F] transition cursor-pointer shrink-0"
+            title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
+          </button>
         </div>
 
-        {/* 14 Navigation Tabs */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-4">
-          {['OPERATIONS', 'PIPELINE & CONTROL', 'VALIDATION', 'SPECIFICATION'].map((grp) => (
-            <div key={grp}>
-              <div className="px-2.5 py-1 text-[9px] font-mono font-bold tracking-widest text-slate-500 uppercase">
-                {grp}
-              </div>
-              <div className="mt-1 space-y-0.5">
-                {navItems
-                  .filter((item) => item.group === grp)
-                  .map((item) => {
-                    const active = activeTab === item.id;
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded text-xs font-mono transition text-left ${
-                          active
-                            ? 'bg-cyan-950/90 text-cyan-300 border border-cyan-700/60 shadow-sm font-bold'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                        }`}
-                      >
-                        <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-cyan-400' : 'text-slate-500'}`} />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    );
-                  })}
-              </div>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-2">
+          {isSidebarCollapsed ? (
+            /* Icon-only mode */
+            <div className="space-y-0.5 px-1.5">
+              {NAV_GROUPS.map((grp, idx) => {
+                const groupItems = NAV_ITEMS.filter(i => i.group === grp);
+                return (
+                  <div key={grp}>
+                    {idx > 0 && <div className="h-px bg-[#1A1C1F] my-2 mx-1" />}
+                    {groupItems.map(item => {
+                      const active = activeTab === item.id;
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setActiveTab(item.id)}
+                          title={item.label}
+                          aria-label={item.label}
+                          className={`w-full flex items-center justify-center p-2 rounded transition cursor-pointer ${
+                            active
+                              ? 'bg-[#1E2023] text-[#E8EAED]'
+                              : 'text-[#525A63] hover:text-[#8B949E] hover:bg-[#141618]'
+                          }`}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              <div className="h-px bg-[#1A1C1F] my-2 mx-1" />
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                title="Settings"
+                aria-label="Settings"
+                className={`w-full flex items-center justify-center p-2 rounded transition cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-[#1E2023] text-[#E8EAED]'
+                    : 'text-[#525A63] hover:text-[#8B949E] hover:bg-[#141618]'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
             </div>
-          ))}
+          ) : (
+            /* Expanded mode */
+            <div className="px-2 space-y-3">
+              {NAV_GROUPS.map((grp) => {
+                const isExpanded = !!expandedGroups[grp];
+                const groupItems = NAV_ITEMS.filter(i => i.group === grp);
+                const hasActive = groupItems.some(i => i.id === activeTab);
+
+                return (
+                  <div key={grp}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(grp)}
+                      aria-expanded={isExpanded}
+                      className={`w-full flex items-center justify-between px-2 py-1 rounded text-left cursor-pointer transition ${
+                        hasActive ? 'text-[#8B949E]' : 'text-[#525A63] hover:text-[#6B7280]'
+                      }`}
+                    >
+                      <span className="text-[10px] font-semibold tracking-widest uppercase">{grp}</span>
+                      {isExpanded
+                        ? <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                        : <ChevronRight className="w-3 h-3 flex-shrink-0" />}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="mt-0.5 space-y-0.5">
+                        {groupItems.map(item => {
+                          const active = activeTab === item.id;
+                          const Icon = item.icon;
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => { setActiveTab(item.id); setExpandedGroups(p => ({ ...p, [grp]: true })); }}
+                              className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left cursor-pointer transition text-xs ${
+                                active
+                                  ? 'bg-[#1E2023] text-[#E8EAED] font-medium'
+                                  : 'text-[#6B7280] hover:text-[#8B949E] hover:bg-[#141618]'
+                              }`}
+                            >
+                              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-[#8B949E]' : 'text-[#525A63]'}`} />
+                              <span className="truncate">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Settings */}
+              <div className="h-px bg-[#1A1C1F]" />
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left cursor-pointer transition text-xs ${
+                  activeTab === 'settings'
+                    ? 'bg-[#1E2023] text-[#E8EAED] font-medium'
+                    : 'text-[#6B7280] hover:text-[#8B949E] hover:bg-[#141618]'
+                }`}
+              >
+                <Settings className={`w-3.5 h-3.5 flex-shrink-0 ${activeTab === 'settings' ? 'text-[#8B949E]' : 'text-[#525A63]'}`} />
+                <span className="truncate">Settings</span>
+              </button>
+            </div>
+          )}
         </nav>
 
-        {/* System Health / Telemetry Link Footer in Sidebar */}
-        <div className="p-3 border-t border-slate-800/80 bg-slate-950/80 font-mono text-[11px] space-y-1.5 text-slate-400">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Telemetry Stream:</span>
-            <div className="flex items-center gap-1.5">
-              {isConnected ? (
-                <>
-                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400 font-bold">30 Hz LIVE</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                  <span className="text-amber-400 font-bold">CONNECTING</span>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-slate-500">Sensor Clock:</span>
-            <span className="text-white">{telemetry?.fps.toFixed(0) || '30'} FPS</span>
+        {/* Connection status */}
+        <div className={`border-t border-[#1A1C1F] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[#4CAF7D]' : 'bg-[#D6A84F] animate-pulse'}`} />
+            {!isSidebarCollapsed && (
+              <span className="text-[10px] text-[#525A63]">
+                {isConnected ? `Live · ${telemetry?.fps.toFixed(0) || 30} Hz` : 'Connecting…'}
+              </span>
+            )}
           </div>
         </div>
       </aside>
 
-      {/* Main Operational Stage */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[#07090e] overflow-hidden">
-        {/* Top Operational Header */}
-        <header className="h-14 bg-[#0a0d16] border-b border-slate-800 px-6 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="font-mono">
-              <span className="text-xs text-slate-400">SUBSYSTEM / </span>
-              <span className="text-sm font-bold text-white uppercase tracking-wider">
-                {navItems.find((i) => i.id === activeTab)?.label}
-              </span>
-            </div>
+      {/* ── Main ── */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#0B0D0F]">
+
+        {/* Header */}
+        <header className="h-11 bg-[#0F1113] border-b border-[#1A1C1F] px-4 flex items-center justify-between flex-shrink-0">
+          {/* Left: page title */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1A1C1F] transition cursor-pointer"
+              title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
+            </button>
+            <span className="text-[13px] font-medium text-[#E8EAED]">
+              {navItems.find(i => i.id === activeTab)?.label ?? 'Settings'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-4 font-mono text-xs">
-            {/* Simulation Clock Readout */}
-            <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded">
-              <span className="text-slate-400">Sim T: <strong className="text-white">{telemetry?.simulation_time_s.toFixed(2)}s</strong></span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-400">Frames: <strong className="text-white">{telemetry?.frame_number || 0}</strong></span>
-              <span className="text-slate-600">|</span>
-              <span className="text-slate-400">Atmosphere: <strong className="text-cyan-400">{telemetry?.atmospheric_condition || 'Clear'}</strong></span>
+          {/* Right: sim controls + status */}
+          <div className="flex items-center gap-2 text-xs">
+            {/* Sim clock — minimal */}
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#525A63] num-mono border-r border-[#1A1C1F] pr-3 mr-1">
+              <span>t = <span className="text-[#8B949E]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
+              <span className="text-[#1E2023]">·</span>
+              <span>f = <span className="text-[#8B949E]">{telemetry?.frame_number ?? 0}</span></span>
             </div>
 
-            {/* Quick Transport Buttons */}
-            <div className="flex items-center gap-1.5">
-              {/* Lost Alarm Indicator / Mute Toggle Button */}
-              <button
-                onClick={() => {
-                  alarmAudio.unlock();
-                  alarmAudio.toggleMute();
-                }}
-                title={
-                  isAlarmMuted
-                    ? 'Alarm Audio Muted (Click to Unmute)'
-                    : isAlarmActive
-                    ? isAlarmSuspended
-                      ? 'Alarm is active - Click to enable browser sound output'
-                      : 'ALARM BEEPING: Beacon lost from satellite camera FOV (Click to Mute)'
-                    : 'Alarm Armed: Beeps if beacon leaves camera FOV (Click to Mute)'
-                }
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border font-mono text-xs font-bold transition shadow-sm ${
-                  isAlarmMuted
-                    ? 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
-                    : isAlarmActive
-                    ? 'bg-rose-950 border-rose-500 text-rose-200 animate-pulse shadow-rose-950/60'
-                    : 'bg-slate-900/90 border-slate-800 text-cyan-400 hover:border-slate-700'
-                }`}
-              >
-                {isAlarmMuted ? (
-                  <VolumeX className="w-3.5 h-3.5 text-slate-400" />
-                ) : (
-                  <Volume2 className={`w-3.5 h-3.5 ${isAlarmActive ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`} />
-                )}
-                <span>
-                  {isAlarmMuted
-                    ? 'ALARM: MUTED'
-                    : isAlarmActive
-                    ? isAlarmSuspended
-                      ? 'ALARM: CLICK FOR SOUND'
-                      : 'ALARM: BEACON LOST'
-                    : 'ALARM: ARMED'}
-                </span>
-              </button>
+            {/* Alarm */}
+            <button
+              onClick={() => { alarmAudio.unlock(); alarmAudio.toggleMute(); }}
+              title={isAlarmMuted ? 'Unmute alarm' : isAlarmActive ? 'Beacon lost — click to mute' : 'Alarm armed'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] border transition cursor-pointer ${
+                isAlarmActive && !isAlarmMuted
+                  ? 'bg-[#2A1515] border-[#D95C5C]/40 text-[#D95C5C]'
+                  : 'bg-transparent border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E]'
+              }`}
+            >
+              {isAlarmMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+              <span>{isAlarmMuted ? 'Muted' : isAlarmActive ? 'Lost' : 'Armed'}</span>
+            </button>
 
-              <button
-                onClick={() => setIsDemoModalOpen(true)}
-                className="px-3 py-1.5 rounded font-bold flex items-center gap-1.5 transition bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-sm"
-                title="Launch Automated 14-Phase Demonstration & Benchmark Mode"
-              >
-                <Zap className="w-3.5 h-3.5 text-cyan-200" />
-                DEMO MODE
-              </button>
-              <button
-                onClick={() => toggleSimulation(!telemetry?.is_running)}
-                className={`px-3 py-1.5 rounded font-bold flex items-center gap-1.5 transition ${
-                  telemetry?.is_running
-                    ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                }`}
-              >
-                {telemetry?.is_running ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                {telemetry?.is_running ? 'PAUSE' : 'RUN'}
-              </button>
-              <button
-                onClick={resetSimulation}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition"
-                title="Reset Simulation State"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
+            {/* Demo */}
+            <button
+              onClick={() => setIsDemoModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] border border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E] transition cursor-pointer"
+              title="Run demo"
+            >
+              <Zap className="w-3 h-3" />
+              <span>Demo</span>
+            </button>
+
+            {/* Run / Pause */}
+            <button
+              onClick={() => toggleSimulation(!telemetry?.is_running)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border transition cursor-pointer ${
+                telemetry?.is_running
+                  ? 'bg-[#D6A84F]/10 border-[#D6A84F]/30 text-[#D6A84F] hover:bg-[#D6A84F]/15'
+                  : 'bg-[#4CAF7D]/10 border-[#4CAF7D]/30 text-[#4CAF7D] hover:bg-[#4CAF7D]/15'
+              }`}
+            >
+              {telemetry?.is_running ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+              <span>{telemetry?.is_running ? 'Pause' : 'Run'}</span>
+            </button>
+
+            {/* Reset */}
+            <button
+              onClick={resetSimulation}
+              className="p-1.5 rounded border border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E] transition cursor-pointer"
+              title="Reset simulation"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
           </div>
         </header>
 
-        {/* Scrollable Page Body */}
-        <div className="flex-1 overflow-y-auto p-5">
+        {/* Page body */}
+        <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'mission_control' && (
             <MissionControlPage
               telemetry={telemetry}
@@ -435,7 +578,6 @@ export const App: React.FC = () => {
               onSelectShape={handleSelectShape}
             />
           )}
-
           {activeTab === 'virtual_simulation' && (
             <VirtualSimulationPage
               telemetry={telemetry}
@@ -447,7 +589,6 @@ export const App: React.FC = () => {
               onSelectShape={handleSelectShape}
             />
           )}
-
           {activeTab === 'camera_view' && (
             <CameraViewPage
               telemetry={telemetry}
@@ -457,9 +598,7 @@ export const App: React.FC = () => {
               onSelectShape={handleSelectShape}
             />
           )}
-
           {activeTab === 'video_benchmark' && <VideoBenchmarkPage />}
-
           {activeTab === 'target_environment' && (
             <TargetEnvironmentPage
               telemetry={telemetry}
@@ -471,65 +610,49 @@ export const App: React.FC = () => {
               onResetSim={resetSimulation}
             />
           )}
-
           {activeTab === 'detection_ai' && (
             <DetectionAIPage config={config} telemetry={telemetry} onUpdateConfig={handleUpdateConfig} />
           )}
-
           {activeTab === 'tracking_control' && (
             <TrackingControlPage config={config} telemetry={telemetry} onUpdateConfig={handleUpdateConfig} />
           )}
-
           {activeTab === 'disturbances' && (
             <DisturbancesPage config={config} telemetry={telemetry} onUpdateConfig={handleUpdateConfig} />
           )}
-
           {activeTab === 'analytics' && (
             <AnalyticsPage telemetry={telemetry} config={config} errorHistory={errorHistory} />
           )}
-
           {activeTab === 'experiments' && <ExperimentsPage />}
-
-          {activeTab === 'performance_reports' && (
-            <PerformanceReportsPage config={config} />
-          )}
-
+          {activeTab === 'performance_reports' && <PerformanceReportsPage config={config} />}
           {activeTab === 'requirements' && <RequirementsPage />}
-
           {activeTab === 'architecture' && <ArchitecturePage />}
-
           {activeTab === 'documentation' && <DocumentationPage />}
-
-          {activeTab === 'settings' && (
-            <SettingsPage config={config} onConfigChange={setConfig} />
-          )}
+          {activeTab === 'settings' && <SettingsPage config={config} onConfigChange={setConfig} />}
         </div>
 
-        {/* Global Status Footer */}
-        <footer className="h-8 bg-[#090c14] border-t border-slate-800/80 px-4 flex items-center justify-between text-[10px] font-mono text-slate-500 flex-shrink-0">
+        {/* Status bar — single row, minimal */}
+        <div className="h-6 bg-[#0F1113] border-t border-[#1A1C1F] px-4 flex items-center justify-between text-[10px] text-[#525A63] flex-shrink-0 num-mono">
           <div className="flex items-center gap-4">
-            <span>3D WORLD: <strong className="text-slate-300">2000 × 2000 × 2000 M</strong></span>
-            <span>CAMERA FPA: <strong className="text-slate-300">640 × 480 (4° × 3°)</strong></span>
-            <span>BEACON SPOT: <strong className="text-cyan-300">{config?.target.shape || 'Square'} 10×10 PX</strong></span>
-            <span>SLEW LIMIT: <strong className="text-emerald-400">≤ 5.0°/S (PAN/TILT)</strong></span>
+            <span>World <span className="text-[#6B7280]">2000³ m</span></span>
+            <span>Sensor <span className="text-[#6B7280]">640×480 · 4°×3°</span></span>
+            <span>Spot <span className="text-[#6B7280]">{config?.target.shape ?? 'Square'} 10×10 px</span></span>
+            <span>Slew <span className="text-[#6B7280]">≤ 5.0°/s</span></span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>PS4 3D OPTICS COMPLIANT</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF7D]" />
+              <span className="text-[#4CAF7D]">Spec OK</span>
             </span>
-            <span className="text-slate-600">|</span>
-            <span>PART 10 & FINAL INTEGRATION COMPLETE</span>
+            <span>LaserLockAI</span>
           </div>
-        </footer>
-
-        {/* Demo Mode Modal */}
-        <DemoModal
-          isOpen={isDemoModalOpen}
-          onClose={() => setIsDemoModalOpen(false)}
-          onNavigateToReports={() => setActiveTab('performance_reports')}
-        />
+        </div>
       </main>
+
+      <DemoModal
+        isOpen={isDemoModalOpen}
+        onClose={() => setIsDemoModalOpen(false)}
+        onNavigateToReports={() => setActiveTab('performance_reports')}
+      />
     </div>
   );
 };
