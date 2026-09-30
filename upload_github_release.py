@@ -160,21 +160,54 @@ def main():
     upload_headers["Content-Type"] = "application/octet-stream"
     upload_headers["Content-Length"] = str(asset_path.stat().st_size)
 
-    with open(asset_path, "rb") as f:
-        file_bytes = f.read()
+    import shutil
+    import subprocess
 
-    st, b = api_request(upload_url, method="POST", headers=upload_headers, data=file_bytes)
-    if st in (200, 201):
-        asset_info = json.loads(b.decode("utf-8"))
-        download_url = asset_info.get("browser_download_url")
-        print("\n" + "=" * 60)
-        print("  [SUCCESS] RELEASE ASSET UPLOADED SUCCESSFULLY!")
-        print(f"  Release Page: {release_data.get('html_url')}")
-        print(f"  Direct Download: {download_url}")
-        print("=" * 60)
+    curl_bin = shutil.which("curl")
+    if curl_bin:
+        print(f"[*] Streaming {asset_path.name} via curl...")
+        cmd = [
+            curl_bin,
+            "-X", "POST",
+            upload_url,
+            "-H", f"Authorization: Bearer {token}",
+            "-H", "Accept: application/vnd.github+json",
+            "-H", "Content-Type: application/octet-stream",
+            "--data-binary", f"@{asset_path}",
+            "--retry", "3",
+            "--retry-delay", "5",
+            "-sS"
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0:
+            try:
+                asset_info = json.loads(res.stdout)
+                download_url = asset_info.get("browser_download_url")
+                print("\n" + "=" * 60)
+                print("  [SUCCESS] RELEASE ASSET UPLOADED SUCCESSFULLY!")
+                print(f"  Release Page: {release_data.get('html_url')}")
+                print(f"  Direct Download: {download_url}")
+                print("=" * 60)
+            except Exception:
+                print("[+] Upload completed.")
+        else:
+            print(f"[ERROR] curl failed: {res.stderr}")
+            sys.exit(1)
     else:
-        print(f"[ERROR] Upload failed with HTTP {st}: {b.decode('utf-8')}")
-        sys.exit(1)
+        with open(asset_path, "rb") as f:
+            file_bytes = f.read()
+        st, b = api_request(upload_url, method="POST", headers=upload_headers, data=file_bytes)
+        if st in (200, 201):
+            asset_info = json.loads(b.decode("utf-8"))
+            download_url = asset_info.get("browser_download_url")
+            print("\n" + "=" * 60)
+            print("  [SUCCESS] RELEASE ASSET UPLOADED SUCCESSFULLY!")
+            print(f"  Release Page: {release_data.get('html_url')}")
+            print(f"  Direct Download: {download_url}")
+            print("=" * 60)
+        else:
+            print(f"[ERROR] Upload failed with HTTP {st}: {b.decode('utf-8')}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

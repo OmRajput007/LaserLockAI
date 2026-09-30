@@ -42,8 +42,10 @@ if (-not (Test-Path $FilePath)) {
 Write-Host "`nTarget Repo : $Repo" -ForegroundColor Green
 Write-Host "Tag         : $Tag" -ForegroundColor Green
 Write-Host "File        : $FilePath" -ForegroundColor Green
-Write-Host "Uploading installer to GitHub Releases... Please wait.`n" -ForegroundColor Yellow
+$EncodedName = [System.Uri]::EscapeDataString([System.IO.Path]::GetFileName($FilePath))
+$UploadUrl = "https://uploads.github.com/repos/$Repo/releases/$Tag/assets?name=$EncodedName"
 
+# If release exists, get release id or upload directly
 python upload_github_release.py --repo "$Repo" --token "$Token" --tag "$Tag" --title "$Title" --notes "$Notes" --file "$FilePath"
 
 if ($LASTEXITCODE -eq 0) {
@@ -51,3 +53,4 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     Write-Host "`n[FAIL] Release upload failed with exit code $LASTEXITCODE" -ForegroundColor Red
 }
+
