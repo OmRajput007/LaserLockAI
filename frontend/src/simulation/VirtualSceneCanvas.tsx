@@ -1,4 +1,4 @@
-﻿import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { Compass, Crosshair, Eye, EyeOff } from 'lucide-react';
 
@@ -32,7 +32,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
     const scale = width / worldWidth; // Screen coordinate to Canvas pixel scale (~0.35)
 
     // Clear background (Deep space dark)
-    ctx.fillStyle = '#05070e';
+    ctx.fillStyle = '#06080B';
     ctx.fillRect(0, 0, width, height);
 
     // Coordinate Grid (100px world spacing)
@@ -192,9 +192,9 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
   }, [target, targets, camera, disturbance, worldWidth, worldHeight]);
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#070a12] border border-slate-800 rounded-lg overflow-hidden shadow-2xl">
+    <div className="relative w-full h-full flex flex-col bg-[#0A0D10] border border-[#1F2429] rounded-lg overflow-hidden shadow-2xl">
       {/* Top Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/90 border-b border-slate-800 text-xs">
+      <div className="flex items-center justify-between px-3 py-2 bg-[#0A0D10]/95 border-b border-[#1F2429] text-xs">
         <div className="flex items-center gap-2 text-cyan-400 font-mono">
           <Compass className="w-4 h-4 text-cyan-400 animate-pulse" />
           <span className="font-semibold tracking-wider">VIRTUAL ENVIRONMENT [2000 × 2000px]</span>
@@ -211,16 +211,16 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
       </div>
 
       {/* Canvas */}
-      <div className="relative flex-1 flex items-center justify-center p-2">
+      <div className="relative flex-1 flex items-center justify-center p-2 bg-[#06080B]">
         <canvas
           ref={canvasRef}
           width={700}
           height={700}
-          className="w-full h-full max-h-[640px] aspect-square object-contain rounded border border-slate-800 shadow-inner"
+          className="w-full h-full max-h-[640px] aspect-square object-contain rounded border border-[#1F2429] shadow-inner"
         />
 
         {/* Legend */}
-        <div className="absolute bottom-4 left-4 bg-slate-950/80 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[10px] space-y-1 text-slate-300">
+        <div className="absolute bottom-4 left-4 bg-[#0A0D10]/90 backdrop-blur border border-[#1F2429] p-2.5 rounded font-mono text-[10px] space-y-1 text-slate-300">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block"></span>
             <span>Optical Beacon Spot ({target?.shape || 'Square'} 10x10 px)</span>
@@ -235,7 +235,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
           </div>
         </div>
 
-        <div className="absolute top-4 right-4 bg-slate-950/80 backdrop-blur border border-slate-800 px-3 py-1.5 rounded font-mono text-[11px] text-cyan-400">
+        <div className="absolute top-4 right-4 bg-[#0A0D10]/90 backdrop-blur border border-[#1F2429] px-3 py-1.5 rounded font-mono text-[11px] text-cyan-400">
           COORDINATES: X/Y/Z (CARTESIAN 3D)
         </div>
       </div>

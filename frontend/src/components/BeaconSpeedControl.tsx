@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Gauge, Clock } from 'lucide-react';
 import { satellitePovSync } from '../simulation/satellitePovSync';
 
@@ -74,7 +74,7 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
   const isAppliedState = speedApplied || internalApplied;
 
   return (
-    <div className={`bg-[#121518] border border-[#252A2E] rounded-lg p-3.5 text-xs ${className}`}>
+    <div className={`bg-[#0A0D10] border border-[#1F2429] rounded-lg p-3.5 text-xs ${className}`}>
       {/* Header with Title and Real-time Badge */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2 text-slate-200 font-medium">
@@ -86,7 +86,7 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
             className={`text-xs font-medium px-2.5 py-0.5 rounded transition border num-mono ${
               isAppliedState
                 ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/60'
-                : 'bg-[#1A1D20] text-slate-200 border-[#2D3237]'
+                : 'bg-[#12161A] text-slate-200 border-[#1F2429]'
             }`}
           >
             {isAppliedState ? 'Applied' : `${localSpeed} km/h`}
@@ -105,8 +105,8 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
               onClick={() => handleSpeedCommit(value)}
               className={`px-2.5 py-1 rounded text-xs font-medium border transition ${
                 isActive
-                  ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048]'
-                  : 'bg-[#161f30] border-[#222f47] text-slate-300 hover:text-white hover:bg-[#1a253a]'
+                  ? 'bg-[#181D22] text-[#E8EAED] border-[#2D3237]'
+                  : 'bg-[#12161A] border-[#1F2429] text-slate-300 hover:text-white hover:bg-[#181D22]'
               }`}
             >
               {tag}
@@ -137,7 +137,7 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
           }}
           onMouseUp={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
           onTouchEnd={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
-          className="w-full accent-slate-500 cursor-pointer h-1.5 bg-[#1a2336] rounded appearance-none"
+          className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-[#12161A] rounded appearance-none"
         />
 
         {/* Range boundary tick labels */}
@@ -150,7 +150,7 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
 
       {/* Physically Grounded Specifications Footnote */}
       {showPhysicalDetails && (
-        <div className="mt-2.5 pt-2 border-t border-[#252A2E] flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-1">
+        <div className="mt-2.5 pt-2 border-t border-[#1F2429] flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-1">
           <span className="flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-slate-500" />
             <span>Earth 1-Rev (Circumference 40,075 km):</span>

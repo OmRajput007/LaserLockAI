@@ -5,7 +5,7 @@ import { Scene3DViewport } from '../simulation/Scene3DViewport';
 import { OrbitalScene3DViewport } from '../simulation/OrbitalScene3DViewport';
 import { OrbitalControlsPanel } from '../simulation/OrbitalControlsPanel';
 import { OrbitalTelemetryPanel } from '../simulation/OrbitalTelemetryPanel';
-import { Compass, Box, Layers, Play, Pause, RotateCcw, Globe } from 'lucide-react';
+import { Compass, Box, Layers, Play, Pause, RotateCcw, Globe, ChevronDown } from 'lucide-react';
 import { api } from '../services/api';
 import { useSceneSettings } from '../hooks/useSceneSettings';
 
@@ -225,22 +225,24 @@ export const VirtualSimulationPage: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Shape selector */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-400 font-medium text-xs">Beacon:</span>
-            {(['Square', 'Circle', 'Gaussian'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => onSelectShape(s)}
-                className={`px-2.5 py-1 rounded text-xs font-medium border transition ${
-                  config?.target.shape === s
-                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/60'
-                    : 'bg-[#1A1D20] text-slate-400 border-[#2D3237] hover:text-white'
-                }`}
+          {/* Beacon Shape Dropdown */}
+          <div className="bg-[#121518] border border-[#252A2E] p-2.5 rounded-lg flex flex-col justify-between min-w-[140px]">
+            <span className="text-xs text-slate-300 font-medium">Beacon Shape</span>
+            <div className="relative my-1">
+              <select
+                value={config?.target.shape ?? 'Gaussian'}
+                onChange={(e) => onSelectShape(e.target.value as 'Square' | 'Circle' | 'Gaussian')}
+                className="w-full bg-[#1A1D20] border border-[#2D3237] hover:border-[#3A4048] text-slate-200 text-xs px-2.5 py-1.5 rounded font-medium appearance-none pr-7 cursor-pointer focus:outline-none focus:border-[#4A5058] transition"
               >
-                {s}
-              </button>
-            ))}
+                <option value="Gaussian" className="bg-[#1A1D20] text-slate-200">Gaussian</option>
+                <option value="Square" className="bg-[#1A1D20] text-slate-200">Square</option>
+                <option value="Circle" className="bg-[#1A1D20] text-slate-200">Circle</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+            </div>
+            <span className="text-[11px] text-slate-400 num-mono">
+              Profile: {config?.target.size_pixels ?? 10}×{config?.target.size_pixels ?? 10} px
+            </span>
           </div>
         </div>
       )}

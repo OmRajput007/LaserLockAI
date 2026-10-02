@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Compass,
   Video,
@@ -329,14 +329,14 @@ export const App: React.FC = () => {
   const navItems = NAV_ITEMS;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0B0D0F] text-[#E8EAED] antialiased" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#06080A] text-[#E8EAED] antialiased" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
 
       {/* ── Sidebar ── */}
       <aside
-        className={`${isSidebarCollapsed ? 'w-14' : 'w-56'} flex flex-col flex-shrink-0 bg-[#0F1113] border-r border-[#1A1C1F] transition-all duration-200 ease-in-out select-none`}
+        className={`${isSidebarCollapsed ? 'w-14' : 'w-56'} flex flex-col flex-shrink-0 bg-[#0A0D10] border-r border-[#1F2429] transition-all duration-200 ease-in-out select-none`}
       >
         {/* Brand */}
-        <div className={`flex items-center border-b border-[#1A1C1F] ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
+        <div className={`flex items-center border-b border-[#1F2429] ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
           {!isSidebarCollapsed && (
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-6 h-6 rounded flex items-center justify-center bg-[#1E2023] border border-[#2A2D31] shrink-0">
@@ -351,7 +351,7 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={toggleSidebar}
-            className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1A1C1F] transition cursor-pointer shrink-0"
+            className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1F2429] transition cursor-pointer shrink-0"
             title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
           >
             {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
@@ -475,7 +475,7 @@ export const App: React.FC = () => {
         </nav>
 
         {/* Connection status */}
-        <div className={`border-t border-[#1A1C1F] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
+        <div className={`border-t border-[#1F2429] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
           <div className="flex items-center gap-1.5">
             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[#4CAF7D]' : 'bg-[#D6A84F] animate-pulse'}`} />
             {!isSidebarCollapsed && (
@@ -488,16 +488,16 @@ export const App: React.FC = () => {
       </aside>
 
       {/* ── Main ── */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#0B0D0F]">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#06080A]">
 
         {/* Header */}
-        <header className="h-11 bg-[#0F1113] border-b border-[#1A1C1F] px-4 flex items-center justify-between flex-shrink-0">
+        <header className="h-11 bg-[#0A0D10] border-b border-[#1F2429] px-4 flex items-center justify-between flex-shrink-0">
           {/* Left: page title */}
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleSidebar}
-              className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1A1C1F] transition cursor-pointer"
+              className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1F2429] transition cursor-pointer"
               title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
             >
               {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
@@ -510,7 +510,7 @@ export const App: React.FC = () => {
           {/* Right: sim controls + status */}
           <div className="flex items-center gap-2 text-xs">
             {/* Sim clock — minimal */}
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#525A63] num-mono border-r border-[#1A1C1F] pr-3 mr-1">
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#525A63] num-mono border-r border-[#1F2429] pr-3 mr-1">
               <span>t = <span className="text-[#8B949E]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
               <span className="text-[#1E2023]">·</span>
               <span>f = <span className="text-[#8B949E]">{telemetry?.frame_number ?? 0}</span></span>
@@ -631,7 +631,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Status bar — single row, minimal */}
-        <div className="h-6 bg-[#0F1113] border-t border-[#1A1C1F] px-4 flex items-center justify-between text-[10px] text-[#525A63] flex-shrink-0 num-mono">
+        <div className="h-6 bg-[#0A0D10] border-t border-[#1F2429] px-4 flex items-center justify-between text-[10px] text-[#525A63] flex-shrink-0 num-mono">
           <div className="flex items-center gap-4">
             <span>World <span className="text-[#6B7280]">2000³ m</span></span>
             <span>Sensor <span className="text-[#6B7280]">640×480 · 4°×3°</span></span>

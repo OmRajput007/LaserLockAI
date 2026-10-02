@@ -2,13 +2,13 @@
 
 @layer base {
   :root {
-    --bg-app:             #0B0D0F;
-    --bg-sidebar:         #0F1113;
-    --bg-surface:         #141618;
-    --bg-surface-raised:  #1A1C1F;
-    --bg-surface-hover:   #1E2023;
-    --border-default:     #222527;
-    --border-muted:       #1A1C1F;
+    --bg-app:             #06080A;
+    --bg-sidebar:         #0A0D10;
+    --bg-surface:         #0A0D10;
+    --bg-surface-raised:  #12161A;
+    --bg-surface-hover:   #181D22;
+    --border-default:     #1F2429;
+    --border-muted:       #1F2429;
     --text-primary:       #E8EAED;
     --text-secondary:     #8B949E;
     --text-muted:         #525A63;
@@ -52,20 +52,20 @@
 
 /* ── Utility Classes ── */
 .panel {
-  background-color: #141618;
-  border: 1px solid #222527;
+  background-color: #0A0D10;
+  border: 1px solid #1F2429;
   border-radius: 6px;
 }
 
 .panel-raised {
-  background-color: #1A1C1F;
-  border: 1px solid #252A2E;
+  background-color: #12161A;
+  border: 1px solid #1F2429;
   border-radius: 6px;
 }
 
 .input-base {
-  background-color: #0F1113;
-  border: 1px solid #222527;
+  background-color: #12161A;
+  border: 1px solid #1F2429;
   color: #E8EAED;
   border-radius: 5px;
   padding: 5px 10px;

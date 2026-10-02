@@ -69,7 +69,7 @@ export const MissionControlPage: React.FC<Props> = ({
       {/* Top Telemetry Cockpit Strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Mission Status */}
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+        <div className="bg-[#0A0D10] border border-[#1F2429] p-3 rounded-lg flex flex-col justify-between">
           <span className="text-xs text-slate-400 font-medium">Mission Status</span>
           <div className="flex items-center gap-2 my-1">
             <span className={`w-2 h-2 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-slate-500'}`} />
@@ -83,7 +83,7 @@ export const MissionControlPage: React.FC<Props> = ({
         </div>
 
         {/* Target Visibility */}
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+        <div className="bg-[#0A0D10] border border-[#1F2429] p-3 rounded-lg flex flex-col justify-between">
           <span className="text-xs text-slate-400 font-medium">Target Visibility</span>
           <div className="flex items-center gap-2 my-1">
             <span className={`w-2 h-2 rounded-full ${inFov ? 'bg-emerald-500' : 'bg-rose-500'}`} />
@@ -97,7 +97,7 @@ export const MissionControlPage: React.FC<Props> = ({
         </div>
 
         {/* Tracking Error */}
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+        <div className="bg-[#0A0D10] border border-[#1F2429] p-3 rounded-lg flex flex-col justify-between">
           <span className="text-xs text-slate-400 font-medium">Tracking Error</span>
           <div className="flex items-baseline gap-1 my-1">
             <span className={`font-semibold text-xl num-mono ${
@@ -113,7 +113,7 @@ export const MissionControlPage: React.FC<Props> = ({
         </div>
 
         {/* Gimbal Orientation */}
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+        <div className="bg-[#0A0D10] border border-[#1F2429] p-3 rounded-lg flex flex-col justify-between">
           <span className="text-xs text-slate-400 font-medium">Gimbal Angles</span>
           <div className="flex items-center gap-2 my-1 text-sm num-mono text-slate-200">
             <span>P: <strong className="text-slate-100 font-medium">{telemetry?.camera.pan_deg.toFixed(1)}°</strong></span>
@@ -124,28 +124,25 @@ export const MissionControlPage: React.FC<Props> = ({
         </div>
 
         {/* Target Shape */}
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-col justify-between">
+        <div className="bg-[#0A0D10] border border-[#1F2429] p-3 rounded-lg flex flex-col justify-between">
           <span className="text-xs text-slate-400 font-medium">Beacon Shape</span>
-          <div className="flex items-center gap-1.5 my-1">
-            {(['Square', 'Circle', 'Gaussian'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => onSelectShape(s)}
-                className={`px-2 py-0.5 rounded text-xs font-medium border transition ${
-                  config?.target.shape === s
-                    ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048]'
-                    : 'bg-[#1A1D20] text-slate-400 border-[#2D3237] hover:text-white'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+          <div className="relative my-1">
+            <select
+              value={config?.target.shape ?? 'Gaussian'}
+              onChange={(e) => onSelectShape(e.target.value as 'Square' | 'Circle' | 'Gaussian')}
+              className="w-full bg-[#12161A] border border-[#1F2429] hover:border-[#2D3237] text-slate-200 text-xs px-2.5 py-1.5 rounded font-medium appearance-none pr-7 cursor-pointer focus:outline-none focus:border-[#3A4048] transition"
+            >
+              <option value="Gaussian" className="bg-[#12161A] text-slate-200">Gaussian</option>
+              <option value="Square" className="bg-[#12161A] text-slate-200">Square</option>
+              <option value="Circle" className="bg-[#12161A] text-slate-200">Circle</option>
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-2 pointer-events-none" />
           </div>
-          <span className="text-[11px] text-slate-500 num-mono">Profile: 10×10 px</span>
+          <span className="text-[11px] text-slate-500 num-mono">Profile: {config?.target.size_pixels ?? 10}×{config?.target.size_pixels ?? 10} px</span>
         </div>
 
         {/* Quick Simulation Controls */}
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex items-center justify-center gap-2">
+        <div className="bg-[#0A0D10] border border-[#1F2429] p-3 rounded-lg flex items-center justify-center gap-2">
           <button
             onClick={() => onToggleSim(!isRunning)}
             className={`flex-1 py-2 px-3 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 transition ${
@@ -159,7 +156,7 @@ export const MissionControlPage: React.FC<Props> = ({
           </button>
           <button
             onClick={onResetSim}
-            className="p-2 bg-[#1A1D20] hover:bg-[#202c42] text-slate-400 hover:text-slate-200 rounded-md border border-[#2D3237] transition"
+            className="p-2 bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 rounded-md border border-[#1F2429] hover:border-[#2D3237] transition"
             title="Reset Simulation State"
           >
             <RotateCcw className="w-4 h-4" />
@@ -168,15 +165,15 @@ export const MissionControlPage: React.FC<Props> = ({
       </div>
 
       {/* Viewport Mode Switcher */}
-      <div className="flex items-center justify-between bg-[#121518] px-3 py-2 rounded-lg border border-[#252A2E] text-xs">
+      <div className="flex items-center justify-between bg-[#0A0D10] px-3 py-2 rounded-lg border border-[#1F2429] text-xs">
         <div className="flex items-center gap-2">
           <span className="text-slate-400 font-medium">Viewport:</span>
           <button
             onClick={() => setViewMode('dual')}
             className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === 'dual'
-                ? 'bg-[#252A2E] text-white border border-slate-700'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D20]'
+                ? 'bg-[#181D22] text-white border border-[#2D3237]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#12161A]'
             }`}
           >
             <Layers className="w-3.5 h-3.5 text-slate-400" /> Dual (2D + Camera)
@@ -185,8 +182,8 @@ export const MissionControlPage: React.FC<Props> = ({
             onClick={() => setViewMode('3d')}
             className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === '3d'
-                ? 'bg-[#252A2E] text-white border border-slate-700'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D20]'
+                ? 'bg-[#181D22] text-white border border-[#2D3237]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#12161A]'
             }`}
           >
             <Box className="w-3.5 h-3.5 text-slate-400" /> 3D Virtual Scene
@@ -195,8 +192,8 @@ export const MissionControlPage: React.FC<Props> = ({
             onClick={() => setViewMode('2d_camera')}
             className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === '2d_camera'
-                ? 'bg-[#252A2E] text-white border border-slate-700'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A1D20]'
+                ? 'bg-[#181D22] text-white border border-[#2D3237]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#12161A]'
             }`}
           >
             <Crosshair className="w-3.5 h-3.5 text-slate-400" /> 2D Camera Only
@@ -213,7 +210,7 @@ export const MissionControlPage: React.FC<Props> = ({
       {/* Main Viewports */}
       {viewMode === 'dual' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="min-h-[520px] rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
+          <div className="min-h-[520px] rounded-lg overflow-hidden border border-[#1F2429] bg-[#06080B]">
             <VirtualSceneCanvas
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
@@ -224,7 +221,7 @@ export const MissionControlPage: React.FC<Props> = ({
             />
           </div>
 
-          <div className="h-full rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
+          <div className="h-full rounded-lg overflow-hidden border border-[#1F2429] bg-[#06080B]">
             <FPACameraViewport
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
@@ -240,7 +237,7 @@ export const MissionControlPage: React.FC<Props> = ({
 
       {viewMode === '3d' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 min-h-[560px] rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
+          <div className="lg:col-span-2 min-h-[560px] rounded-lg overflow-hidden border border-[#1F2429] bg-[#06080B]">
             <Scene3DViewport
               target={telemetry?.target ?? null}
               targets={telemetry?.targets ?? []}
@@ -251,7 +248,7 @@ export const MissionControlPage: React.FC<Props> = ({
             />
           </div>
 
-          <div className="h-full rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
+          <div className="h-full rounded-lg overflow-hidden border border-[#1F2429] bg-[#06080B]">
             <FPACameraViewport
               target={telemetry?.target ?? null}
               camera={telemetry?.camera ?? null}
@@ -266,7 +263,7 @@ export const MissionControlPage: React.FC<Props> = ({
       )}
 
       {viewMode === '2d_camera' && (
-        <div className="max-w-3xl mx-auto w-full rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
+        <div className="max-w-3xl mx-auto w-full rounded-lg overflow-hidden border border-[#1F2429] bg-[#06080B]">
           <FPACameraViewport
             target={telemetry?.target ?? null}
             camera={telemetry?.camera ?? null}
@@ -280,11 +277,11 @@ export const MissionControlPage: React.FC<Props> = ({
       )}
 
       {/* Target Kinematics Telemetry (Collapsible) */}
-      <div className="bg-[#121518] border border-[#252A2E] rounded-lg overflow-hidden">
+      <div className="bg-[#0A0D10] border border-[#1F2429] rounded-lg overflow-hidden">
         <button
           type="button"
           onClick={() => setShowKinematics(!showKinematics)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-[#1A1D20] hover:bg-[#1A1D20] transition text-left"
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-[#12161A] hover:bg-[#181D22] transition text-left"
         >
           <span className="font-semibold text-xs text-slate-200">
             Target 3D Kinematics Readout
@@ -298,10 +295,10 @@ export const MissionControlPage: React.FC<Props> = ({
         </button>
 
         {showKinematics && (
-          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-[#252A2E]">
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-[#1F2429]">
             {/* Position */}
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#252A2E]">
+              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#1F2429]">
                 Position r(t)
               </div>
               <div className="flex justify-between num-mono text-xs">
@@ -320,7 +317,7 @@ export const MissionControlPage: React.FC<Props> = ({
 
             {/* Velocity */}
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#252A2E]">
+              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#1F2429]">
                 Velocity v(t)
               </div>
               <div className="flex justify-between num-mono text-xs">
@@ -339,7 +336,7 @@ export const MissionControlPage: React.FC<Props> = ({
 
             {/* Acceleration */}
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#252A2E]">
+              <div className="text-xs font-semibold text-slate-300 pb-1 border-b border-[#1F2429]">
                 Acceleration a(t)
               </div>
               <div className="flex justify-between num-mono text-xs">
@@ -367,8 +364,8 @@ export const MissionControlPage: React.FC<Props> = ({
       />
 
       {/* Real-time Tracking Performance Chart */}
-      <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-3">
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#252A2E]">
+      <div className="bg-[#0A0D10] border border-[#1F2429] rounded-lg p-3">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#1F2429]">
           <span className="font-semibold text-xs text-slate-200">
             Real-Time Tracking Error History (FPA Centroid Distance)
           </span>

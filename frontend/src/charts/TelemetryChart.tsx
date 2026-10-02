@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import {
   LineChart,
   Line,
@@ -17,7 +17,7 @@ interface ChartProps {
 
 export const TelemetryChart: React.FC<ChartProps> = ({ data, maxThreshold = 10 }) => {
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900/60 border border-slate-800 rounded-lg p-3">
+    <div className="w-full h-full flex flex-col bg-[#0A0D10] border border-[#1F2429] rounded-lg p-3">
       <div className="flex items-center justify-between mb-2 font-mono text-xs">
         <div className="flex items-center gap-2 text-cyan-400 font-semibold">
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
@@ -38,7 +38,7 @@ export const TelemetryChart: React.FC<ChartProps> = ({ data, maxThreshold = 10 }
       <div className="flex-1 w-full min-h-[160px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 20, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#252A2E" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1F2429" />
             <XAxis
               dataKey="time"
               stroke="#64748b"
@@ -52,8 +52,8 @@ export const TelemetryChart: React.FC<ChartProps> = ({ data, maxThreshold = 10 }
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#090d16',
-                borderColor: '#334155',
+                backgroundColor: '#0A0D10',
+                borderColor: '#1F2429',
                 fontSize: '11px',
                 fontFamily: 'monospace',
                 color: '#f8fafc',
