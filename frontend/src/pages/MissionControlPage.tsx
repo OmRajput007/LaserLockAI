@@ -1,10 +1,11 @@
-﻿import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { VirtualSceneCanvas } from '../simulation/VirtualSceneCanvas';
 import { FPACameraViewport } from '../simulation/FPACameraViewport';
 import { Scene3DViewport } from '../simulation/Scene3DViewport';
 import { TelemetryChart } from '../charts/TelemetryChart';
 import { api } from '../services/api';
+import { useSceneSettings } from '../hooks/useSceneSettings';
 import BeaconSpeedControl from '../components/BeaconSpeedControl';
 import {
   Play,
@@ -38,23 +39,25 @@ export const MissionControlPage: React.FC<Props> = ({
   onGimbalAngles,
   onSelectShape,
 }) => {
-  const [viewMode, setViewMode] = useState<'dual' | '3d' | '2d_camera'>('dual');
-  const [showKinematics, setShowKinematics] = useState<boolean>(true);
+  const { settings, bindSetting, set } = useSceneSettings();
+  const [viewMode, setViewMode] = [settings.missionViewMode, bindSetting('missionViewMode')];
+  const [showKinematics, setShowKinematics] = [settings.missionShowKinematics, bindSetting('missionShowKinematics')];
   const [localSpeed, setLocalSpeed] = useState<number>(
-    config?.motion?.speed_kmh ?? config?.motion?.speed_pixels_per_s ?? 150
+    () => settings.beaconSpeedKmh || config?.motion?.speed_kmh || config?.motion?.speed_pixels_per_s || 150
   );
   const [speedApplied, setSpeedApplied] = useState(false);
 
   const applySpeed = useCallback(async (spd: number) => {
     try {
       setLocalSpeed(spd);
+      set({ beaconSpeedKmh: spd });
       await api.setBeaconSpeed(spd);
       setSpeedApplied(true);
       setTimeout(() => setSpeedApplied(false), 800);
     } catch (e) {
       console.error('Failed to set beacon speed:', e);
     }
-  }, []);
+  }, [set]);
 
   const isRunning = telemetry?.is_running ?? false;
   const isLocked = telemetry?.tracking.is_locked ?? false;

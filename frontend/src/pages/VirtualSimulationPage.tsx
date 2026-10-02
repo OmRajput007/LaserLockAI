@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SimulationTelemetry, SystemConfig, OrbitalScenarioConfig } from '../types';
 import { VirtualSceneCanvas } from '../simulation/VirtualSceneCanvas';
 import { Scene3DViewport } from '../simulation/Scene3DViewport';
@@ -7,6 +7,7 @@ import { OrbitalControlsPanel } from '../simulation/OrbitalControlsPanel';
 import { OrbitalTelemetryPanel } from '../simulation/OrbitalTelemetryPanel';
 import { Compass, Box, Layers, Play, Pause, RotateCcw, Globe } from 'lucide-react';
 import { api } from '../services/api';
+import { useSceneSettings } from '../hooks/useSceneSettings';
 
 interface Props {
   telemetry: SimulationTelemetry | null;
@@ -28,7 +29,8 @@ export const VirtualSimulationPage: React.FC<Props> = ({
   onSelectMotion,
   onSelectShape,
 }) => {
-  const [activeViewTab, setActiveViewTab] = useState<ViewTab>('2d');
+  const { settings, bindSetting } = useSceneSettings();
+  const [activeViewTab, setActiveViewTab] = [settings.virtualSimTab, bindSetting('virtualSimTab')];
   const isRunning = telemetry?.is_running ?? false;
   const target = telemetry?.target ?? null;
 

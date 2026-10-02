@@ -1,4 +1,4 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { TargetState, CameraState, TrackingTelemetry, DetectionTelemetry, DisturbanceTelemetry } from '../types';
 import { satellitePovSync } from './satellitePovSync';
@@ -1432,7 +1432,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
                 : isAlarmActive
                 ? isAlarmSuspended
                   ? 'Alarm is active - Click to enable browser sound output'
-                  : 'ALARM BEEPING: Beacon is lost from camera FOV (Click to Mute)'
+                  : 'ALARM BEEPING: Beacon out of sight (Click to Mute)'
                 : 'Lost FOV Alarm Armed (Click to Mute)'
             }
             className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono transition ${
@@ -1505,16 +1505,10 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               title="Click anywhere to unlock audio if muted/blocked by browser"
               className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-rose-950/95 border border-rose-500 rounded text-[10px] font-mono text-rose-200 font-bold tracking-wider animate-pulse flex items-center gap-2 backdrop-blur-sm shadow-xl shadow-rose-950/80 cursor-pointer select-none"
             >
-              <Volume2 className="w-3.5 h-3.5 text-rose-400 animate-bounce flex-shrink-0" />
               <span>
                 {isEffectiveOccluded
-                  ? (isChannelOccluded ? 'ALARM: OPTICAL CHANNEL OCCLUDED (CLOUD / OBSTACLE)' : 'ALARM: BEACON OCCLUDED BY EARTH LIMB')
-                  : 'ALARM: BEACON LOST FROM SATELLITE FOV'}
-                {isAlarmMuted
-                  ? ' • [MUTED]'
-                  : isAlarmSuspended
-                  ? ' • [CLICK VIEWPORT FOR SOUND]'
-                  : ' • [BEEPING]'}
+                  ? (isChannelOccluded ? 'Optical Channel Occluded (Cloud / Obstacle)' : 'Beacon out of sight')
+                  : 'Beacon out of sight'}
               </span>
             </div>
           )}

@@ -1,11 +1,13 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useSceneSettings } from '../hooks/useSceneSettings';
 import * as THREE from 'three';
 import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { satellitePovSync, computeBeaconOmegaReal, EARTH_CIRCUMFERENCE_KM } from './satellitePovSync';
 import { formatBeaconRevolutionTime } from '../components/BeaconSpeedControl';
 import { alarmAudio } from '../services/alarmAudio';
 import HandoverPanel from './HandoverPanel';
-import { getOrCreateEarthTexture, createAtmosphereRimMesh } from './earthTexture';
+import { getOrCreateEarthTexture, createAtmosphereRimMesh, createRealisticEarthAssembly, RealisticEarthAssembly } from './earthTexture';
+import { createRealSatelliteModel, updateScreenSpaceSatelliteScale } from './satelliteModel';
 import {
   Box,
   RefreshCw,
@@ -36,6 +38,7 @@ import {
   Crosshair,
   Maximize2,
   Move,
+  Undo2,
 } from 'lucide-react';
 
 interface Scene3DProps {
@@ -1098,15 +1101,19 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const targetMeshRef = useRef<THREE.Group | null>(null);
   const targetCubeMeshRef = useRef<THREE.Sprite | THREE.Mesh | null>(null);
   const satSpriteRef = useRef<THREE.Sprite | null>(null);
+  const sat3DModelRef = useRef<THREE.Group | null>(null);
   const beaconSpriteRef = useRef<THREE.Sprite | null>(null);
   const beaconLabelRef = useRef<THREE.Sprite | null>(null);
   const lastBeaconLabelState = useRef({ speed: -1, locked: false });
   const backupSpriteRef = useRef<THREE.Sprite | null>(null);
+  const backup3DModelRef = useRef<THREE.Group | null>(null);
   const losLineRef = useRef<THREE.Line | null>(null);
   const trailLineRef = useRef<THREE.Line | null>(null);
   const frustumLinesRef = useRef<THREE.LineSegments | null>(null);
   const activeOrbitRingRef = useRef<THREE.Line | null>(null);
   const globeMeshRef = useRef<THREE.Mesh | null>(null);
+  const cloudMeshRef = useRef<THREE.Mesh | null>(null);
+  const realisticEarthAssemblyRef = useRef<RealisticEarthAssembly | null>(null);
   const beaconGroupRef = useRef<THREE.Group | null>(null);
   const beaconTrackRingRef = useRef<THREE.Line | null>(null);
   // Backup satellite (for handover visualisation)
@@ -1121,7 +1128,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const turbulenceLabelRef = useRef<THREE.Sprite | null>(null);
   const thinAtmoLabelRef = useRef<THREE.Sprite | null>(null);
   const karmanLabelRef = useRef<THREE.Sprite | null>(null);
-  const [showAtmosphereShells, setShowAtmosphereShells] = useState<boolean>(true);
 
   // Standard Reference Altitude Rings (100km, 2000km, 20200km, 35786km - Task 2 & 3)
   const referenceRingsGroupRef = useRef<THREE.Group | null>(null);
@@ -1130,7 +1136,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     ring: THREE.Line;
     label: THREE.Sprite;
   }[]>([]);
-  const [showReferenceRings, setShowReferenceRings] = useState<boolean>(false); // Off by default
 
   // Solar Direction & Day/Night Terminator State (Tasks 1-4)
   const sunGroupRef = useRef<THREE.Group | null>(null);
@@ -1139,7 +1144,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const sunArrowRef = useRef<THREE.ArrowHelper | null>(null);
   const sunLabelRef = useRef<THREE.Sprite | null>(null);
   const nightShadingMeshRef = useRef<THREE.Mesh | null>(null);
-  const [showSunTerminator, setShowSunTerminator] = useState<boolean>(true); // Active by default
 
   // Satellite Ground Footprint (Elevation Mask Geometry - Tasks 1-3)
   const footprintGroupRef = useRef<THREE.Group | null>(null);
@@ -1147,15 +1151,21 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const footprintCapMeshRef = useRef<THREE.Mesh | null>(null);
   const footprintCenterMarkerRef = useRef<THREE.Mesh | null>(null);
   const footprintLabelRef = useRef<THREE.Sprite | null>(null);
-  const [showFootprint, setShowFootprint] = useState<boolean>(true); // Active by default
+
+  // ── Persisted scene settings (survive page navigation via localStorage) ──
+  const { settings: _ss, set: _setS, bindSetting: _bindS } = useSceneSettings();
+  const [showAtmosphereShells, setShowAtmosphereShells] = [_ss.showAtmosphereShells, _bindS('showAtmosphereShells')];
+  const [showReferenceRings, setShowReferenceRings] = [_ss.showReferenceRings, _bindS('showReferenceRings')];
+  const [showSunTerminator, setShowSunTerminator] = [_ss.showSunTerminator, _bindS('showSunTerminator')];
+  const [showFootprint, setShowFootprint] = [_ss.showFootprint, _bindS('showFootprint')];
   const [isBeaconInFootprint, setIsBeaconInFootprint] = useState<boolean>(false);
   const [beaconElevationDeg, setBeaconElevationDeg] = useState<number>(0.0);
   const [footprintThetaDeg, setFootprintThetaDeg] = useState<number>(14.96);
   const [footprintGroundRadiusKm, setFootprintGroundRadiusKm] = useState<number>(1665.0);
-  const [isLegendMinimized, setIsLegendMinimized] = useState<boolean>(false);
-  const [isTrackerMinimized, setIsTrackerMinimized] = useState<boolean>(false);
-  const [isScaleMinimized, setIsScaleMinimized] = useState<boolean>(false);
-  const [showLayerBar, setShowLayerBar] = useState<boolean>(true);
+  const [isLegendMinimized, setIsLegendMinimized] = [_ss.isLegendMinimized, _bindS('isLegendMinimized')];
+  const [isTrackerMinimized, setIsTrackerMinimized] = [_ss.isTrackerMinimized, _bindS('isTrackerMinimized')];
+  const [isScaleMinimized, setIsScaleMinimized] = [_ss.isScaleMinimized, _bindS('isScaleMinimized')];
+  const [showLayerBar, setShowLayerBar] = [_ss.showLayerBar, _bindS('showLayerBar')];
 
   // Earth Render Radius state (defaults to 100u, dynamically tunable)
   const [earthRenderRadius, setEarthRenderRadius] = useState<number>(EARTH_RENDER_R);
@@ -1167,11 +1177,11 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const tgtPosRef = useRef(new THREE.Vector3(38, 76, 52).normalize().multiplyScalar(globeRadius));
 
   // Beacon Surface Motion State (Physically grounded atmospheric UAV/Drone platform: 0 - 1200 km/h)
-  const [beaconSpeedKmh, setBeaconSpeedKmh] = useState<number>(150);
-  const [beaconRevolving, setBeaconRevolving] = useState<boolean>(true);
+  const [beaconSpeedKmh, setBeaconSpeedKmh] = [_ss.beaconSpeedKmh, _bindS('beaconSpeedKmh')];
+  const [beaconRevolving, setBeaconRevolving] = [_ss.beaconRevolving, _bindS('beaconRevolving')];
   const [beaconAnomalyDeg, setBeaconAnomalyDeg] = useState<number>(120.0);
-  const [beaconInc, setBeaconInc] = useState<number>(28.5);
-  const [beaconRaan, setBeaconRaan] = useState<number>(65.0);
+  const [beaconInc, setBeaconInc] = [_ss.beaconInc, _bindS('beaconInc')];
+  const [beaconRaan, setBeaconRaan] = [_ss.beaconRaan, _bindS('beaconRaan')];
 
   // Handover state (populated from satellitePovSync or sim telemetry)
   const [handoverData, setHandoverData] = useState<any>(null);
@@ -1197,6 +1207,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
   // 3D BEACON GROUND PATH PLANNING (1=Start [Green] -> 4=End [Orange], reference user image)
   const [beaconPathWaypoints, setBeaconPathWaypoints] = useState<BeaconPathWaypoint[]>(() => {
+    if (_ss.beaconPathCleared) {
+      return [];
+    }
     return PRESET_4POINT_WAYPOINTS.map((wp, idx) => ({
       id: idx + 1,
       label: wp.label,
@@ -1208,8 +1221,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const beaconPathWaypointsRef = useRef<BeaconPathWaypoint[]>(beaconPathWaypoints);
   beaconPathWaypointsRef.current = beaconPathWaypoints;
 
-  const [pathFollowMode, setPathFollowMode] = useState<boolean>(true);
-  const pathFollowModeRef = useRef<boolean>(true);
+  const [pathFollowMode, setPathFollowMode] = [_ss.pathFollowMode, _bindS('pathFollowMode')];
+  const pathFollowModeRef = useRef<boolean>(_ss.pathFollowMode);
   pathFollowModeRef.current = pathFollowMode;
 
   const [pathMotionActive, setPathMotionActive] = useState<boolean>(false);
@@ -1220,9 +1233,14 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const isDrawingPathRef = useRef<boolean>(false);
   isDrawingPathRef.current = isDrawingPath;
 
-  const [showBeaconPathPlanner, setShowBeaconPathPlanner] = useState<boolean>(true);
-  const [isPathPlannerMinimized, setIsPathPlannerMinimized] = useState<boolean>(false);
-  const [pathPlannerPosition, setPathPlannerPosition] = useState<'top-center' | 'top-left' | 'bottom-center'>('top-center');
+  // 3D Focus & Instant Navigation Mode ('earth' overview vs 'satellite' close-up tracking)
+  const [focusMode, setFocusMode] = useState<'earth' | 'satellite'>('earth');
+  const focusModeRef = useRef<'earth' | 'satellite'>('earth');
+  focusModeRef.current = focusMode;
+
+  const [showBeaconPathPlanner, setShowBeaconPathPlanner] = [_ss.showBeaconPathPlanner, _bindS('showBeaconPathPlanner')];
+  const [isPathPlannerMinimized, setIsPathPlannerMinimized] = [_ss.isPathPlannerMinimized, _bindS('isPathPlannerMinimized')];
+  const [pathPlannerPosition, setPathPlannerPosition] = [_ss.pathPlannerPosition, _bindS('pathPlannerPosition')];
 
   const cyclePathPlannerPosition = () => {
     setPathPlannerPosition((prev) => {
@@ -1403,6 +1421,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     setPathCurrentLegDisplay('Leg 1→2');
     setPathStatusText('Ready at Pt 1 (Starting Point)');
     rebuildBeaconPathVisuals(pts, earthRenderRadiusRef.current);
+    _setS({ beaconPathCleared: false, pathFollowMode: true });
   };
 
   const handleClearBeaconPath = () => {
@@ -1415,6 +1434,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     setPathOverallProgressPct(0);
     setPathStatusText('Path Cleared (Static Mode)');
     rebuildBeaconPathVisuals([], earthRenderRadiusRef.current);
+    _setS({ beaconPathCleared: true, pathFollowMode: false });
   };
 
   const handleToggleDrawMode = () => {
@@ -1445,9 +1465,130 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         setPathStatusText('Pt 1 (Starting Point) Placed');
       }
       rebuildBeaconPathVisuals(nextList, earthRenderRadiusRef.current);
+      _setS({ beaconPathCleared: false });
       return nextList;
     });
   };
+
+  const handleRemoveWaypoint = useCallback((indexToRemove: number) => {
+    setBeaconPathWaypoints((prev) => {
+      if (indexToRemove < 0 || indexToRemove >= prev.length) return prev;
+      const rawList = prev.filter((_, i) => i !== indexToRemove);
+      const nextList: BeaconPathWaypoint[] = rawList.map((wp, idx) => ({
+        ...wp,
+        id: idx + 1,
+        label: idx === 0 ? '1 (START)' : `Pt ${idx + 1}`,
+      }));
+      beaconPathWaypointsRef.current = nextList;
+
+      if (nextList.length === 0) {
+        pathMotionActiveRef.current = false;
+        setPathMotionActive(false);
+        setPathFollowMode(false);
+        pathFollowModeRef.current = false;
+        pathLegIndexRef.current = 0;
+        pathLegProgressRef.current = 0.0;
+        setPathOverallProgressPct(0);
+        setPathCurrentLegDisplay('None');
+        setPathStatusText('Path Cleared (Static Mode)');
+        rebuildBeaconPathVisuals([], earthRenderRadiusRef.current);
+        _setS({ beaconPathCleared: true, pathFollowMode: false });
+      } else if (nextList.length === 1) {
+        pathMotionActiveRef.current = false;
+        setPathMotionActive(false);
+        setPathFollowMode(false);
+        pathFollowModeRef.current = false;
+        pathLegIndexRef.current = 0;
+        pathLegProgressRef.current = 0.0;
+        setPathOverallProgressPct(0);
+        setPathCurrentLegDisplay('Pt 1 (Static)');
+        pathCurrentLocalPosRef.current.copy(nextList[0].localPos);
+        setPathStatusText('Pt 1 (Starting Point) Placed');
+        rebuildBeaconPathVisuals(nextList, earthRenderRadiusRef.current);
+        _setS({ beaconPathCleared: false, pathFollowMode: false });
+      } else {
+        const maxLegIdx = nextList.length - 2;
+        if (pathLegIndexRef.current > maxLegIdx) {
+          pathLegIndexRef.current = maxLegIdx;
+          pathLegProgressRef.current = 0.0;
+          pathCurrentLocalPosRef.current.copy(nextList[maxLegIdx].localPos);
+        }
+        const overallPct = Math.round(
+          ((pathLegIndexRef.current + Math.min(1.0, pathLegProgressRef.current)) / (nextList.length - 1)) * 100
+        );
+        setPathOverallProgressPct(overallPct);
+        setPathCurrentLegDisplay(`Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2}`);
+        setPathStatusText(`Undone Pt ${indexToRemove + 1} (${nextList.length} pts remaining)`);
+        rebuildBeaconPathVisuals(nextList, earthRenderRadiusRef.current);
+        _setS({ beaconPathCleared: false });
+      }
+      return nextList;
+    });
+  }, [earthRenderRadiusRef, _setS]);
+
+  const handleUndoLastWaypoint = useCallback(() => {
+    if (beaconPathWaypointsRef.current.length > 0) {
+      handleRemoveWaypoint(beaconPathWaypointsRef.current.length - 1);
+    }
+  }, [handleRemoveWaypoint]);
+
+  // Instant Satellite Focus Handlers
+  const handleFocusSatellite = useCallback(() => {
+    focusModeRef.current = 'satellite';
+    setFocusMode('satellite');
+    orbitStateRef.current = { theta: 0.8, phi: 0.35, radius: 10.0 };
+  }, []);
+
+  const handleToggleFocusSatellite = useCallback(() => {
+    if (focusModeRef.current === 'satellite') {
+      focusModeRef.current = 'earth';
+      setFocusMode('earth');
+      orbitStateRef.current = { theta: 0.75, phi: 0.45, radius: 340.0 };
+    } else {
+      focusModeRef.current = 'satellite';
+      setFocusMode('satellite');
+      orbitStateRef.current = { theta: 0.8, phi: 0.35, radius: 10.0 };
+    }
+  }, []);
+
+  // Global Keyboard Shortcut: Ctrl+Z (undo waypoint), S/F (instant satellite focus), Esc (return to Earth)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          (target as any).isContentEditable)
+      ) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (beaconPathWaypointsRef.current.length > 0) {
+          e.preventDefault();
+          handleUndoLastWaypoint();
+        }
+      }
+
+      // Quick shortcut to jump / toggle satellite focus view: S or F key
+      if ((e.key === 's' || e.key === 'S' || e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        handleToggleFocusSatellite();
+      }
+
+      // Escape key returns to Earth overview
+      if (e.key === 'Escape' && focusModeRef.current === 'satellite') {
+        e.preventDefault();
+        handleToggleFocusSatellite();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleUndoLastWaypoint, handleToggleFocusSatellite]);
 
   const handleCenterTargetOnGlobe = () => {
     setAutoLOS(true);
@@ -1462,29 +1603,29 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   };
 
   // Interactive Orbit Controller State
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('leo-550-p1');
-  const selectedPresetIdRef = useRef<string>(selectedPresetId);
+  const [selectedPresetId, setSelectedPresetId] = [_ss.selectedPresetId, _bindS('selectedPresetId')];
+  const selectedPresetIdRef = useRef<string>(_ss.selectedPresetId);
   selectedPresetIdRef.current = selectedPresetId;
   const [selectedMarkerType, setSelectedMarkerType] = useState<'sat' | 'beacon' | 'peer' | null>('sat');
   const selectedMarkerTypeRef = useRef<'sat' | 'beacon' | 'peer' | null>(selectedMarkerType);
   selectedMarkerTypeRef.current = selectedMarkerType;
   // Render scale mode (Rule 2 & 4: default TRUE_SCALE)
-  const [scaleMode, setScaleMode] = useState<RenderScaleMode>('TRUE_SCALE');
-  const scaleModeRef = useRef<RenderScaleMode>('TRUE_SCALE');
+  const [scaleMode, setScaleMode] = [_ss.scaleMode, _bindS('scaleMode')];
+  const scaleModeRef = useRef<RenderScaleMode>(_ss.scaleMode);
   scaleModeRef.current = scaleMode;
 
   // Standard Keplerian elements (Rule 1 & 4)
   const [orbitPerigeeKm, setOrbitPerigeeKm] = useState<number>(550.0);
   const [orbitApogeeKm, setOrbitApogeeKm] = useState<number>(550.0);
   const [orbitAltitudeKm, setOrbitAltitudeKm] = useState<number>(550.0);
-  const [orbitRadius, setOrbitRadius] = useState<number>(getRenderOrbitRadius(550.0, 'TRUE_SCALE'));
+  const [orbitRadius, setOrbitRadius] = useState<number>(getRenderOrbitRadius(550.0, _ss.scaleMode));
   const [orbitInc, setOrbitInc] = useState<number>(53.0);
   const [orbitRaan, setOrbitRaan] = useState<number>(35.0);
   const [orbitArgPerigeeDeg, setOrbitArgPerigeeDeg] = useState<number>(0.0);
   const [orbitAnomalyDeg, setOrbitAnomalyDeg] = useState<number>(48.7);
-  const [autoRevolve, setAutoRevolve] = useState<boolean>(true);
+  const [autoRevolve, setAutoRevolve] = [_ss.autoRevolve, _bindS('autoRevolve')];
   const [revolveSpeed, setRevolveSpeed] = useState<number>(0.003);
-  const [showOrbitTuner, setShowOrbitTuner] = useState<boolean>(false);
+  const [showOrbitTuner, setShowOrbitTuner] = [_ss.showOrbitTuner, _bindS('showOrbitTuner')];
   const [currentSlantRange, setCurrentSlantRange] = useState<number>(8.62);
   const [currentSlantRangeKm, setCurrentSlantRangeKm] = useState<number>(550.0);
   const [isOccludedByEarth, setIsOccludedByEarth] = useState<boolean>(false);
@@ -1498,8 +1639,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
   // Physical Simulation Time Warp (Default 60×: 1 real second = 1 sim minute)
   // Preserves exact Keplerian periods: 550 km orbit completes in 95.5s at 60×, 95.5m at 1× real-time
-  const [simTimeWarp, setSimTimeWarp] = useState<number>(60);
-  const simTimeWarpRef = useRef<number>(60);
+  const [simTimeWarp, setSimTimeWarp] = [_ss.simTimeWarp, _bindS('simTimeWarp')];
+  const simTimeWarpRef = useRef<number>(_ss.simTimeWarp);
   simTimeWarpRef.current = simTimeWarp;
 
   // Toggle for the Real Orbital Speeds & Periods Reference Table modal
@@ -1557,8 +1698,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   };
 
   // Earth Diurnal Rotation State (Real physical spin: 15°/hour around polar Y-axis)
-  const [earthSpinEnabled, setEarthSpinEnabled] = useState<boolean>(true);
-  const [earthSpinMultiplier, setEarthSpinMultiplier] = useState<number>(1); // Default 1x real-time (15°/hr)
+  const [earthSpinEnabled, setEarthSpinEnabled] = [_ss.earthSpinEnabled, _bindS('earthSpinEnabled')];
+  const [earthSpinMultiplier, setEarthSpinMultiplier] = [_ss.earthSpinMultiplier, _bindS('earthSpinMultiplier')];
 
   const earthSpinRef = useRef({
     enabled: true,
@@ -1663,15 +1804,17 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const updateAtmosphereShellGeometry = (mode: RenderScaleMode, earthR: number = earthRenderRadiusRef.current) => {
     const r20 = getRenderOrbitRadius(20.0, mode, READABLE_K, earthR);
     const r100 = getRenderOrbitRadius(100.0, mode, READABLE_K, earthR);
+    const safeR20 = Math.max(earthR * 1.008, r20);
+    const safeR100 = Math.max(earthR * 1.018, r100);
 
     if (turbulenceShellRef.current) {
       turbulenceShellRef.current.geometry.dispose();
-      turbulenceShellRef.current.geometry = new THREE.SphereGeometry(r20, 48, 24);
+      turbulenceShellRef.current.geometry = new THREE.SphereGeometry(safeR20, 96, 64);
     }
 
     if (thinAtmoShellRef.current) {
       thinAtmoShellRef.current.geometry.dispose();
-      thinAtmoShellRef.current.geometry = new THREE.SphereGeometry(r100, 48, 24);
+      thinAtmoShellRef.current.geometry = new THREE.SphereGeometry(safeR100, 96, 64);
     }
 
     if (karmanRingRef.current) {
@@ -1767,10 +1910,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
   // Function to recompute sun direction arrow, label, terminator ring, and night shading when Earth radius changes
   const updateSunTerminatorGeometry = (earthR: number = earthRenderRadiusRef.current) => {
-    if (nightShadingMeshRef.current) {
-      nightShadingMeshRef.current.geometry.dispose();
-      nightShadingMeshRef.current.geometry = new THREE.SphereGeometry(earthR + 0.08, 48, 24);
-    }
     if (terminatorRingRef.current) {
       const termPts = computeTerminatorCirclePoints(FIXED_SUN_DIR, earthR + 0.20, 180);
       terminatorRingRef.current.geometry.setFromPoints(termPts);
@@ -1793,12 +1932,17 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     if (sunLabelRef.current) {
       sunLabelRef.current.position.copy(FIXED_SUN_DIR.clone().multiplyScalar(earthR + 48.0));
     }
+    if (realisticEarthAssemblyRef.current) {
+      realisticEarthAssemblyRef.current.updateSunDir(FIXED_SUN_DIR);
+    }
   };
 
   const handleEarthRenderRadiusChange = (newRadius: number) => {
     setEarthRenderRadius(newRadius);
     earthRenderRadiusRef.current = newRadius;
-    if (globeMeshRef.current) {
+    if (realisticEarthAssemblyRef.current) {
+      realisticEarthAssemblyRef.current.updateRadius(newRadius);
+    } else if (globeMeshRef.current) {
       const s = newRadius / 100.0;
       globeMeshRef.current.scale.set(s, s, s);
     }
@@ -1862,13 +2006,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
       updateActiveOrbitRingGeometry(perigee, apogee, inc, raan, argPerigee, scaleMode);
 
-      // In TRUE_SCALE, if selecting GEO or GTO (apogee 35,786 km), zoom camera out to frame it
-      if (scaleMode === 'TRUE_SCALE' && apogee > 30000) {
-        if (orbitStateRef.current.radius < 900) {
-          orbitStateRef.current.radius = 1100.0;
+      // In TRUE_SCALE, if selecting GEO or GTO (apogee 35,786 km), zoom camera out to frame it (only when in Earth overview)
+      if (focusModeRef.current === 'earth') {
+        if (scaleMode === 'TRUE_SCALE' && apogee > 30000) {
+          if (orbitStateRef.current.radius < 900) {
+            orbitStateRef.current.radius = 1100.0;
+          }
+        } else if (apogee <= 2000 && orbitStateRef.current.radius > 700) {
+          orbitStateRef.current.radius = 340.0;
         }
-      } else if (apogee <= 2000 && orbitStateRef.current.radius > 700) {
-        orbitStateRef.current.radius = 340.0;
       }
     }
   };
@@ -2108,78 +2254,25 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     sunLight.position.copy(FIXED_SUN_DIR.clone().multiplyScalar(600));
     scene.add(sunLight);
 
-    // 5. INJECT DUMMY 3D EARTH GLOBE AT SCENE ORIGIN (0, 0, 0)
-    const globeGeo = new THREE.SphereGeometry(globeRadius, 64, 32);
-    const earthTex = getOrCreateEarthTexture();
-    const globeMat = new THREE.MeshStandardMaterial({
-      map: earthTex,
-      roughness: 0.72,
-      metalness: 0.05,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-      depthWrite: true,
-      depthTest: true,
-    });
-    const globeMesh = new THREE.Mesh(globeGeo, globeMat);
+    // 5. INJECT PHOTOREALISTIC 3D NASA EARTH AT SCENE ORIGIN (0, 0, 0)
+    const earthAssembly = createRealisticEarthAssembly(globeRadius, FIXED_SUN_DIR);
+    realisticEarthAssemblyRef.current = earthAssembly;
+    const globeMesh = earthAssembly.globeMesh;
     globeMesh.position.set(0, 0, 0);
     globeMesh.renderOrder = 0;
     scene.add(globeMesh);
     globeMeshRef.current = globeMesh;
+    cloudMeshRef.current = earthAssembly.cloudMesh;
 
-    // Atmospheric rim glow around Earth
-    const earthRimGlow = createAtmosphereRimMesh(globeRadius);
-    globeMesh.add(earthRimGlow);
-
-    // Subtle latitudinal/longitudinal aerospace coordinate graticule
-    const wireframeGeo = new THREE.WireframeGeometry(new THREE.SphereGeometry(globeRadius + 0.02, 36, 18));
-    const wireframeMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.14,
-    });
-    const globeWireframe = new THREE.LineSegments(wireframeGeo, wireframeMat);
-    globeMesh.add(globeWireframe);
-
-    // 5a. NIGHT-SIDE HEMISPHERE SHADING OVERLAY (Task 3)
-    // Darkens the night hemisphere (dot(vWorldNormal, sunDir) < 0) smoothly with twilight penumbra
-    const nightShaderMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uSunDir: { value: FIXED_SUN_DIR.clone() },
-      },
-      vertexShader: `
-        varying vec3 vWorldNormal;
-        void main() {
-          vWorldNormal = normalize(mat3(modelMatrix) * normal);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 uSunDir;
-        varying vec3 vWorldNormal;
-        void main() {
-          float dotSun = dot(vWorldNormal, uSunDir);
-          // Twilight transition across the terminator (-0.08 to +0.08)
-          float nightFactor = smoothstep(0.08, -0.08, dotSun);
-          // Darken night hemisphere by shading over globe and wireframe
-          gl_FragColor = vec4(0.01, 0.02, 0.06, nightFactor * 0.62);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      side: THREE.FrontSide,
-    });
-    const nightGeo = new THREE.SphereGeometry(globeRadius + 0.08, 48, 24);
-    const nightMesh = new THREE.Mesh(nightGeo, nightShaderMat);
-    nightMesh.name = 'nightSideShading';
-    nightMesh.visible = showSunTerminator;
-    nightMesh.renderOrder = 1;
+    // 5a. NIGHT-SIDE HEMISPHERE SHADING & CITY LIGHTS OVERLAY (Task 3)
+    // Seamlessly integrated directly into realistic Earth globe material without concentric faceting
+    const nightMesh = earthAssembly.nightMesh;
+    nightMesh.visible = false;
     scene.add(nightMesh);
     nightShadingMeshRef.current = nightMesh;
 
     // 5b. CONCENTRIC ATMOSPHERIC SHELLS & KÁRMÁN LINE (Matching Physics Layer 0-20km Turbulence)
-    // Sizing dynamically reuses getRenderOrbitRadius(altKm, scaleMode)
+    // Sizing dynamically reuses getRenderOrbitRadius(altKm, scaleMode) with safe clearance to prevent geometric penetration
     const atmoGroup = new THREE.Group();
     atmoGroup.name = 'atmosphereGroup';
     atmoGroup.visible = showAtmosphereShells;
@@ -2187,16 +2280,19 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
     const r20 = getRenderOrbitRadius(20.0, scaleModeRef.current);
     const r100 = getRenderOrbitRadius(100.0, scaleModeRef.current);
+    const safeR20 = Math.max(globeRadius * 1.008, r20);
+    const safeR100 = Math.max(globeRadius * 1.018, r100);
 
     // 1. Shaded Turbulence Zone Shell (0-20 km)
-    // Primary optical disturbance region (scintillation, jitter, beam wander)
-    const turbGeo = new THREE.SphereGeometry(r20, 48, 24);
+    // High tessellation 96x64 + AdditiveBlending ensures zero polygon facets or darkening artifacts
+    const turbGeo = new THREE.SphereGeometry(safeR20, 96, 64);
     const turbMat = new THREE.MeshBasicMaterial({
       color: 0x0284c7, // sky-600 shaded cyan-blue
       transparent: true,
-      opacity: 0.16,
-      depthWrite: false, // Prevents occluding satellites/lines behind or inside
+      opacity: 0.12,
+      depthWrite: false,
       depthTest: true,
+      blending: THREE.AdditiveBlending,
       side: THREE.FrontSide,
     });
     const turbMesh = new THREE.Mesh(turbGeo, turbMat);
@@ -2206,14 +2302,14 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     turbulenceShellRef.current = turbMesh;
 
     // 2. Faint/Thin Atmosphere Shell (20-100 km)
-    // Upper stratosphere, mesosphere & thermosphere up to edge of space
-    const thinGeo = new THREE.SphereGeometry(r100, 48, 24);
+    const thinGeo = new THREE.SphereGeometry(safeR100, 96, 64);
     const thinMat = new THREE.MeshBasicMaterial({
       color: 0x60a5fa, // light indigo/periwinkle faint veil
       transparent: true,
-      opacity: 0.055,
+      opacity: 0.045,
       depthWrite: false,
       depthTest: true,
+      blending: THREE.AdditiveBlending,
       side: THREE.FrontSide,
     });
     const thinMesh = new THREE.Mesh(thinGeo, thinMat);
@@ -2611,15 +2707,30 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     );
     const tgtPos = tgtPosRef.current;
 
-    // 8. ACTIVE SATELLITE (Flat screen-space billboard marker - Tasks 1-5)
-    // Replaced 3D shaded sphere + panels with standardized flat billboard dot
+    // 8. ACTIVE SATELLITE (High-Fidelity 3D Real Satellite Model)
     const satGroup = new THREE.Group();
+    satGroup.name = 'ActiveSatelliteGroup';
+
+    // Authentic 3D Real Satellite Model: Gold MLI Bus, Dual Solar Arrays, FSOC Optical Head, Parabolic Dish
+    const sat3D = createRealSatelliteModel({
+      accentColor: 0x0284c7, // Standard Satellite Blue
+      isGoldMLI: true,
+      includeOpticalTurret: true,
+      includeAntenna: true,
+      includeStarTrackers: true,
+      includeThrusters: true,
+    });
+    satGroup.add(sat3D);
+    sat3DModelRef.current = sat3D;
+
+    // Invisible hit-test target sprite to preserve raycaster clicking and selection hitbox
     const satSpriteMat = new THREE.SpriteMaterial({
       map: getFlatMarkerTexture(),
-      color: 0x0284c7, // Standard Satellite Blue
+      color: 0x0284c7,
       depthTest: true,
       depthWrite: false,
       transparent: true,
+      opacity: 0.0,
     });
     const satSprite = new THREE.Sprite(satSpriteMat);
     satSprite.renderOrder = 10;
@@ -2825,14 +2936,28 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       initBackupNu,
       activeOrbitRef.current.argPerigeeDeg
     );
-    // 12b. BACKUP SATELLITE (Flat screen-space billboard marker - Tasks 1-5)
+    // 12b. BACKUP SATELLITE (High-Fidelity 3D Real Satellite Model for Handover)
     const backupGroup = new THREE.Group();
+    backupGroup.name = 'BackupSatelliteGroup';
+
+    const backup3D = createRealSatelliteModel({
+      accentColor: 0x818cf8, // Standard Backup Satellite Purple
+      isGoldMLI: true,
+      includeOpticalTurret: true,
+      includeAntenna: true,
+      includeStarTrackers: true,
+      includeThrusters: true,
+    });
+    backupGroup.add(backup3D);
+    backup3DModelRef.current = backup3D;
+
     const backupSpriteMat = new THREE.SpriteMaterial({
       map: getFlatMarkerTexture(),
-      color: 0x818cf8, // Standard Backup Satellite Purple
+      color: 0x818cf8,
       depthTest: true,
       depthWrite: false,
       transparent: true,
+      opacity: 0.0,
     });
     const backupSprite = new THREE.Sprite(backupSpriteMat);
     backupSprite.renderOrder = 10;
@@ -2963,7 +3088,22 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           action: () => {
             setSelectedPresetId('leo-550-p1');
             setSelectedMarkerType('sat');
+            handleFocusSatellite();
           },
+        });
+      }
+      if (sat3DModelRef.current) {
+        sat3DModelRef.current.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            clickables.push({
+              obj: child,
+              action: () => {
+                setSelectedPresetId('leo-550-p1');
+                setSelectedMarkerType('sat');
+                handleFocusSatellite();
+              },
+            });
+          }
         });
       }
       if (beaconSpriteRef.current) {
@@ -3002,10 +3142,17 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     };
 
     const onWheel = (e: WheelEvent) => {
-      orbitStateRef.current.radius = Math.max(
-        105,
-        Math.min(1800, orbitStateRef.current.radius + e.deltaY * 0.4)
-      );
+      if (focusModeRef.current === 'satellite') {
+        orbitStateRef.current.radius = Math.max(
+          3.0,
+          Math.min(80.0, orbitStateRef.current.radius + e.deltaY * 0.04)
+        );
+      } else {
+        orbitStateRef.current.radius = Math.max(
+          105,
+          Math.min(1800, orbitStateRef.current.radius + e.deltaY * 0.4)
+        );
+      }
       e.preventDefault();
     };
 
@@ -3037,6 +3184,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       if (globeMeshRef.current && earthSpinRef.current.enabled) {
         const dTheta = EARTH_ROT_RAD_PER_SEC * (isRevolving ? dtSimSec : dtRealSec) * earthSpinRef.current.multiplier;
         globeMeshRef.current.rotation.y += dTheta;
+        if (cloudMeshRef.current) {
+          cloudMeshRef.current.rotation.y += dTheta * 1.05;
+        }
       }
 
       // 1. Advance peer constellation satellites along their orbits according to Kepler's Third Law
@@ -3632,17 +3782,27 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       // 14. Standardized screen-space billboard scaling for all scene markers (Tasks 1, 2, 5, 6)
       const canvasH = container.clientHeight || 480;
 
-      // 1) Active primary satellite: 15.4px if selected, otherwise base 11.0px
+      // 1) Active primary satellite: size strictly matches standard marker diameter (15.4px if selected, otherwise base 11.0px)
       const isPrimarySatActive =
         selectedMarkerTypeRef.current === 'sat' ||
         selectedPresetIdRef.current === 'leo-550-p1' ||
         selectedPresetIdRef.current === 'custom';
+      const satTargetPx = isPrimarySatActive ? ACTIVE_MARKER_PX : BASE_MARKER_PX;
       updateScreenSpaceMarkerScale(
         satSpriteRef.current,
         perspCamera,
         canvasH,
-        isPrimarySatActive ? ACTIVE_MARKER_PX : BASE_MARKER_PX
+        satTargetPx
       );
+      if (sat3DModelRef.current) {
+        updateScreenSpaceSatelliteScale(
+          sat3DModelRef.current,
+          perspCamera,
+          canvasH,
+          satTargetPx,
+          1.8
+        );
+      }
 
       // 2) Beacon target marker: 15.4px when active/locked/in-footprint, otherwise base 11.0px
       const isBeaconActive =
@@ -3685,12 +3845,22 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
       // 3) Backup satellite: 15.4px during active handover, otherwise base 11.0px
       const isBackupActive = handoverRef.current && handoverRef.current.state !== 'IDLE';
+      const backupTargetPx = isBackupActive ? ACTIVE_MARKER_PX : BASE_MARKER_PX;
       updateScreenSpaceMarkerScale(
         backupSpriteRef.current,
         perspCamera,
         canvasH,
-        isBackupActive ? ACTIVE_MARKER_PX : BASE_MARKER_PX
+        backupTargetPx
       );
+      if (backup3DModelRef.current) {
+        updateScreenSpaceSatelliteScale(
+          backup3DModelRef.current,
+          perspCamera,
+          canvasH,
+          backupTargetPx,
+          1.8
+        );
+      }
 
       // 4) Peer constellation satellites: 15.4px if selected in UI, otherwise base 11.0px
       peerNodesRef.current.forEach((node) => {
@@ -3703,12 +3873,19 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         );
       });
 
-      // Spherical camera view around scene origin (0, 0, 0)
+      // Spherical camera view around scene origin (0, 0, 0) OR tracked satellite in space
       const { theta, phi, radius } = orbitStateRef.current;
-      perspCamera.position.x = radius * Math.sin(theta) * Math.cos(phi);
-      perspCamera.position.y = radius * Math.sin(phi);
-      perspCamera.position.z = radius * Math.cos(theta) * Math.cos(phi);
-      perspCamera.lookAt(0, 0, 0);
+      if (focusModeRef.current === 'satellite') {
+        perspCamera.position.x = currentSatPos.x + radius * Math.sin(theta) * Math.cos(phi);
+        perspCamera.position.y = currentSatPos.y + radius * Math.sin(phi);
+        perspCamera.position.z = currentSatPos.z + radius * Math.cos(theta) * Math.cos(phi);
+        perspCamera.lookAt(currentSatPos.x, currentSatPos.y, currentSatPos.z);
+      } else {
+        perspCamera.position.x = radius * Math.sin(theta) * Math.cos(phi);
+        perspCamera.position.y = radius * Math.sin(phi);
+        perspCamera.position.z = radius * Math.cos(theta) * Math.cos(phi);
+        perspCamera.lookAt(0, 0, 0);
+      }
 
       renderer.render(scene, perspCamera);
     };
@@ -3773,6 +3950,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   }, [target, worldWidth, worldHeight]);
 
   const resetCameraView = () => {
+    focusModeRef.current = 'earth';
+    setFocusMode('earth');
     orbitStateRef.current = { theta: 0.75, phi: 0.45, radius: 340.0 };
   };
 
@@ -3822,7 +4001,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       sunGroupRef.current.visible = showSunTerminator;
     }
     if (nightShadingMeshRef.current) {
-      nightShadingMeshRef.current.visible = showSunTerminator;
+      nightShadingMeshRef.current.visible = false;
+    }
+    if (realisticEarthAssemblyRef.current?.setShowSunTerminator) {
+      realisticEarthAssemblyRef.current.setShowSunTerminator(showSunTerminator);
     }
     if (footprintGroupRef.current) {
       footprintGroupRef.current.visible = showFootprint;
@@ -3843,7 +4025,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* Play / Pause Auto Revolve */}
+            {/* Play / Pause Satellite Orbital Motion */}
             <button
               onClick={() => setAutoRevolve(!autoRevolve)}
               className={`px-2 py-0.5 rounded border text-[10px] flex items-center gap-1 transition ${
@@ -3851,15 +4033,16 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700'
                   : 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-800'
               }`}
-              title={autoRevolve ? 'Pause Satellite Orbit' : 'Resume Satellite Orbit'}
+              title={autoRevolve ? 'Pause Satellite Orbital Motion (Spacecraft in Space)' : 'Resume Satellite Orbital Motion'}
             >
               {autoRevolve ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-              <span>{autoRevolve ? 'Orbiting' : 'Paused'}</span>
+              <span>{autoRevolve ? 'Sat Orbit: Active' : 'Sat Orbit: Paused'}</span>
             </button>
 
             {/* Quick Time Warp Badge in Header */}
-            <div className="flex items-center gap-1 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-[10px]">
+            <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-[10px]">
               <Clock className="w-3 h-3 text-cyan-400" />
+              <span className="text-cyan-400 font-semibold">Time:</span>
               <select
                 value={simTimeWarp}
                 onChange={(e) => setSimTimeWarp(Number(e.target.value))}
@@ -3877,6 +4060,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             {/* Lower Pole View */}
             <button
               onClick={() => {
+                focusModeRef.current = 'earth';
+                setFocusMode('earth');
                 orbitStateRef.current = { theta: 0, phi: -1.35, radius: 340.0 };
               }}
               className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[10px] transition"
@@ -3888,6 +4073,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             {/* Upper Pole View */}
             <button
               onClick={() => {
+                focusModeRef.current = 'earth';
+                setFocusMode('earth');
                 orbitStateRef.current = { theta: 0, phi: 1.35, radius: 340.0 };
               }}
               className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[10px] transition"
@@ -3896,11 +4083,26 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               <Compass className="w-3 h-3 text-cyan-400 rotate-180" /> <span>N-Pole</span>
             </button>
 
+            {/* Jump / Focus Satellite Toggle */}
+            <button
+              onClick={handleToggleFocusSatellite}
+              className={`px-2 py-0.5 rounded border text-[10px] flex items-center gap-1.5 transition font-semibold ${
+                focusMode === 'satellite'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500 shadow-sm shadow-amber-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700 hover:border-cyan-500'
+              }`}
+              title="Instantly jump camera directly to satellite in 3D orbit (Shortcut: S or F)"
+            >
+              <Crosshair className={`w-3 h-3 ${focusMode === 'satellite' ? 'text-amber-400 animate-pulse' : 'text-cyan-400'}`} />
+              <span>{focusMode === 'satellite' ? 'Sat Focus (Active)' : 'Jump to Sat'}</span>
+              <span className="text-[9px] px-1 py-0.2 bg-black/40 rounded text-slate-400 font-mono">S</span>
+            </button>
+
             {/* Reset Camera View */}
             <button
               onClick={resetCameraView}
               className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 text-[10px] transition"
-              title="Reset 3D Orbit Camera to Default Angle"
+              title="Reset 3D Orbit Camera to Default Earth View"
             >
               <RefreshCw className="w-3 h-3" /> <span>Reset</span>
             </button>
@@ -4173,6 +4375,44 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           className={`w-full h-full ${isDrawingPath ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
         />
 
+        {/* Instant Satellite Focus Status Banner & Return Controls */}
+        {focusMode === 'satellite' && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-slate-950/95 backdrop-blur-md border border-amber-500/80 text-amber-300 text-xs font-mono px-4 py-1.5 rounded-full shadow-2xl z-30 flex items-center gap-3 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+            <span className="font-semibold flex items-center gap-1.5 text-amber-300">
+              <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+              SATELLITE CHASE TRACKING ACTIVE
+            </span>
+            <span className="text-[10px] text-slate-400 hidden md:inline">
+              Drag: Orbit · Scroll: Zoom (3x - 80x)
+            </span>
+            <button
+              onClick={resetCameraView}
+              className="px-2.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+              title="Return camera to global Earth overview (Shortcut: S, F, or Esc)"
+            >
+              <Globe className="w-3 h-3 text-cyan-400" />
+              <span>Return to Earth</span>
+              <kbd className="px-1 py-0.2 bg-black/50 text-slate-400 rounded text-[9px]">Esc</kbd>
+            </button>
+          </div>
+        )}
+
+        {/* Floating Quick Jump-to-Satellite Pill (When in Earth mode) */}
+        {focusMode === 'earth' && !isDrawingPath && (
+          <div className="absolute bottom-3 right-4 z-20 pointer-events-auto">
+            <button
+              onClick={handleToggleFocusSatellite}
+              className="bg-slate-950/90 hover:bg-slate-900 backdrop-blur-md border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-2xl flex items-center gap-2 text-xs font-mono transition group cursor-pointer"
+              title="Instantly jump camera directly to satellite in space (Press S or F)"
+            >
+              <Crosshair className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
+              <span className="font-semibold text-[11px]">Jump to Satellite</span>
+              <kbd className="px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-700 text-cyan-300 rounded text-[9px] font-bold">S</kbd>
+            </button>
+          </div>
+        )}
+
         {/* Draw Mode Top Floating Indicator Banner (Only shown if Beacon Path Planner panel is closed) */}
         {isDrawingPath && !showBeaconPathPlanner && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-slate-950/95 backdrop-blur-md border border-amber-500/70 text-amber-300 text-xs font-mono px-4 py-1.5 rounded-full shadow-2xl z-30 flex items-center gap-3 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150">
@@ -4180,6 +4420,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             <span className="font-semibold">
               Draw Mode Active: Click on 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed) · Pt 1 is Start, Pt {beaconPathWaypoints.length || 4} is End
             </span>
+            <button
+              onClick={handleUndoLastWaypoint}
+              disabled={beaconPathWaypoints.length === 0}
+              className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Undo last placed waypoint (Ctrl+Z)"
+            >
+              <Undo2 className="w-3 h-3" />
+              <span>Undo</span>
+            </button>
             <button
               onClick={() => setIsDrawingPath(false)}
               className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition"
@@ -4283,12 +4532,23 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
                       <span className="truncate">Click 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed)</span>
                     </div>
-                    <button
-                      onClick={() => setIsDrawingPath(false)}
-                      className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9.5px] font-bold shrink-0 transition"
-                    >
-                      Done
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={handleUndoLastWaypoint}
+                        disabled={beaconPathWaypoints.length === 0}
+                        className="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[9.5px] font-bold flex items-center gap-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Undo last waypoint (Ctrl+Z)"
+                      >
+                        <Undo2 className="w-2.5 h-2.5" />
+                        <span>Undo</span>
+                      </button>
+                      <button
+                        onClick={() => setIsDrawingPath(false)}
+                        className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9.5px] font-bold transition"
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -4356,13 +4616,28 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
                   <div className="flex items-center justify-between text-[10px] text-slate-400 px-0.5">
                     <span>Min 2 pts · Stops at end (Pt {beaconPathWaypoints.length || 4})</span>
+                  </div>
+
+                  {/* Undo Point & Delete Path Action Buttons */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={handleUndoLastWaypoint}
+                      disabled={beaconPathWaypoints.length === 0}
+                      className="px-2 py-1.5 rounded-lg bg-amber-950/50 hover:bg-amber-900/70 text-amber-300 border border-amber-700/50 text-[10.5px] flex items-center justify-center gap-1.5 font-semibold transition disabled:opacity-35 disabled:cursor-not-allowed shadow-sm"
+                      title="Undo the last waypoint placed on the beacon path (Ctrl+Z)"
+                    >
+                      <Undo2 className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Undo Point</span>
+                    </button>
+
                     <button
                       onClick={handleClearBeaconPath}
-                      className="hover:text-rose-400 flex items-center gap-1 transition text-slate-500"
-                      title="Clear all waypoints"
+                      disabled={beaconPathWaypoints.length === 0}
+                      className="px-2 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-700/50 text-[10.5px] flex items-center justify-center gap-1.5 font-semibold transition disabled:opacity-35 disabled:cursor-not-allowed shadow-sm"
+                      title="Delete all beacon path waypoints and clear the 3D path line from the simulation"
                     >
-                      <Trash2 className="w-3 h-3" />
-                      <span>Clear</span>
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Delete Path</span>
                     </button>
                   </div>
                 </div>
@@ -4404,9 +4679,17 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
                 {/* Plotted Waypoints List (Ref: 1=Start [Green], 4=End [Orange]) */}
                 <div className="border border-slate-800/80 rounded bg-slate-900/60 p-1.5 space-y-1">
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider flex justify-between">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider flex justify-between items-center">
                     <span>Plotted Waypoints ({beaconPathWaypoints.length})</span>
-                    <span className="text-slate-500 text-[9px]">1=Start (Green) · 4=End</span>
+                    <button
+                      onClick={handleUndoLastWaypoint}
+                      disabled={beaconPathWaypoints.length === 0}
+                      className="text-[9px] text-amber-400 hover:text-amber-300 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed transition font-semibold"
+                      title="Undo last plotted waypoint (Ctrl+Z)"
+                    >
+                      <Undo2 className="w-2.5 h-2.5" />
+                      <span>Undo (Ctrl+Z)</span>
+                    </button>
                   </div>
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
                     {beaconPathWaypoints.map((wp, idx) => {
@@ -4438,9 +4721,18 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                               {isStart ? '1 (START)' : isEnd ? `${wp.id} (END)` : `Point ${wp.id}`}
                             </span>
                           </div>
-                          <span className="text-slate-400 text-[8.5px]">
-                            {wp.latDeg.toFixed(1)}°, {wp.lonDeg.toFixed(1)}°
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400 text-[8.5px]">
+                              {wp.latDeg.toFixed(1)}°, {wp.lonDeg.toFixed(1)}°
+                            </span>
+                            <button
+                              onClick={() => handleRemoveWaypoint(idx)}
+                              className="text-slate-500 hover:text-rose-400 p-0.5 rounded transition"
+                              title={`Remove Point ${wp.id}`}
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}

@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 
 let cachedEarthCanvas: HTMLCanvasElement | null = null;
 let cachedEarthTexture: THREE.CanvasTexture | null = null;
@@ -457,26 +457,88 @@ export function createEarthTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+let cachedRealisticTextures: {
+  day: THREE.Texture;
+  normal: THREE.Texture;
+  specular: THREE.Texture;
+  clouds: THREE.Texture;
+  nightLights: THREE.Texture;
+} | null = null;
+
 /**
- * Retrieves the shared cached Earth texture, or creates one if not yet initialized.
+ * Loads and caches photorealistic NASA Blue Marble textures.
+ * Uses local static assets served by Vite (/textures/earth/...).
  */
-export function getOrCreateEarthTexture(): THREE.CanvasTexture {
+export function getRealisticEarthTextures() {
+  if (cachedRealisticTextures) {
+    return cachedRealisticTextures;
+  }
+
+  const textureLoader = new THREE.TextureLoader();
+
+  // Create immediate canvas texture fallback while realistic images load
+  const fallbackCanvas = getOrCreateEarthTexture();
+
+  const loadTex = (url: string, isColor: boolean = false) => {
+    const tex = textureLoader.load(
+      url,
+      (loaded) => {
+        loaded.needsUpdate = true;
+      },
+      undefined,
+      (err) => {
+        console.warn(`Could not load Earth texture from ${url}, using fallback:`, err);
+      }
+    );
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    if (isColor) {
+      tex.colorSpace = THREE.SRGBColorSpace;
+    }
+    return tex;
+  };
+
+  const day = loadTex('/textures/earth/earth_day_2048.jpg', true);
+  const normal = loadTex('/textures/earth/earth_normal_2048.jpg', false);
+  const specular = loadTex('/textures/earth/earth_specular_2048.jpg', false);
+  const clouds = loadTex('/textures/earth/earth_clouds_1024.png', true);
+  const nightLights = loadTex('/textures/earth/earth_lights_2048.png', true);
+
+  cachedRealisticTextures = { day, normal, specular, clouds, nightLights };
+  return cachedRealisticTextures;
+}
+
+/**
+ * Retrieves the shared cached Earth texture (photorealistic NASA day map with procedural fallback).
+ */
+export function getOrCreateEarthTexture(): THREE.Texture {
   if (cachedEarthTexture) {
     return cachedEarthTexture;
   }
+  // Initialize procedural canvas texture first
   cachedEarthTexture = createEarthTexture();
+
+  // Return realistic day texture if available
+  try {
+    const realistic = getRealisticEarthTextures();
+    if (realistic && realistic.day) {
+      return realistic.day;
+    }
+  } catch (e) {
+    console.warn('Using procedural canvas Earth texture fallback:', e);
+  }
   return cachedEarthTexture;
 }
 
 /**
- * Creates an Earth atmosphere outer rim glow sphere mesh.
+ * Creates an Earth atmosphere outer rim glow sphere mesh with realistic Rayleigh scattering look.
  */
 export function createAtmosphereRimMesh(radius: number): THREE.Mesh {
   const atmoGeo = new THREE.SphereGeometry(radius * 1.018, 64, 32);
   const atmoMat = new THREE.MeshBasicMaterial({
     color: 0x38bdf8,
     transparent: true,
-    opacity: 0.18,
+    opacity: 0.22,
     side: THREE.BackSide,
     depthWrite: false,
     depthTest: true,
@@ -486,3 +548,157 @@ export function createAtmosphereRimMesh(radius: number): THREE.Mesh {
   atmoMesh.renderOrder = 2;
   return atmoMesh;
 }
+
+/**
+ * Assembly holding realistic Earth components (globe, rotating cloud layer, night city lights).
+ */
+export interface RealisticEarthAssembly {
+  globeMesh: THREE.Mesh;
+  cloudMesh: THREE.Mesh;
+  nightMesh: THREE.Mesh;
+  atmosphereMesh: THREE.Mesh;
+  updateSunDir: (sunDir: THREE.Vector3) => void;
+  updateRadius: (radius: number) => void;
+  setShowSunTerminator?: (show: boolean) => void;
+}
+
+/**
+ * Creates a fully realistic NASA Earth globe with:
+ * - High-tessellation sphere geometry (96x64)
+ * - Photorealistic satellite surface map (NASA Blue Marble)
+ * - Normal bump map for terrain elevation and mountain relief
+ * - Specular reflection for oceans
+ * - Rotating transparent cloud sphere layer (AdditiveBlending)
+ * - Integrated per-pixel day/night solar terminator with glowing city lights
+ * - Multi-layer Rayleigh atmospheric haze (no concentric Z-fighting or facet artifacts)
+ */
+export function createRealisticEarthAssembly(
+  radius: number,
+  fixedSunDir: THREE.Vector3
+): RealisticEarthAssembly {
+  const textures = getRealisticEarthTextures();
+
+  // Uniform references for physical solar lighting & day/night terminator
+  const sunUniform = { value: fixedSunDir.clone() };
+  const showTerminatorUniform = { value: 1.0 };
+  const nightLightsUniform = { value: textures.nightLights };
+
+  // 1. Globe Mesh (High-tessellation 96x64)
+  const globeGeo = new THREE.SphereGeometry(radius, 96, 64);
+  const globeMat = new THREE.MeshStandardMaterial({
+    map: textures.day,
+    normalMap: textures.normal,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+    roughnessMap: textures.specular,
+    roughness: 0.68,
+    metalness: 0.05,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+    depthWrite: true,
+    depthTest: true,
+  });
+
+  // Seamlessly integrate twilight terminator darkening and glowing golden city lights
+  // directly into the globe shader. This completely eliminates any separate concentric
+  // sphere mesh, preventing chord intersections, faceting, and dark trapezoid artifacts!
+  globeMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uSunDir = sunUniform;
+    shader.uniforms.uShowTerminator = showTerminatorUniform;
+    shader.uniforms.uNightLights = nightLightsUniform;
+
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+varying vec3 vEarthNormal;
+varying vec2 vEarthUv;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <worldpos_vertex>',
+      `#include <worldpos_vertex>
+vEarthNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+vEarthUv = uv;`
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+uniform vec3 uSunDir;
+uniform float uShowTerminator;
+uniform sampler2D uNightLights;
+varying vec3 vEarthNormal;
+varying vec2 vEarthUv;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>
+if (uShowTerminator > 0.5) {
+  float dotSun = dot(vEarthNormal, uSunDir);
+  // Physical twilight transition zone (-0.12 to +0.12)
+  float nightFactor = smoothstep(0.12, -0.12, dotSun);
+  
+  // Natural night darkening across oceans and land
+  gl_FragColor.rgb *= mix(1.0, 0.04, nightFactor * 0.96);
+  
+  // Electric golden city lights glowing on dark continents
+  vec4 nightSample = texture2D(uNightLights, vEarthUv);
+  float cityIntensity = max(nightSample.r, max(nightSample.g, nightSample.b));
+  vec3 cityColor = nightSample.rgb * vec3(1.7, 1.4, 0.95);
+  gl_FragColor.rgb += cityColor * (nightFactor * cityIntensity * 1.8);
+}`
+    );
+  };
+
+  const globeMesh = new THREE.Mesh(globeGeo, globeMat);
+  globeMesh.name = 'realisticEarthGlobe';
+  globeMesh.renderOrder = 0;
+
+  // 2. Cloud Layer (Transparent, slightly above surface with AdditiveBlending)
+  const cloudGeo = new THREE.SphereGeometry(radius * 1.006, 64, 32);
+  const cloudMat = new THREE.MeshStandardMaterial({
+    map: textures.clouds,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: true,
+  });
+  const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+  cloudMesh.name = 'earthCloudsLayer';
+  cloudMesh.renderOrder = 3;
+  globeMesh.add(cloudMesh);
+
+  // 3. Dummy / Invisible Night Mesh kept for API compatibility with scene refs
+  const nightMesh = new THREE.Mesh();
+  nightMesh.name = 'earthNightCityLights';
+  nightMesh.visible = false;
+  globeMesh.add(nightMesh);
+
+  // 4. Atmosphere Rim Glow (Multi-layer Rayleigh scattering haze)
+  const atmosphereMesh = createAtmosphereRimMesh(radius);
+  globeMesh.add(atmosphereMesh);
+
+  const updateSunDir = (sunDir: THREE.Vector3) => {
+    sunUniform.value.copy(sunDir);
+  };
+
+  const setShowSunTerminator = (show: boolean) => {
+    showTerminatorUniform.value = show ? 1.0 : 0.0;
+  };
+
+  const updateRadius = (newRadius: number) => {
+    const s = newRadius / radius;
+    globeMesh.scale.set(s, s, s);
+  };
+
+  return {
+    globeMesh,
+    cloudMesh,
+    nightMesh,
+    atmosphereMesh,
+    updateSunDir,
+    updateRadius,
+    setShowSunTerminator,
+  };
+}
+

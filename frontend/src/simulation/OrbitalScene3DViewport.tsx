@@ -1,9 +1,11 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitalTelemetry } from '../types';
 import { Globe, RefreshCw, Crosshair, Eye, Compass, ShieldAlert, CheckCircle, AlertTriangle } from 'lucide-react';
 import HandoverPanel from './HandoverPanel';
 import { satellitePovSync } from './satellitePovSync';
+import { getRealisticEarthTextures } from './earthTexture';
+import { createRealSatelliteModel } from './satelliteModel';
 
 interface Props {
   orbitalTelemetry: OrbitalTelemetry | null;
@@ -257,16 +259,30 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     // 5. Earth Globe (Scale: 1 scene unit = 1000 km)
     // Earth radius: 6378.137 km = 6.378137 scene units
     const EARTH_RADIUS_UNITS = 6.378137;
-    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS_UNITS, 64, 64);
-    const earthTex = createEarthTexture();
+    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS_UNITS, 96, 64);
+    const textures = getRealisticEarthTextures();
     const earthMat = new THREE.MeshStandardMaterial({
-      map: earthTex,
-      roughness: 0.8,
-      metalness: 0.1,
+      map: textures.day,
+      normalMap: textures.normal,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughnessMap: textures.specular,
+      roughness: 0.68,
+      metalness: 0.05,
     });
     const earthMesh = new THREE.Mesh(earthGeo, earthMat);
     scene.add(earthMesh);
     earthGlobeRef.current = earthMesh;
+
+    // Realistic transparent cloud layer
+    const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS_UNITS * 1.006, 64, 32);
+    const cloudMat = new THREE.MeshStandardMaterial({
+      map: textures.clouds,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+    });
+    const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+    earthMesh.add(cloudMesh);
 
     // 6. Faint Atmosphere Shell at 100 km
     // Atmosphere radius = (6378.137 + 100.0) / 1000 = 6.478137 units
@@ -294,13 +310,19 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     presetRingsGroup.add(createOrbitRing(6378.137 + 35786, 0x475569, 0.35, true)); // GEO
     scene.add(presetRingsGroup);
 
-    // 8. Active Camera Platform Marker & Billboard
+    // 8. Active Camera Platform 3D Satellite Model & Billboard
     const camGroup = new THREE.Group();
-    // Inner enlarged 3D marker
-    const camMarkerGeo = new THREE.SphereGeometry(0.2, 16, 16);
-    const camMarkerMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
-    const camMesh = new THREE.Mesh(camMarkerGeo, camMarkerMat);
-    camGroup.add(camMesh);
+    // Authentic 3D Real Satellite: Gold MLI, Solar Wings, FSOC Optical Terminal
+    const camSat3D = createRealSatelliteModel({
+      size: 0.44, // Preserves exact 0.4-unit footprint (matching previous r=0.2 sphere)
+      accentColor: 0x06b6d4,
+      isGoldMLI: true,
+      includeOpticalTurret: true,
+      includeAntenna: true,
+      includeStarTrackers: true,
+      includeThrusters: true,
+    });
+    camGroup.add(camSat3D);
 
     // Glowing sprite halo & label
     const camSprite = createMarkerSprite('CAMERA', '#06b6d4', 'C');
@@ -309,12 +331,18 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     scene.add(camGroup);
     cameraMarkerRef.current = camGroup;
 
-    // 9. Active Beacon Platform Marker & Billboard
+    // 9. Active Beacon Platform 3D Satellite Model & Billboard
     const beaconGroup = new THREE.Group();
-    const beaconMarkerGeo = new THREE.SphereGeometry(0.2, 16, 16);
-    const beaconMarkerMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-    const beaconMesh = new THREE.Mesh(beaconMarkerGeo, beaconMarkerMat);
-    beaconGroup.add(beaconMesh);
+    const beaconSat3D = createRealSatelliteModel({
+      size: 0.44, // Preserves exact 0.4-unit footprint
+      accentColor: 0x10b981,
+      isGoldMLI: true,
+      includeOpticalTurret: true,
+      includeAntenna: true,
+      includeStarTrackers: true,
+      includeThrusters: true,
+    });
+    beaconGroup.add(beaconSat3D);
 
     const beaconSprite = createMarkerSprite('BEACON', '#10b981', 'B');
     beaconSprite.position.set(0, 0.6, 0);
@@ -322,12 +350,18 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     scene.add(beaconGroup);
     beaconMarkerRef.current = beaconGroup;
 
-    // 9b. Backup Satellite Platform Marker & Billboard
+    // 9b. Backup Satellite Platform 3D Satellite Model & Billboard
     const backupGroup = new THREE.Group();
-    const backupMarkerGeo = new THREE.SphereGeometry(0.18, 16, 16);
-    const backupMarkerMat = new THREE.MeshBasicMaterial({ color: 0x818cf8 });
-    const backupMesh = new THREE.Mesh(backupMarkerGeo, backupMarkerMat);
-    backupGroup.add(backupMesh);
+    const backupSat3D = createRealSatelliteModel({
+      size: 0.40, // Preserves exact footprint (matching previous r=0.18 sphere)
+      accentColor: 0x818cf8,
+      isGoldMLI: true,
+      includeOpticalTurret: true,
+      includeAntenna: true,
+      includeStarTrackers: true,
+      includeThrusters: true,
+    });
+    backupGroup.add(backupSat3D);
 
     const backupSprite = createMarkerSprite('BACKUP SAT', '#818cf8', 'S2');
     backupSprite.position.set(0, 0.6, 0);
@@ -403,8 +437,10 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     };
 
     const onWheel = (e: WheelEvent) => {
-      // Zoom limits: min 7.2 units (just above atmosphere), max 85.0 units (beyond GEO)
-      orbitStateRef.current.radius = Math.max(7.2, Math.min(85.0, orbitStateRef.current.radius + e.deltaY * 0.02));
+      // Zoom limits: min 0.25 units when following satellite, otherwise min 7.2 units (just above atmosphere), max 85.0 units (beyond GEO)
+      const minR = followCameraRef.current ? 0.25 : 7.2;
+      const zoomStep = followCameraRef.current ? 0.005 : 0.02;
+      orbitStateRef.current.radius = Math.max(minR, Math.min(85.0, orbitStateRef.current.radius + e.deltaY * zoomStep));
       e.preventDefault();
     };
 
@@ -484,9 +520,10 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       beaconPos.normalize().multiplyScalar(earthRUnits);
     }
 
-    // 1. Update Camera Platform position
+    // 1. Update Camera Platform position & orientation towards beacon
     if (cameraMarkerRef.current) {
       cameraMarkerRef.current.position.copy(camPos);
+      cameraMarkerRef.current.lookAt(beaconPos);
     }
 
     // 2. Update Beacon Platform position
@@ -536,6 +573,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
         backupPos.normalize().multiplyScalar(earthRUnits);
       }
       backupMarkerRef.current.position.copy(backupPos);
+      backupMarkerRef.current.lookAt(beaconPos);
       backupMarkerRef.current.visible = true;
 
       const backupPositions = backupLosLineRef.current.geometry.attributes.position as THREE.BufferAttribute;
@@ -662,8 +700,47 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
   const handleResetView = () => {
     orbitStateRef.current = { theta: 0.8, phi: 0.5, radius: 18.0 };
     setFollowCamera(false);
+    followCameraRef.current = false;
     currentLookAtRef.current.set(0, 0, 0);
   };
+
+  const handleJumpToSatellite = () => {
+    setFollowCamera(true);
+    followCameraRef.current = true;
+    orbitStateRef.current = { theta: 0.8, phi: 0.35, radius: 1.2 };
+    if (cameraMarkerRef.current) {
+      currentLookAtRef.current.copy(cameraMarkerRef.current.position);
+    }
+  };
+
+  // Keyboard shortcut: S / F toggles satellite chase focus, Esc returns to Earth overview
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          (target as any).isContentEditable)
+      ) {
+        return;
+      }
+      if ((e.key === 's' || e.key === 'S' || e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (followCameraRef.current) {
+          handleResetView();
+        } else {
+          handleJumpToSatellite();
+        }
+      }
+      if (e.key === 'Escape' && followCameraRef.current) {
+        e.preventDefault();
+        handleResetView();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const getLinkStatusBadge = () => {
     if (!orbitalTelemetry) return null;
@@ -700,15 +777,36 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
+          {/* Jump to Satellite Button */}
+          <button
+            onClick={followCamera ? handleResetView : handleJumpToSatellite}
+            className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold ${
+              followCamera
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500 shadow-sm shadow-amber-500/20'
+                : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700 hover:border-cyan-500'
+            }`}
+            title="Instantly jump camera directly to satellite in 3D orbit (Shortcut: S or F)"
+          >
+            <Crosshair className={`w-3 h-3 ${followCamera ? 'text-amber-400 animate-pulse' : 'text-cyan-400'}`} />
+            <span>{followCamera ? 'Sat Tracked (Active)' : 'Jump to Satellite'}</span>
+            <span className="text-[9px] px-1 py-0.2 bg-black/40 rounded text-slate-400 font-mono">S</span>
+          </button>
+
           {/* Follow Camera Toggle */}
           <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
             <input
               type="checkbox"
               checked={followCamera}
-              onChange={(e) => setFollowCamera(e.target.checked)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  handleJumpToSatellite();
+                } else {
+                  handleResetView();
+                }
+              }}
               className="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0"
             />
-            <Eye className="w-3 h-3 text-cyan-400" /> Follow Camera Platform
+            <Eye className="w-3 h-3 text-cyan-400" /> Follow Camera
           </label>
 
           <span className="text-slate-600">|</span>
@@ -717,7 +815,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
           <button
             onClick={handleResetView}
             className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1.5 transition font-semibold"
-            title="Reset 3D Orbit Camera"
+            title="Reset 3D Orbit Camera to Default Earth View"
           >
             <RefreshCw className="w-3 h-3" /> Reset View
           </button>
