@@ -256,8 +256,8 @@ class SimulationEngine:
                 mod = 1.0 - d_flicker + d_flicker * (0.5 + 0.5 * math.sin(2.0 * math.pi * f_flicker * self.sim_time))
                 raw_intensity *= mod
 
-            # If LINK_BLOCKED, Earth occludes beacon - do NOT render!
-            if link_state != "LINK_BLOCKED":
+            # If LINK_BLOCKED or NO_COVERAGE, Earth occludes beacon - do NOT render!
+            if link_state not in ("LINK_BLOCKED", "NO_COVERAGE"):
                 u, v, in_fov, _, _ = self.camera.project_orbital_beacon(az_body, el_body)
                 if in_fov and u is not None and v is not None:
                     u_eff = u + jit_dx
@@ -424,6 +424,14 @@ class SimulationEngine:
             detection_telemetry.beacon_detected = False
             detection_telemetry.detected_centroid_x = None
             detection_telemetry.detected_centroid_y = None
+            detection_telemetry.pixel_error_x = None
+            detection_telemetry.pixel_error_y = None
+            detection_telemetry.total_pixel_error = None
+            detection_telemetry.angular_error_x_deg = None
+            detection_telemetry.angular_error_y_deg = None
+            detection_telemetry.confidence = 0.0
+            detection_telemetry.candidates = []
+            detection_telemetry.bbox = None
 
         # 5. Closed-Loop Kalman Target Tracking & Full PAT State Machine (Part 5)
         meas = None

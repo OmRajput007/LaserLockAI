@@ -378,6 +378,7 @@ class OpenCVBeaconDetector(BaseDetector):
         self,
         frame: np.ndarray,
         telemetry: Optional[DetectionTelemetry] = None,
+        tracking: Optional[Any] = None,
     ) -> np.ndarray:
         """
         Renders visualization overlays directly onto the camera frame:
@@ -402,6 +403,15 @@ class OpenCVBeaconDetector(BaseDetector):
 
         det = telemetry or self.last_telemetry
 
+        # Single source of truth for PAT lock and link blockage state
+        pat_state = None
+        is_blocked = False
+        is_locked = False
+        if tracking is not None:
+            pat_state = getattr(tracking, "state", getattr(tracking, "mode", None))
+            is_blocked = bool(getattr(tracking, "is_link_blocked", False) or pat_state in ("LINK_BLOCKED", "NO_COVERAGE"))
+            is_locked = bool(getattr(tracking, "is_locked", False) or (pat_state == "LOCKED" and not is_blocked))
+
         # 1. Camera Crosshairs & Boresight Reticle
         # Center reticle lines
         crosshair_color = (255, 200, 0)  # Cyan/Gold BGR
@@ -416,8 +426,8 @@ class OpenCVBeaconDetector(BaseDetector):
         # 20-pixel Warning Ring (Amber)
         cv2.circle(annotated, (cx_img, cy_img), 20, (0, 180, 255), 1)
 
-        # 2. Draw Candidates & Primary Detection
-        if det and det.beacon_detected and det.detected_centroid_x is not None and det.detected_centroid_y is not None:
+        # 2. Draw Candidates & Primary Detection (Only when link is not blocked)
+        if not is_blocked and det and det.beacon_detected and det.detected_centroid_x is not None and det.detected_centroid_y is not None:
             bx = int(round(det.detected_centroid_x))
             by = int(round(det.detected_centroid_y))
 
@@ -477,15 +487,31 @@ class OpenCVBeaconDetector(BaseDetector):
         cv2.rectangle(annotated, (8, 8), (280, 115), hud_bg_color, -1)
         cv2.rectangle(annotated, (8, 8), (280, 115), (60, 80, 100), 1)
 
-        if det and det.beacon_detected:
-            status_text = "STATUS: BEACON DETECTED [LOCKED]"
-            status_color = (0, 255, 120)
+        if is_blocked:
+            status_text = f"STATUS: {pat_state or 'LINK_BLOCKED'} (OCCLUDED)"
+            status_color = (0, 70, 255)
+            centroid_str = "Centroid: NONE (LOS BLOCKED BY EARTH)"
+            err_pixel_str = "Pixel Err: N/A (LINK BLOCKED)"
+            err_ang_str = "Angular: N/A (LINK BLOCKED)"
+            perf_str = f"PAT State: {pat_state or 'LINK_BLOCKED'} | CV: {det.processing_time_ms if det else 0.0:.1f}ms"
+        elif det and det.beacon_detected and det.detected_centroid_x is not None:
+            if is_locked:
+                status_text = "STATUS: BEACON DETECTED [LOCKED]"
+                status_color = (0, 255, 120)
+            elif pat_state:
+                status_text = f"STATUS: BEACON DETECTED [{pat_state}]"
+                status_color = (255, 200, 0) if pat_state in ("TRACKING", "ACQUIRING") else (0, 180, 255)
+            else:
+                is_aligned = (det.total_pixel_error or 999.0) <= 10.0
+                status_text = "STATUS: BEACON DETECTED [ALIGNED]" if is_aligned else "STATUS: BEACON DETECTED [UNLOCKED]"
+                status_color = (0, 255, 120) if is_aligned else (0, 180, 255)
+
             centroid_str = f"Centroid (Bx, By): ({det.detected_centroid_x:.1f}, {det.detected_centroid_y:.1f})"
-            err_pixel_str = f"Pixel Err: Ex={det.pixel_error_x:+.1f} Ey={det.pixel_error_y:+.1f} | E={det.total_pixel_error:.1f}px"
-            err_ang_str = f"Angular: thX={det.angular_error_x_deg:+.2f} deg  thY={det.angular_error_y_deg:+.2f} deg"
+            err_pixel_str = f"Pixel Err: Ex={det.pixel_error_x:+.1f} Ey={det.pixel_error_y:+.1f} | E={det.total_pixel_error:.1f}px" if det.pixel_error_x is not None and det.total_pixel_error is not None else "Pixel Err: N/A"
+            err_ang_str = f"Angular: thX={det.angular_error_x_deg:+.2f} deg  thY={det.angular_error_y_deg:+.2f} deg" if det.angular_error_x_deg is not None else "Angular: N/A"
             perf_str = f"Conf: {det.confidence:.2f} | SNR: {det.snr_db:.1f}dB | CV: {det.processing_time_ms:.1f}ms"
         else:
-            status_text = "STATUS: ACQUIRING / NO BEACON"
+            status_text = f"STATUS: {pat_state or 'ACQUIRING'} / NO BEACON"
             status_color = (0, 70, 255)
             centroid_str = "Centroid: NONE (TARGET OUT OF FOV)"
             err_pixel_str = "Pixel Err: N/A"
