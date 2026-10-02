@@ -25,13 +25,18 @@ sys.path.insert(0, WORKSPACE_ROOT)
 
 def check_and_build_frontend():
     dist_index = os.path.join(WORKSPACE_ROOT, "frontend", "dist", "index.html")
+    node_modules_dir = os.path.join(WORKSPACE_ROOT, "frontend", "node_modules")
+    frontend_dir = os.path.join(WORKSPACE_ROOT, "frontend")
     if not os.path.exists(dist_index):
         print("[*] Production frontend bundle not detected. Building frontend...")
         try:
-            subprocess.run(["npm", "run", "build"], cwd=os.path.join(WORKSPACE_ROOT, "frontend"), check=True, shell=True)
+            if not os.path.exists(node_modules_dir):
+                print("[*] Node modules not found. Running npm install...")
+                subprocess.run(["npm", "install"], cwd=frontend_dir, check=True, shell=True)
+            subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True, shell=True)
             print("[+] Frontend build succeeded.")
         except Exception as e:
-            print(f"[!] Warning: npm run build failed ({e}). Proceeding with available files.")
+            print(f"[!] Warning: npm build failed ({e}). Proceeding with available files.")
 
 
 def launch_browser():

@@ -177,6 +177,14 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   const isPovOccluded = Boolean(povState.isOccluded);
   const isPovLocked = Boolean(povState.isLockedInFov && !isPovOccluded);
 
+  // Orbital beacon projection onto the 640x480 FPA (single source of truth for the
+  // satellite POV white pixel). Non-null only while the beacon is on the sensor.
+  const orbitalSpotU = povState.beaconPixelU;
+  const orbitalSpotV = povState.beaconPixelV;
+  const hasOrbitalSpot =
+    !isPovOccluded && orbitalSpotU !== null && orbitalSpotV !== null;
+  const orbitalAngularErrorDeg = povState.beaconAngularErrorDeg ?? 180.0;
+
   const isEffectiveOccluded = isLinkBlocked || isChannelOccluded || (isPovOccluded && !isPovLocked);
 
   // Single source of truth for PAT lock state:
@@ -222,10 +230,12 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   );
 
   const isBeaconVisibleInFov = !isEffectiveOccluded && (
-    isPovLocked || isLocked || isCvDetected || isTrackedInSensor || isGroundTruthInSensor
+    hasOrbitalSpot || isPovLocked || isLocked || isCvDetected || isTrackedInSensor || isGroundTruthInSensor
   );
 
-  const isBeaconLost = isEffectiveOccluded || !isBeaconVisibleInFov;
+  // The orbital POV projection is authoritative: if the beacon is on the satellite FPA
+  // the alarm must be silent; the moment it leaves the FOV the alarm resumes.
+  const isBeaconLost = isEffectiveOccluded || (hasOrbitalSpot ? false : !isBeaconVisibleInFov);
 
   // Directly trigger alarm whenever beacon is lost or occluded
   useEffect(() => {
@@ -255,11 +265,15 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     }
   }, [isPovLocked, onGimbalAngles]);
 
-  // Determine Beacon optical spot coordinates (u, v) on 640x480 FPA sensor
+  // Determine Beacon optical spot coordinates (u, v) on 640x480 FPA sensor.
+  // Priority 1: the satellite POV orbital projection (authoritative for this viewport).
   let spotU = 320.0;
   let spotV = 240.0;
 
-  if (isCvDetected && detection?.detected_centroid_x !== null && detection?.detected_centroid_x !== undefined && detection?.detected_centroid_y !== null && detection?.detected_centroid_y !== undefined) {
+  if (hasOrbitalSpot && orbitalSpotU !== null && orbitalSpotV !== null) {
+    spotU = orbitalSpotU;
+    spotV = orbitalSpotV;
+  } else if (isCvDetected && detection?.detected_centroid_x !== null && detection?.detected_centroid_x !== undefined && detection?.detected_centroid_y !== null && detection?.detected_centroid_y !== undefined) {
     spotU = detection.detected_centroid_x;
     spotV = detection.detected_centroid_y;
   } else if (isTrackedInSensor && tracking?.filtered_x !== null && tracking?.filtered_x !== undefined && tracking?.filtered_y !== null && tracking?.filtered_y !== undefined) {
@@ -317,6 +331,17 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               }`}
             >
               OpenCV Raw Feed
+            </button>
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
+              }}
+              className="px-2.5 py-1 rounded text-xs font-semibold transition flex items-center gap-1.5 bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/80 hover:border-cyan-400 shadow-sm cursor-pointer ml-1"
+              title="Jump 3D Orbit Camera to face Satellite in front (Shortcut: S or F)"
+            >
+              <Crosshair className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <span>Jump to Sat</span>
+              <kbd className="px-1 py-0.2 bg-black/40 text-[9px] rounded text-slate-300 font-mono">S</kbd>
             </button>
           </div>
         </div>
@@ -420,7 +445,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
             </div>
 
             {/* Optical Beacon Spot Overlay: rendered whenever beacon is visible/locked in FOV and not drawn by backend CV */}
-            {!isEffectiveOccluded && (isPovLocked || isBeaconVisibleInFov) && !isCvDetected && (
+            {!isEffectiveOccluded && (hasOrbitalSpot || isPovLocked || isBeaconVisibleInFov) && !(isCvDetected && !hasOrbitalSpot) && (
               <div
                 className="absolute pointer-events-none select-none z-20"
                 style={{

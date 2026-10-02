@@ -13,6 +13,12 @@ export interface SatellitePovState {
   autoLOS: boolean;
   isLockedInFov: boolean; // True when rectangular FOV frustum is GREEN
   isLostFromFov: boolean;   // True when rectangular FOV frustum is RED
+  // Pixel projection of the orbital beacon onto the 640x480 FPA (satellite POV).
+  // Null when the beacon is outside the sensor or the link is occluded.
+  beaconPixelU: number | null;
+  beaconPixelV: number | null;
+  beaconAngularErrorDeg: number; // boresight-to-LOS angle
+  beaconInFov: boolean;          // within 4.0 x 3.0 deg AND inside sensor bounds
   perigeeAltKm?: number;
   apogeeAltKm?: number;
   argPerigeeDeg?: number;
@@ -99,6 +105,10 @@ class SatellitePovSync {
     autoLOS: false,
     isLockedInFov: false,
     isLostFromFov: true,
+    beaconPixelU: null,
+    beaconPixelV: null,
+    beaconAngularErrorDeg: 180.0,
+    beaconInFov: false,
     boresightDir: new THREE.Vector3(0, 0, -1),
   };
 
@@ -116,6 +126,10 @@ class SatellitePovSync {
     if (data.autoLOS !== undefined) this.currentData.autoLOS = data.autoLOS;
     if (data.isLockedInFov !== undefined) this.currentData.isLockedInFov = data.isLockedInFov;
     if (data.isLostFromFov !== undefined) this.currentData.isLostFromFov = data.isLostFromFov;
+    if (data.beaconPixelU !== undefined) this.currentData.beaconPixelU = data.beaconPixelU;
+    if (data.beaconPixelV !== undefined) this.currentData.beaconPixelV = data.beaconPixelV;
+    if (data.beaconAngularErrorDeg !== undefined) this.currentData.beaconAngularErrorDeg = data.beaconAngularErrorDeg;
+    if (data.beaconInFov !== undefined) this.currentData.beaconInFov = data.beaconInFov;
     if (data.perigeeAltKm !== undefined) this.currentData.perigeeAltKm = data.perigeeAltKm;
     if (data.apogeeAltKm !== undefined) this.currentData.apogeeAltKm = data.apogeeAltKm;
     if (data.argPerigeeDeg !== undefined) this.currentData.argPerigeeDeg = data.argPerigeeDeg;
@@ -132,10 +146,60 @@ class SatellitePovSync {
       }
     }
     this.currentData.timestamp = Date.now();
+    this.recomputeFpaProjection();
 
     for (let i = 0; i < this.listeners.length; i++) {
       this.listeners[i](this.currentData);
     }
+  }
+
+  /**
+   * Projects the orbital beacon onto the satellite's 640x480 FPA using the same
+   * linear 160 px/deg mapping the backend uses (640 px / 4.0 deg, 480 px / 3.0 deg).
+   * This is the single source of truth for the white-pixel beacon in the FPA viewport.
+   */
+  private recomputeFpaProjection() {
+    const d = this.currentData;
+    const losDir = new THREE.Vector3().subVectors(d.tgtPos, d.satPos).normalize();
+    const boresight =
+      d.boresightDir && d.boresightDir.lengthSq() > 1e-9
+        ? d.boresightDir.clone().normalize()
+        : d.satPos.clone().negate().normalize();
+
+    const dot = THREE.MathUtils.clamp(boresight.dot(losDir), -1, 1);
+    const angDeg = THREE.MathUtils.radToDeg(Math.acos(dot));
+    d.beaconAngularErrorDeg = angDeg;
+
+    if (d.isOccluded || dot <= 0) {
+      d.beaconPixelU = null;
+      d.beaconPixelV = null;
+      d.beaconInFov = false;
+      return;
+    }
+
+    // Orthogonal basis around the boresight for signed azimuth/elevation offsets.
+    let upRef = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(boresight.dot(upRef)) > 0.9) upRef = new THREE.Vector3(1, 0, 0);
+    const right = new THREE.Vector3().crossVectors(boresight, upRef).normalize();
+    const up = new THREE.Vector3().crossVectors(right, boresight).normalize();
+
+    const deltaAzDeg = THREE.MathUtils.radToDeg(
+      Math.asin(THREE.MathUtils.clamp(losDir.dot(right), -1, 1))
+    );
+    const deltaElDeg = THREE.MathUtils.radToDeg(
+      Math.asin(THREE.MathUtils.clamp(losDir.dot(up), -1, 1))
+    );
+
+    // Linear FPA mapping: u = 320 + az * 160, v = 240 - el * 160
+    const u = 320.0 + deltaAzDeg * 160.0;
+    const v = 240.0 - deltaElDeg * 160.0;
+
+    const inSensor = u >= 0.0 && u <= 640.0 && v >= 0.0 && v <= 480.0;
+    const inAngularFov = Math.abs(deltaAzDeg) <= 2.0 && Math.abs(deltaElDeg) <= 1.5;
+
+    d.beaconPixelU = inSensor ? u : null;
+    d.beaconPixelV = inSensor ? v : null;
+    d.beaconInFov = inSensor && inAngularFov && !d.isOccluded;
   }
 
   getData(): SatellitePovState {
@@ -170,6 +234,8 @@ class SatellitePovSync {
       } else {
         this.currentData.boresightDir.copy(this.currentData.satPos).negate().normalize();
       }
+      // Recompute the FPA pixel projection so the fallback path never emits stale coordinates.
+      this.recomputeFpaProjection();
       this.currentData.timestamp = now;
     }
     return this.currentData;

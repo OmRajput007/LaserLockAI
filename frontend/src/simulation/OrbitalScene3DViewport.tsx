@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitalTelemetry } from '../types';
-import { Globe, RefreshCw, Crosshair, Eye, Compass, ShieldAlert, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Globe, RefreshCw, Crosshair, Eye, Compass, ShieldAlert, CheckCircle, AlertTriangle, Satellite, Radio } from 'lucide-react';
 import HandoverPanel from './HandoverPanel';
 import { satellitePovSync } from './satellitePovSync';
 import { getRealisticEarthTextures } from './earthTexture';
@@ -742,6 +742,56 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const handleLocateSatellite = () => {
+    const camPos = cameraMarkerRef.current?.position;
+    if (camPos) {
+      const len = camPos.length();
+      if (len > 0.001) {
+        const phi = Math.asin(Math.max(-0.95, Math.min(0.95, camPos.y / len)));
+        const theta = Math.atan2(camPos.x, camPos.z);
+        orbitStateRef.current.theta = theta;
+        orbitStateRef.current.phi = phi;
+        orbitStateRef.current.radius = Math.max(12.0, Math.min(22.0, orbitStateRef.current.radius));
+      }
+    }
+    setFollowCamera(false);
+    followCameraRef.current = false;
+    currentLookAtRef.current.set(0, 0, 0);
+  };
+
+  const handleLocateBeacon = () => {
+    const bPos = beaconMarkerRef.current?.position;
+    if (bPos) {
+      const len = bPos.length();
+      if (len > 0.001) {
+        const phi = Math.asin(Math.max(-0.95, Math.min(0.95, bPos.y / len)));
+        const theta = Math.atan2(bPos.x, bPos.z);
+        orbitStateRef.current.theta = theta;
+        orbitStateRef.current.phi = phi;
+        orbitStateRef.current.radius = Math.max(12.0, Math.min(20.0, orbitStateRef.current.radius));
+      }
+    }
+    setFollowCamera(false);
+    followCameraRef.current = false;
+    currentLookAtRef.current.set(0, 0, 0);
+  };
+
+  // Listen for global "fsoc:locate-satellite" and "fsoc:locate-beacon" events
+  useEffect(() => {
+    const handleSat = () => handleLocateSatellite();
+    const handleBeacon = () => handleLocateBeacon();
+
+    window.addEventListener('fsoc:locate-satellite', handleSat);
+    window.addEventListener('fsoc:jump-to-sat', handleSat);
+    window.addEventListener('fsoc:locate-beacon', handleBeacon);
+
+    return () => {
+      window.removeEventListener('fsoc:locate-satellite', handleSat);
+      window.removeEventListener('fsoc:jump-to-sat', handleSat);
+      window.removeEventListener('fsoc:locate-beacon', handleBeacon);
+    };
+  }, []);
+
   const getLinkStatusBadge = () => {
     if (!orbitalTelemetry) return null;
     const { link } = orbitalTelemetry;
@@ -776,20 +826,25 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
           <span className="text-[10px] text-slate-500 font-normal">(1 UNIT = 1000 KM)</span>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px]">
-          {/* Jump to Satellite Button */}
+        <div className="flex items-center gap-2 text-[11px]">
+          {/* Locate Satellite Button */}
           <button
-            onClick={followCamera ? handleResetView : handleJumpToSatellite}
-            className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold ${
-              followCamera
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500 shadow-sm shadow-amber-500/20'
-                : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700 hover:border-cyan-500'
-            }`}
-            title="Instantly jump camera directly to satellite in 3D orbit (Shortcut: S or F)"
+            onClick={handleLocateSatellite}
+            className="px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold cursor-pointer bg-cyan-950/50 hover:bg-cyan-900 text-cyan-300 border-cyan-700/80 hover:border-cyan-400"
+            title="Instantly orient camera to face satellite in 3D orbit (Shortcut: S)"
           >
-            <Crosshair className={`w-3 h-3 ${followCamera ? 'text-amber-400 animate-pulse' : 'text-cyan-400'}`} />
-            <span>{followCamera ? 'Sat Tracked (Active)' : 'Jump to Satellite'}</span>
-            <span className="text-[9px] px-1 py-0.2 bg-black/40 rounded text-slate-400 font-mono">S</span>
+            <Satellite className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Locate Sat</span>
+          </button>
+
+          {/* Locate Beacon Button */}
+          <button
+            onClick={handleLocateBeacon}
+            className="px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold cursor-pointer bg-rose-950/50 hover:bg-rose-900 text-rose-300 border-rose-700/80 hover:border-rose-400"
+            title="Instantly orient camera to face beacon in 3D orbit (Shortcut: B)"
+          >
+            <Radio className="w-3.5 h-3.5 text-rose-400" />
+            <span>Locate Beacon</span>
           </button>
 
           {/* Follow Camera Toggle */}
@@ -875,6 +930,26 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
           <HandoverPanel handover={orbitalTelemetry.handover} />
         </div>
       )}
+
+      {/* Floating Quick Locate Buttons (Unrestricted global access) */}
+      <div className="absolute bottom-3 right-4 z-20 pointer-events-auto flex items-center gap-2">
+        <button
+          onClick={handleLocateSatellite}
+          className="bg-slate-950/95 hover:bg-cyan-950/80 backdrop-blur-md border border-cyan-500/80 hover:border-cyan-400 text-cyan-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(6,182,212,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+          title="Instantly orient camera to face satellite in 3D orbit (Shortcut: S)"
+        >
+          <Satellite className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
+          <span className="font-semibold text-[11px]">Locate satellite</span>
+        </button>
+        <button
+          onClick={handleLocateBeacon}
+          className="bg-slate-950/95 hover:bg-rose-950/80 backdrop-blur-md border border-rose-500/80 hover:border-rose-400 text-rose-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(244,63,94,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+          title="Instantly orient camera to face beacon in 3D orbit (Shortcut: B)"
+        >
+          <Radio className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition" />
+          <span className="font-semibold text-[11px]">Locate beacon</span>
+        </button>
+      </div>
 
       {/* Bottom Floating Stats Strip */}
       <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[11px] text-slate-300 pointer-events-none flex flex-wrap gap-4 shadow-xl">

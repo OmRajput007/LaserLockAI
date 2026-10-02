@@ -54,6 +54,7 @@ import { ArchitecturePage } from './pages/ArchitecturePage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DemoModal } from './pages/DemoModal';
+import { Scene3DViewport } from './simulation/Scene3DViewport';
 
 const NAV_GROUPS = [
   'OPERATIONS',
@@ -327,6 +328,83 @@ export const App: React.FC = () => {
   };
 
   const navItems = NAV_ITEMS;
+
+  const isPopout3D = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popout') === '3d';
+
+  if (isPopout3D) {
+    return (
+      <div
+        className="flex h-screen w-screen flex-col overflow-hidden bg-[#06080A] text-[#E8EAED] antialiased"
+        style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+      >
+        {/* Sleek minimal header for the standalone 3D tab */}
+        <header className="h-10 bg-[#0A0D10] border-b border-[#1F2429] px-4 flex items-center justify-between flex-shrink-0 select-none">
+          <div className="flex items-center gap-2.5">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#4CAF7D] shadow-[0_0_8px_rgba(76,175,125,0.8)]' : 'bg-[#D6A84F] animate-pulse'}`} />
+            <span className="text-xs font-semibold tracking-wider text-white">
+              LaserLockAI — 3D LEO Kinematics (Standalone Window)
+            </span>
+            <span className="text-[11px] text-[#525A63] font-mono">
+              {isConnected ? `Live · ${telemetry?.fps.toFixed(0) || 30} FPS` : 'Connecting…'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#525A63] num-mono border-r border-[#1F2429] pr-3 mr-1">
+              <span>t = <span className="text-[#8B949E]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
+              <span className="text-[#1E2023]">·</span>
+              <span>f = <span className="text-[#8B949E]">{telemetry?.frame_number ?? 0}</span></span>
+            </div>
+
+            {/* Run / Pause */}
+            <button
+              onClick={() => toggleSimulation(!telemetry?.is_running)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border transition cursor-pointer ${
+                telemetry?.is_running
+                  ? 'bg-[#D6A84F]/10 border-[#D6A84F]/30 text-[#D6A84F] hover:bg-[#D6A84F]/15'
+                  : 'bg-[#4CAF7D]/10 border-[#4CAF7D]/30 text-[#4CAF7D] hover:bg-[#4CAF7D]/15'
+              }`}
+            >
+              {telemetry?.is_running ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+              <span>{telemetry?.is_running ? 'Pause' : 'Run'}</span>
+            </button>
+
+            {/* Reset */}
+            <button
+              onClick={resetSimulation}
+              className="p-1 rounded border border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E] transition cursor-pointer"
+              title="Reset simulation"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+
+            {/* Return to Main Dashboard */}
+            <button
+              onClick={() => {
+                window.location.href = window.location.origin + window.location.pathname;
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-[#252A2E] bg-[#12161A] text-slate-300 hover:text-white hover:border-[#3A4048] transition cursor-pointer ml-1"
+              title="Open full Mission Control Dashboard in this tab"
+            >
+              <span>Main Dashboard</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Dedicated 100% Space 3D Virtual Scene */}
+        <main className="flex-1 w-full h-full p-2 overflow-hidden">
+          <Scene3DViewport
+            target={telemetry?.target ?? null}
+            targets={telemetry?.targets ?? []}
+            camera={telemetry?.camera ?? null}
+            disturbance={telemetry?.disturbance ?? null}
+            worldWidth={config?.motion.screen_width ?? 2000}
+            worldHeight={config?.motion.screen_height ?? 2000}
+          />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#06080A] text-[#E8EAED] antialiased" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>

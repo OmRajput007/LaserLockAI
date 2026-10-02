@@ -40,7 +40,7 @@ export const MissionControlPage: React.FC<Props> = ({
   onSelectShape,
 }) => {
   const { settings, bindSetting, set } = useSceneSettings();
-  const [viewMode, setViewMode] = [settings.missionViewMode, bindSetting('missionViewMode')];
+  const [viewMode, setViewMode] = [settings.missionViewMode || '3d', bindSetting('missionViewMode')];
   const [showKinematics, setShowKinematics] = [settings.missionShowKinematics, bindSetting('missionShowKinematics')];
   const [localSpeed, setLocalSpeed] = useState<number>(
     () => settings.beaconSpeedKmh || config?.motion?.speed_kmh || config?.motion?.speed_pixels_per_s || 150
@@ -169,16 +169,6 @@ export const MissionControlPage: React.FC<Props> = ({
         <div className="flex items-center gap-2">
           <span className="text-slate-400 font-medium">Viewport:</span>
           <button
-            onClick={() => setViewMode('dual')}
-            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
-              viewMode === 'dual'
-                ? 'bg-[#181D22] text-white border border-[#2D3237]'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#12161A]'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-slate-400" /> Dual (2D + Camera)
-          </button>
-          <button
             onClick={() => setViewMode('3d')}
             className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               viewMode === '3d'
@@ -187,6 +177,16 @@ export const MissionControlPage: React.FC<Props> = ({
             }`}
           >
             <Box className="w-3.5 h-3.5 text-slate-400" /> 3D Virtual Scene
+          </button>
+          <button
+            onClick={() => setViewMode('dual')}
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+              viewMode === 'dual'
+                ? 'bg-[#181D22] text-white border border-[#2D3237]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#12161A]'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-slate-400" /> Dual (2D + Camera)
           </button>
           <button
             onClick={() => setViewMode('2d_camera')}

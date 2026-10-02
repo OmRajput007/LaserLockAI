@@ -26,10 +26,10 @@
     "target_id": 1,
     "target_type": "Beacon Spot",
     "target_count": 1,
-    "shape": "Circle",
+    "shape": "Square",
     "size_pixels": 10,
     "initial_location_mode": "Random",
-    "intensity": 220.0,
+    "intensity": 255.0,
     "default_depth_z": 1000.0,
     "background_level": 15.0,
     "noise_sigma": 3.0,
@@ -38,16 +38,16 @@
     "flicker_depth": 0.35
   },
   "motion": {
-    "trajectory_type": "Straight Line",
-    "speed_pixels_per_s": 35.0,
-    "speed_kmh": 150.0,
+    "trajectory_type": "Figure of 8",
+    "speed_pixels_per_s": 590.0,
+    "speed_kmh": 590.0,
     "screen_width": 2000,
     "screen_height": 2000,
     "world_depth_z": 2000
   },
   "detection": {
-    "method": "Classical CV",
-    "algorithm": "Classical CV",
+    "method": "CV + Kalman",
+    "algorithm": "AI + Kalman",
     "intensity_threshold": 110,
     "use_otsu": false,
     "min_area": 3.0,
@@ -57,13 +57,13 @@
     "subpixel_accuracy": true,
     "annotate_frame": true,
     "ai_model_name": "YOLOv8-Nano-FSOC",
-    "ai_confidence_threshold": 0.65,
+    "ai_confidence_threshold": 0.55,
     "ai_input_resolution": "640x480",
-    "ai_inference_device": "CUDA",
-    "ai_detection_frequency_hz": 30.0,
+    "ai_inference_device": "GPU",
+    "ai_detection_frequency_hz": 50.0,
     "model_weights_path": "models/yolov8_beacon.onnx",
     "target_id_mode": "Multi-Criteria",
-    "reject_false_bright_objects": false,
+    "reject_false_bright_objects": true,
     "max_spatial_jump_px": 80.0,
     "min_track_persistence_frames": 2,
     "expected_spot_size_px": 10.0,
@@ -71,7 +71,7 @@
     "kalman_measurement_noise": 1.0,
     "kalman_max_coast_frames": 15,
     "inject_false_bright_objects": true,
-    "false_bright_object_count": 5
+    "false_bright_object_count": 3
   },
   "tracking": {
     "algorithm": "Kalman Filter",
@@ -105,14 +105,14 @@
     "deadband_px": 0.5
   },
   "disturbance": {
-    "noise_type": "None",
+    "noise_type": "Multi-Noise",
     "gaussian_noise_enabled": true,
     "salt_pepper_enabled": true,
     "poisson_noise_enabled": true,
-    "noise_std_dev": 12.0,
+    "noise_std_dev": 18.0,
     "salt_pepper_ratio": 0.04,
     "camera_jitter_enabled": false,
-    "camera_jitter_max_px": 10.0,
+    "camera_jitter_max_px": 0.0,
     "camera_jitter_frequency_hz": 15.0,
     "atmospheric_condition": "Clear",
     "atmospheric_extinction_coeff": 0.05,
@@ -135,7 +135,7 @@
     "sudden_movement_max_px": 12.0,
     "brightness_fluctuation_enabled": false,
     "brightness_fluctuation_amplitude": 15.0,
-    "snr_reduction_db": 0.0,
+    "snr_reduction_db": 12.0,
     "preset_scenario": "High Noise"
   },
   "performance": {

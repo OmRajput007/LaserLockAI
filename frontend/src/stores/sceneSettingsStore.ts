@@ -49,7 +49,7 @@ export interface SceneSettings {
   virtualSimTab: '2d' | '3d' | 'orbital';
 }
 
-const STORAGE_KEY = 'laserlockAI_sceneSettings_v3';
+const STORAGE_KEY = 'laserlockAI_sceneSettings_v4';
 
 export const sceneSettingsDefaults: SceneSettings = {
   beaconRevolving: true,
@@ -77,7 +77,7 @@ export const sceneSettingsDefaults: SceneSettings = {
   autoRevolve: true,
   selectedPresetId: 'leo-550-p1',
   earthStyle: 'realistic',
-  missionViewMode: 'dual',
+  missionViewMode: '3d',
   missionShowKinematics: true,
   virtualSimTab: '2d',
 };
@@ -90,9 +90,15 @@ let cachedSettings: SceneSettings | null = null;
 export function loadSceneSettings(): SceneSettings {
   if (cachedSettings) return cachedSettings;
   try {
-    const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+    const raw = typeof window !== 'undefined'
+      ? (localStorage.getItem(STORAGE_KEY) || localStorage.getItem('laserlockAI_sceneSettings_v3'))
+      : null;
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<SceneSettings>;
+      // If migrating from previous version that defaulted to 'dual', set to '3d'
+      if (!localStorage.getItem(STORAGE_KEY) && parsed.missionViewMode === 'dual') {
+        parsed.missionViewMode = '3d';
+      }
       cachedSettings = { ...sceneSettingsDefaults, ...parsed };
       return cachedSettings;
     }

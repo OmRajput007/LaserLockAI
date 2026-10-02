@@ -21,6 +21,7 @@ import {
   Layers,
   Globe,
   Radio,
+  Satellite,
   Locate,
   Ruler,
   Sun,
@@ -40,6 +41,7 @@ import {
   Maximize2,
   Move,
   Undo2,
+  ExternalLink,
 } from 'lucide-react';
 
 interface Scene3DProps {
@@ -1176,6 +1178,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
   // Target Ground Station position ref (radius = 100 on surface)
   const tgtPosRef = useRef(new THREE.Vector3(38, 76, 52).normalize().multiplyScalar(globeRadius));
+  const latestSatPosRef = useRef(new THREE.Vector3(0, 0, 108.6));
 
   // Beacon Surface Motion State (Physically grounded atmospheric UAV/Drone platform: 0 - 1200 km/h)
   const [beaconSpeedKmh, setBeaconSpeedKmh] = [_ss.beaconSpeedKmh, _bindS('beaconSpeedKmh')];
@@ -1234,9 +1237,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const isDrawingPathRef = useRef<boolean>(false);
   isDrawingPathRef.current = isDrawingPath;
 
-  // 3D Focus & Instant Navigation Mode ('earth' overview vs 'satellite' close-up tracking)
-  const [focusMode, setFocusMode] = useState<'earth' | 'satellite'>('earth');
-  const focusModeRef = useRef<'earth' | 'satellite'>('earth');
+  // 3D Focus & Instant Navigation Mode ('earth' overview vs 'satellite' vs 'beacon' close-up tracking)
+  const [focusMode, setFocusMode] = useState<'earth' | 'satellite' | 'beacon'>('earth');
+  const focusModeRef = useRef<'earth' | 'satellite' | 'beacon'>('earth');
   focusModeRef.current = focusMode;
 
   const [showBeaconPathPlanner, setShowBeaconPathPlanner] = [_ss.showBeaconPathPlanner, _bindS('showBeaconPathPlanner')];
@@ -1533,24 +1536,46 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     }
   }, [handleRemoveWaypoint]);
 
-  // Instant Satellite Focus Handlers
-  const handleFocusSatellite = useCallback(() => {
-    focusModeRef.current = 'satellite';
-    setFocusMode('satellite');
-    orbitStateRef.current = { theta: 0.8, phi: 0.35, radius: 10.0 };
-  }, []);
-
-  const handleToggleFocusSatellite = useCallback(() => {
-    if (focusModeRef.current === 'satellite') {
-      focusModeRef.current = 'earth';
-      setFocusMode('earth');
-      orbitStateRef.current = { theta: 0.75, phi: 0.45, radius: 340.0 };
-    } else {
-      focusModeRef.current = 'satellite';
-      setFocusMode('satellite');
-      orbitStateRef.current = { theta: 0.8, phi: 0.35, radius: 10.0 };
+  // Instant Location Reorientation Handlers - NEVER lock or restrict the interface!
+  const handleLocateSatellite = useCallback(() => {
+    const satPos = latestSatPosRef.current;
+    const len = satPos.length();
+    if (len > 0.001) {
+      const phi = Math.asin(Math.max(-0.95, Math.min(0.95, satPos.y / len)));
+      const theta = Math.atan2(satPos.x, satPos.z);
+      orbitStateRef.current.theta = theta;
+      orbitStateRef.current.phi = phi;
+      orbitStateRef.current.radius = Math.max(160.0, Math.min(260.0, orbitStateRef.current.radius));
     }
   }, []);
+
+  const handleLocateBeacon = useCallback(() => {
+    const bPos = tgtPosRef.current;
+    const len = bPos.length();
+    if (len > 0.001) {
+      const phi = Math.asin(Math.max(-0.95, Math.min(0.95, bPos.y / len)));
+      const theta = Math.atan2(bPos.x, bPos.z);
+      orbitStateRef.current.theta = theta;
+      orbitStateRef.current.phi = phi;
+      orbitStateRef.current.radius = Math.max(150.0, Math.min(240.0, orbitStateRef.current.radius));
+    }
+  }, []);
+
+  // Listen for global "fsoc:locate-satellite" and "fsoc:locate-beacon" events
+  useEffect(() => {
+    const onLocateSat = () => handleLocateSatellite();
+    const onLocateBeacon = () => handleLocateBeacon();
+
+    window.addEventListener('fsoc:locate-satellite', onLocateSat);
+    window.addEventListener('fsoc:jump-to-sat', onLocateSat);
+    window.addEventListener('fsoc:locate-beacon', onLocateBeacon);
+
+    return () => {
+      window.removeEventListener('fsoc:locate-satellite', onLocateSat);
+      window.removeEventListener('fsoc:jump-to-sat', onLocateSat);
+      window.removeEventListener('fsoc:locate-beacon', onLocateBeacon);
+    };
+  }, [handleLocateSatellite, handleLocateBeacon]);
 
   // Global Keyboard Shortcut: Ctrl+Z (undo waypoint), S/F (instant satellite focus), Esc (return to Earth)
   useEffect(() => {
@@ -1572,16 +1597,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         }
       }
 
-      // Quick shortcut to jump / toggle satellite focus view: S or F key
+      // Quick shortcut to jump to satellite view: S or F key
       if ((e.key === 's' || e.key === 'S' || e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        handleToggleFocusSatellite();
-      }
-
-      // Escape key returns to Earth overview
-      if (e.key === 'Escape' && focusModeRef.current === 'satellite') {
-        e.preventDefault();
-        handleToggleFocusSatellite();
+        handleLocateSatellite();
       }
     };
 
@@ -1589,7 +1608,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleUndoLastWaypoint, handleToggleFocusSatellite]);
+  }, [handleUndoLastWaypoint, handleLocateSatellite]);
 
   const handleCenterTargetOnGlobe = () => {
     setAutoLOS(true);
@@ -3089,7 +3108,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           action: () => {
             setSelectedPresetId('leo-550-p1');
             setSelectedMarkerType('sat');
-            handleFocusSatellite();
+            handleLocateSatellite();
           },
         });
       }
@@ -3101,7 +3120,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               action: () => {
                 setSelectedPresetId('leo-550-p1');
                 setSelectedMarkerType('sat');
-                handleFocusSatellite();
+                handleLocateSatellite();
               },
             });
           }
@@ -3143,17 +3162,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (focusModeRef.current === 'satellite') {
-        orbitStateRef.current.radius = Math.max(
-          3.0,
-          Math.min(80.0, orbitStateRef.current.radius + e.deltaY * 0.04)
-        );
-      } else {
-        orbitStateRef.current.radius = Math.max(
-          105,
-          Math.min(1800, orbitStateRef.current.radius + e.deltaY * 0.4)
-        );
-      }
+      orbitStateRef.current.radius = Math.max(
+        105,
+        Math.min(1800, orbitStateRef.current.radius + e.deltaY * 0.4)
+      );
       e.preventDefault();
     };
 
@@ -3874,19 +3886,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         );
       });
 
-      // Spherical camera view around scene origin (0, 0, 0) OR tracked satellite in space
+      // Keep track of latest satellite position for instant locating
+      latestSatPosRef.current.copy(currentSatPos);
+
+      // Spherical camera view around scene origin (0, 0, 0)
       const { theta, phi, radius } = orbitStateRef.current;
-      if (focusModeRef.current === 'satellite') {
-        perspCamera.position.x = currentSatPos.x + radius * Math.sin(theta) * Math.cos(phi);
-        perspCamera.position.y = currentSatPos.y + radius * Math.sin(phi);
-        perspCamera.position.z = currentSatPos.z + radius * Math.cos(theta) * Math.cos(phi);
-        perspCamera.lookAt(currentSatPos.x, currentSatPos.y, currentSatPos.z);
-      } else {
-        perspCamera.position.x = radius * Math.sin(theta) * Math.cos(phi);
-        perspCamera.position.y = radius * Math.sin(phi);
-        perspCamera.position.z = radius * Math.cos(theta) * Math.cos(phi);
-        perspCamera.lookAt(0, 0, 0);
-      }
+      perspCamera.position.x = radius * Math.sin(theta) * Math.cos(phi);
+      perspCamera.position.y = radius * Math.sin(phi);
+      perspCamera.position.z = radius * Math.cos(theta) * Math.cos(phi);
+      perspCamera.lookAt(0, 0, 0);
 
       renderer.render(scene, perspCamera);
     };
@@ -4092,19 +4100,24 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               <Compass className="w-3.5 h-3.5 text-slate-400 rotate-180" /> <span>N-Pole</span>
             </button>
 
-            {/* Jump / Focus Satellite Toggle */}
+            {/* Locate Satellite Button */}
             <button
-              onClick={handleToggleFocusSatellite}
-              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-2 transition ${
-                focusMode === 'satellite'
-                  ? 'border-cyan-500/70 bg-cyan-950/40 text-cyan-300 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white border-[#252A2E] hover:border-[#3A4048]'
-              }`}
-              title="Instantly jump camera directly to satellite in 3D orbit (Shortcut: S or F)"
+              onClick={handleLocateSatellite}
+              className="px-2.5 py-1 bg-[#12161A] hover:bg-cyan-950/60 text-cyan-300 hover:text-white rounded border border-[#252A2E] hover:border-cyan-500 flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
+              title="Instantly orient camera to face satellite on the globe (Shortcut: S)"
             >
-              <Crosshair className={`w-3.5 h-3.5 ${focusMode === 'satellite' ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
-              <span>{focusMode === 'satellite' ? 'Sat Focus (Active)' : 'Jump to Sat'}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1C2127] text-slate-300 font-mono">S</span>
+              <Satellite className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Locate Sat</span>
+            </button>
+
+            {/* Locate Beacon Button */}
+            <button
+              onClick={handleLocateBeacon}
+              className="px-2.5 py-1 bg-[#12161A] hover:bg-rose-950/60 text-rose-300 hover:text-white rounded border border-[#252A2E] hover:border-rose-500 flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
+              title="Instantly orient camera to face beacon on the globe (Shortcut: B)"
+            >
+              <Radio className="w-3.5 h-3.5 text-rose-400" />
+              <span>Locate Beacon</span>
             </button>
 
             {/* Reset Camera View */}
@@ -4125,6 +4138,20 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               <Layers className="w-3.5 h-3.5 text-slate-400" />
               <span>Overlays (7)</span>
               {showLayerBar ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+
+            {/* Pop out in new tab option */}
+            <button
+              onClick={() => {
+                const url = new URL(window.location.origin + window.location.pathname);
+                url.searchParams.set('popout', '3d');
+                window.open(url.toString(), '_blank', 'noopener,noreferrer');
+              }}
+              className="px-2.5 py-1 bg-[#12161A] hover:bg-cyan-950/60 text-cyan-300 hover:text-white rounded border border-[#252A2E] hover:border-cyan-500/80 flex items-center gap-1.5 text-xs transition cursor-pointer font-medium shadow-sm ml-1"
+              title="Pop out 3D Virtual Scene & all settings into a new browser tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Pop out</span>
             </button>
           </div>
         </div>
@@ -4381,40 +4408,24 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           className={`w-full h-full ${isDrawingPath ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
         />
 
-        {/* Instant Satellite Focus Status Banner & Return Controls */}
-        {focusMode === 'satellite' && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-slate-950/95 backdrop-blur-md border border-amber-500/80 text-amber-300 text-xs font-mono px-4 py-1.5 rounded-full shadow-2xl z-30 flex items-center gap-3 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-            <span className="font-semibold flex items-center gap-1.5 text-amber-300">
-              <Crosshair className="w-3.5 h-3.5 text-amber-400" />
-              SATELLITE CHASE TRACKING ACTIVE
-            </span>
-            <span className="text-[10px] text-slate-400 hidden md:inline">
-              Drag: Orbit · Scroll: Zoom (3x - 80x)
-            </span>
+        {/* Floating Quick Locate Buttons (Unrestricted global access) */}
+        {!isDrawingPath && (
+          <div className="absolute bottom-3 right-4 z-20 pointer-events-auto flex items-center gap-2">
             <button
-              onClick={resetCameraView}
-              className="px-2.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-              title="Return camera to global Earth overview (Shortcut: S, F, or Esc)"
+              onClick={handleLocateSatellite}
+              className="bg-slate-950/95 hover:bg-cyan-950/80 backdrop-blur-md border border-cyan-500/80 hover:border-cyan-400 text-cyan-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(6,182,212,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+              title="Instantly orient camera to face satellite on the globe (Shortcut: S)"
             >
-              <Globe className="w-3 h-3 text-cyan-400" />
-              <span>Return to Earth</span>
-              <kbd className="px-1 py-0.2 bg-black/50 text-slate-400 rounded text-[9px]">Esc</kbd>
+              <Satellite className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
+              <span className="font-semibold text-[11px]">Locate satellite</span>
             </button>
-          </div>
-        )}
-
-        {/* Floating Quick Jump-to-Satellite Pill (When in Earth mode) */}
-        {focusMode === 'earth' && !isDrawingPath && (
-          <div className="absolute bottom-3 right-4 z-20 pointer-events-auto">
             <button
-              onClick={handleToggleFocusSatellite}
-              className="bg-slate-950/90 hover:bg-slate-900 backdrop-blur-md border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-2xl flex items-center gap-2 text-xs font-mono transition group cursor-pointer"
-              title="Instantly jump camera directly to satellite in space (Press S or F)"
+              onClick={handleLocateBeacon}
+              className="bg-slate-950/95 hover:bg-rose-950/80 backdrop-blur-md border border-rose-500/80 hover:border-rose-400 text-rose-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(244,63,94,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+              title="Instantly orient camera to face beacon on the globe (Shortcut: B)"
             >
-              <Crosshair className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
-              <span className="font-semibold text-[11px]">Jump to Satellite</span>
-              <kbd className="px-1.5 py-0.2 bg-cyan-950/80 border border-cyan-700 text-cyan-300 rounded text-[9px] font-bold">S</kbd>
+              <Radio className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition" />
+              <span className="font-semibold text-[11px]">Locate beacon</span>
             </button>
           </div>
         )}

@@ -5,7 +5,7 @@ import { Scene3DViewport } from '../simulation/Scene3DViewport';
 import { OrbitalScene3DViewport } from '../simulation/OrbitalScene3DViewport';
 import { OrbitalControlsPanel } from '../simulation/OrbitalControlsPanel';
 import { OrbitalTelemetryPanel } from '../simulation/OrbitalTelemetryPanel';
-import { Compass, Box, Layers, Play, Pause, RotateCcw, Globe, ChevronDown } from 'lucide-react';
+import { Compass, Box, Layers, Play, Pause, RotateCcw, Globe, ChevronDown, Crosshair } from 'lucide-react';
 import { api } from '../services/api';
 import { useSceneSettings } from '../hooks/useSceneSettings';
 
@@ -169,6 +169,22 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               title="Reset Simulation"
             >
               <RotateCcw className="w-4 h-4" />
+            </button>
+
+            {/* Jump to Sat Button */}
+            <button
+              onClick={() => {
+                if (activeViewTab === '2d') {
+                  setActiveViewTab('3d');
+                }
+                window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
+              }}
+              className="px-3 py-1.5 rounded-md font-semibold text-xs transition flex items-center gap-1.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-600/80 hover:border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer"
+              title="Jump 3D Camera Directly in Front of Satellite (Shortcut: S or F)"
+            >
+              <Crosshair className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <span>Jump to Sat</span>
+              <kbd className="px-1 py-0.2 bg-black/50 text-[9px] rounded text-slate-300 font-mono">S</kbd>
             </button>
           </div>
         </div>
