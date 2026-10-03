@@ -95,9 +95,15 @@ class TargetIdentificationEngine:
             # Direct hard-rejection for extreme false bright objects if enabled
             is_clutter = False
             if self.config.reject_false_bright_objects:
-                # Glints that are larger than 4x expected area or smaller than 0.05x
-                if cand.area > 400.0 or cand.area < 2.0:
+                # Glints that are larger than 2x expected area (cloud glints) or smaller than 0.05x (hot pixels)
+                if cand.area > 200.0 or cand.area < 2.0:
                     is_clutter = True
+                # Elongated glints / scratch reflections failing circularity / aspect ratio consistency
+                if cand.bbox and len(cand.bbox) >= 4:
+                    bw, bh = cand.bbox[2], cand.bbox[3]
+                    ar = float(bw) / max(1.0, float(bh))
+                    if ar > 2.2 or ar < 0.45:
+                        is_clutter = True
 
             # 2. Position Score (Spatial Gating):
             if ref_x is not None and ref_y is not None:

@@ -1166,16 +1166,16 @@ def reset_analytics_metrics():
 
 class CreateExperimentRequest(BaseModel):
     name: str = Field(..., description="Experiment title / scenario name")
-    algorithm: Literal["Basic CV", "CV + Kalman", "CV + PID", "AI", "AI + Kalman", "AI + Kalman + PID"] = "CV + PID"
+    algorithm: Literal["Basic CV", "CV + Kalman", "CV + PID", "AI", "AI + Kalman", "AI + Kalman + PID"] = "AI + Kalman"
     target_motion: Literal[
         "Straight Line", "Circular", "Figure of 8", "Random", "Spiral", "Sinusoidal"
-    ] = "Straight Line"
+    ] = "Figure of 8"
     noise_type: Literal["None", "Salt & Pepper", "Gaussian", "Poisson", "Multi-Noise"] = "None"
     noise_level_sigma: float = Field(0.0, ge=0.0, le=20.0)
     atmosphere: Literal["Clear", "Haze", "Fog", "Rain", "Low Light"] = "Clear"
-    pid_kp: float = Field(0.25, ge=0.0, le=2.0)
-    pid_ki: float = Field(0.02, ge=0.0, le=1.0)
-    pid_kd: float = Field(0.05, ge=0.0, le=1.0)
+    pid_kp: float = Field(70.0, ge=0.0, le=200.0)
+    pid_ki: float = Field(11.0, ge=0.0, le=50.0)
+    pid_kd: float = Field(1.8, ge=0.0, le=50.0)
     kalman_enabled: bool = True
     duration_s: float = Field(3.0, ge=1.0, le=60.0)
 
@@ -1194,6 +1194,11 @@ def run_custom_experiment(cmd: CreateExperimentRequest):
 
     base_cfg = config_manager.get_config()
     cfg = copy.deepcopy(base_cfg)
+
+    # Ensure target placement is centered inside FOV for controlled experiment
+    cfg.target.initial_location_mode = "Center"
+    cfg.control.mode = "PID Coarse Pointing"
+    cfg.control.integral_windup_limit = 5.0
 
     # Configure trial parameters
     cfg.motion.trajectory_type = cmd.target_motion  # type: ignore
@@ -1215,12 +1220,16 @@ def run_custom_experiment(cmd: CreateExperimentRequest):
         cfg.disturbance.gaussian_noise_enabled = True
         cfg.disturbance.salt_pepper_enabled = True
 
-    cfg.control.kp_pan = cmd.pid_kp
-    cfg.control.ki_pan = cmd.pid_ki
-    cfg.control.kd_pan = cmd.pid_kd
-    cfg.control.kp_tilt = cmd.pid_kp
-    cfg.control.ki_tilt = cmd.pid_ki
-    cfg.control.kd_tilt = cmd.pid_kd
+    # Gain scaling: if caller passes legacy low gains (< 5.0), scale to deg plant
+    kp = cmd.pid_kp * 160.0 if (0.0 < cmd.pid_kp < 5.0) else cmd.pid_kp
+    ki = cmd.pid_ki * 160.0 if (0.0 < cmd.pid_ki < 1.0) else cmd.pid_ki
+    kd = cmd.pid_kd * 10.0 if (0.0 < cmd.pid_kd < 0.5) else cmd.pid_kd
+    cfg.control.kp_pan = min(90.0, max(20.0, kp)) if kp > 0 else 0.0
+    cfg.control.ki_pan = min(25.0, max(2.0, ki)) if ki > 0 else 0.0
+    cfg.control.kd_pan = min(10.0, max(0.2, kd)) if kd > 0 else 0.0
+    cfg.control.kp_tilt = cfg.control.kp_pan
+    cfg.control.ki_tilt = cfg.control.ki_pan
+    cfg.control.kd_tilt = cfg.control.kd_pan
 
     # Map algorithm
     algo_map = {

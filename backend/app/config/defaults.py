@@ -39,32 +39,35 @@ def get_default_config() -> SystemConfig:
             target_count=1,  # Target count: 1
             shape="Square",  # Square mandatory
             size_pixels=10,  # 10x10 pixels
-            initial_location_mode="Random",  # Target initial location: Random
+            initial_location_mode="Center",  # Center of FOV
             intensity=255.0,
         ),
         motion=MotionConfig(
-            trajectory_type="Straight Line",  # Straight Line, Circular, Figure of 8, Random
+            trajectory_type="Figure of 8",  # Straight Line, Circular, Figure of 8, Random
             speed_pixels_per_s=40.0,
             screen_width=2000,  # Screen size: 2000x2000 minimum
             screen_height=2000,
         ),
         detection=DetectionConfig(
-            algorithm="Threshold Centroid",
-            intensity_threshold=180,
+            method="AI + Kalman",
+            algorithm="AI Detector",
+            intensity_threshold=120,
             subpixel_accuracy=True,
+            reject_false_bright_objects=True,
         ),
         tracking=TrackingConfig(
-            algorithm="None",  # Placeholder for Part 6
-            update_interval_hz=20.0,  # Tracking update interval >= 20 Hz
+            algorithm="Kalman Filter",
+            update_interval_hz=30.0,
         ),
         control=ControlConfig(
-            mode="Open Loop",  # Placeholder for Part 6
-            kp_pan=0.8,
-            ki_pan=0.02,
-            kd_pan=0.15,
-            kp_tilt=0.8,
-            ki_tilt=0.02,
-            kd_tilt=0.15,
+            mode="PID Coarse Pointing",
+            kp_pan=70.0,
+            ki_pan=11.0,
+            kd_pan=1.8,
+            kp_tilt=70.0,
+            ki_tilt=11.0,
+            kd_tilt=1.8,
+            integral_windup_limit=5.0,
         ),
         disturbance=DisturbanceConfig(
             noise_type="None",  # Salt & Pepper, Gaussian, Poisson

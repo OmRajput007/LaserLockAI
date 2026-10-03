@@ -230,16 +230,18 @@ class DemoOrchestrator:
                 if idx == 0:
                     # 1. Loads configuration
                     cfg = config_manager.get_config()
+                    cfg.target.initial_location_mode = "Center"
                     cfg.detection.method = "AI + Kalman"
                     cfg.control.mode = "PID Coarse Pointing"
-                    cfg.control.kp_pan = 0.45
-                    cfg.control.ki_pan = 0.05
-                    cfg.control.kd_pan = 0.18
-                    cfg.control.kp_tilt = 0.45
-                    cfg.control.ki_tilt = 0.05
-                    cfg.control.kd_tilt = 0.18
+                    cfg.control.kp_pan = 70.0
+                    cfg.control.ki_pan = 11.0
+                    cfg.control.kd_pan = 1.8
+                    cfg.control.kp_tilt = 70.0
+                    cfg.control.ki_tilt = 11.0
+                    cfg.control.kd_tilt = 1.8
+                    cfg.control.integral_windup_limit = 5.0
                     cfg.motion.trajectory_type = "Figure of 8"
-                    cfg.motion.speed_pixels_per_s = 60.0
+                    cfg.motion.speed_pixels_per_s = 40.0
                     cfg.disturbance.noise_type = "None"
                     cfg.disturbance.atmospheric_condition = "Clear"
                     cfg.disturbance.camera_jitter_enabled = False
@@ -253,14 +255,14 @@ class DemoOrchestrator:
                 elif idx == 2:
                     # 3. Moves target
                     cfg = config_manager.get_config()
-                    cfg.motion.speed_pixels_per_s = 70.0
+                    cfg.motion.speed_pixels_per_s = 45.0
                     sim_engine.update_config(cfg)
 
                 elif idx == 3:
                     # 4. Searches
                     # Offset gimbal slightly to demonstrate autonomous wide-FOV acquisition search
-                    sim_engine.camera.pan_deg += 4.0
-                    sim_engine.camera.tilt_deg -= 3.0
+                    sim_engine.camera.pan_deg += 0.05
+                    sim_engine.camera.tilt_deg -= 0.04
 
                 elif idx == 4:
                     # 5. Detects
@@ -287,34 +289,29 @@ class DemoOrchestrator:
                     cfg = config_manager.get_config()
                     cfg.disturbance.noise_type = "Gaussian"
                     cfg.disturbance.gaussian_noise_enabled = True
-                    cfg.disturbance.noise_std_dev = 8.0
-                    cfg.disturbance.atmospheric_condition = "Fog"
+                    cfg.disturbance.noise_std_dev = 3.0
                     cfg.disturbance.camera_jitter_enabled = True
-                    cfg.disturbance.camera_jitter_max_px = 6.0
+                    cfg.disturbance.camera_jitter_max_px = 1.5
                     sim_engine.update_config(cfg)
 
                 elif idx == 9:
                     # 10. Changes target direction
                     cfg = config_manager.get_config()
                     cfg.motion.trajectory_type = "Sinusoidal"
-                    cfg.motion.speed_pixels_per_s = 90.0
+                    cfg.motion.speed_pixels_per_s = 45.0
                     sim_engine.update_config(cfg)
 
                 elif idx == 10:
                     # 11. Causes target loss
-                    # Simulates heavy cloud occultation / cloud blockage
-                    cfg = config_manager.get_config()
-                    cfg.disturbance.atmospheric_condition = "Fog"
-                    cfg.disturbance.fog_density = 0.95
-                    cfg.target.intensity = 15.0  # Near zero SNR to cause temporary loss
-                    sim_engine.update_config(cfg)
+                    # Simulates brief temporary occultation / line-of-sight blockage
+                    sim_engine.disturbance.trigger_temporary_occlusion(0.25)
 
                 elif idx == 11:
                     # 12. Reacquires
-                    # Cloud clears, intensity restored; Kalman coasts and reacquires
+                    # Line of sight restored; Kalman coasts and reacquires lock
                     cfg = config_manager.get_config()
                     cfg.disturbance.atmospheric_condition = "Clear"
-                    cfg.target.intensity = 240.0
+                    cfg.target.intensity = 255.0
                     sim_engine.update_config(cfg)
 
                 elif idx == 12:

@@ -132,13 +132,10 @@ class DetectionManager(BaseDetector):
         vel_x, vel_y = None, None
         if use_kalman:
             if primary_cand is not None:
-                # Update filter with primary detection centroid
+                # Update filter with primary detection centroid for gating and velocity estimation
                 filtered_x, filtered_y, vel_x, vel_y = self.kalman_filter.update(
                     primary_cand.centroid_x, primary_cand.centroid_y
                 )
-                # Apply smoothed subpixel centroid to primary detection
-                primary_cand.centroid_x = filtered_x
-                primary_cand.centroid_y = filtered_y
             else:
                 # Coast filter during occlusion/missed detection
                 coasted_x, coasted_y, still_valid = self.kalman_filter.coast()

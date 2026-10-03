@@ -119,23 +119,30 @@ class StraightLineTrajectory(BaseTrajectory):
 
 
 class CircularTrajectory(BaseTrajectory):
-    """Circular orbit in XY-plane at fixed Z depth."""
+    """Circular orbit in XY-plane at fixed Z depth scaled to sensor FOV."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.radius = min(self.world_width, self.world_height) * 0.3  # 30% of world
-        self.angular_speed = self.speed / max(self.radius, 1.0)  # ω = v / r
+        # Sized within camera FOV (~70m x 52m at 1000m range)
+        self.radius = 15.0
+        self.angular_speed = 0.05  # ~2.8 deg/s angular rate
         self.theta = 0.0
 
     def reset(self, initial_mode: str = "Random"):
         super().reset(initial_mode)
         self.theta = random.uniform(0, 2 * math.pi) if initial_mode == "Random" else 0.0
+        if initial_mode == "Center":
+            self.x = self.cx
+            self.y = self.cy
+        else:
+            self.x = self.cx + self.radius * (math.cos(self.theta) - 1.0)
+            self.y = self.cy + self.radius * math.sin(self.theta)
 
     def evaluate(self, dt: float) -> Tuple[Vec3, Vec3, Vec3]:
         self.t += dt
         self.theta += self.angular_speed * dt
 
-        self.x = self.cx + self.radius * math.cos(self.theta)
+        self.x = self.cx + self.radius * (math.cos(self.theta) - 1.0)
         self.y = self.cy + self.radius * math.sin(self.theta)
         self.z = self.cz
 
@@ -151,17 +158,24 @@ class CircularTrajectory(BaseTrajectory):
 
 
 class FigureOf8Trajectory(BaseTrajectory):
-    """Lissajous figure-of-8 (2:1 frequency ratio) trajectory."""
+    """Lissajous figure-of-8 (2:1 frequency ratio) trajectory scaled to sensor FOV."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.amplitude_x = self.world_width * 0.25
-        self.amplitude_y = self.world_height * 0.15
-        self.omega = self.speed / max(self.amplitude_x, 1.0)
+        # Sized within camera FOV (~70m x 52m at 1000m range)
+        self.amplitude_x = 20.0
+        self.amplitude_y = 12.0
+        self.omega = self.speed / 500.0
 
     def reset(self, initial_mode: str = "Random"):
         super().reset(initial_mode)
         self.t = random.uniform(0, 2 * math.pi) if initial_mode == "Random" else 0.0
+        if initial_mode == "Center":
+            self.x = self.cx
+            self.y = self.cy
+        else:
+            self.x = self.cx + self.amplitude_x * math.sin(self.omega * self.t)
+            self.y = self.cy + self.amplitude_y * math.sin(2 * self.omega * self.t)
 
     def evaluate(self, dt: float) -> Tuple[Vec3, Vec3, Vec3]:
         self.t += dt

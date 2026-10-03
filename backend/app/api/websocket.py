@@ -45,6 +45,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
+            t_loop_start = asyncio.get_event_loop().time()
             # If simulation is marked running, advance step; else sample current state
             if sim_engine.is_running:
                 telemetry = sim_engine.step()
@@ -53,9 +54,13 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
 
             await websocket.send_text(telemetry.model_dump_json())
 
+            target_interval = max(0.010, sim_engine.dt)
+            elapsed = asyncio.get_event_loop().time() - t_loop_start
+            wait_time = max(0.001, target_interval - elapsed)
+
             # Check if any incoming command arrived over WebSocket
             try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=0.033)
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=wait_time)
                 cmd = json.loads(data)
 
                 # Slider target angle commands

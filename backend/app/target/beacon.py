@@ -329,13 +329,20 @@ class TargetManager:
         Updates configuration and rebuilds targets if target count or type changed.
         Preserves current positions for live parameter changes.
         """
-        count_changed = target_config.target_count != self.target_config.target_count
-        traj_changed = motion_config.trajectory_type != self.motion_config.trajectory_type
+        count_changed = target_config.target_count != len(self.targets)
+        traj_changed = motion_config.trajectory_type != getattr(self, "_last_trajectory_type", None)
+        gen_mismatch = False
+        if self.targets and self.targets[0]._generator is not None:
+            from backend.app.target.motion_generators import create_motion_generator
+            expected_gen = create_motion_generator(motion_config.trajectory_type)
+            if type(self.targets[0]._generator) != type(expected_gen):
+                gen_mismatch = True
 
         self.target_config = target_config
         self.motion_config = motion_config
+        self._last_trajectory_type = motion_config.trajectory_type
 
-        if count_changed or traj_changed:
+        if count_changed or traj_changed or gen_mismatch:
             self._build_targets()
         else:
             # Just update visual properties in-place (no position reset)
