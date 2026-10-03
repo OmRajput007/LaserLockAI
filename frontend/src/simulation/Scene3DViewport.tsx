@@ -1565,15 +1565,29 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   useEffect(() => {
     const onLocateSat = () => handleLocateSatellite();
     const onLocateBeacon = () => handleLocateBeacon();
+    const onStopAll = () => {
+      activeOrbitRef.current.autoRevolve = false;
+      beaconMotionRef.current.isRevolving = false;
+      earthSpinRef.current.enabled = false;
+    };
+    const onStartAll = () => {
+      activeOrbitRef.current.autoRevolve = true;
+      beaconMotionRef.current.isRevolving = true;
+      earthSpinRef.current.enabled = true;
+    };
 
     window.addEventListener('fsoc:locate-satellite', onLocateSat);
     window.addEventListener('fsoc:jump-to-sat', onLocateSat);
     window.addEventListener('fsoc:locate-beacon', onLocateBeacon);
+    window.addEventListener('fsoc:stop-all-processes', onStopAll);
+    window.addEventListener('fsoc:start-all-processes', onStartAll);
 
     return () => {
       window.removeEventListener('fsoc:locate-satellite', onLocateSat);
       window.removeEventListener('fsoc:jump-to-sat', onLocateSat);
       window.removeEventListener('fsoc:locate-beacon', onLocateBeacon);
+      window.removeEventListener('fsoc:stop-all-processes', onStopAll);
+      window.removeEventListener('fsoc:start-all-processes', onStartAll);
     };
   }, [handleLocateSatellite, handleLocateBeacon]);
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { VirtualSceneCanvas } from '../simulation/VirtualSceneCanvas';
 import { FPACameraViewport } from '../simulation/FPACameraViewport';
@@ -16,6 +16,7 @@ import {
   Crosshair,
   ChevronDown,
   ChevronUp,
+  Square,
 } from 'lucide-react';
 
 interface Props {
@@ -63,6 +64,54 @@ export const MissionControlPage: React.FC<Props> = ({
   const isLocked = telemetry?.tracking.is_locked ?? false;
   const inFov = telemetry?.target.is_in_fov ?? false;
   const target = telemetry?.target ?? null;
+
+  // Stop / Start All Calculating Processes State
+  const [isProcessesRunning, setIsProcessesRunning] = useState<boolean>(true);
+  const initialMountRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      return;
+    }
+    if (telemetry?.is_running !== undefined) {
+      setIsProcessesRunning(telemetry.is_running);
+    }
+  }, [telemetry?.is_running]);
+
+  const handleToggleAllProcesses = useCallback(async () => {
+    if (isProcessesRunning) {
+      // Stop all calculating processes across backend simulation & frontend 3D kinetics
+      setIsProcessesRunning(false);
+      try {
+        onToggleSim(false);
+        await api.pauseSimulation();
+      } catch (err) {
+        console.error('Failed to pause simulation backend:', err);
+      }
+      set({
+        autoRevolve: false,
+        beaconRevolving: false,
+        earthSpinEnabled: false,
+      });
+      window.dispatchEvent(new CustomEvent('fsoc:stop-all-processes'));
+    } else {
+      // Start all calculating processes across backend simulation & frontend 3D kinetics
+      setIsProcessesRunning(true);
+      try {
+        onToggleSim(true);
+        await api.startSimulation();
+      } catch (err) {
+        console.error('Failed to start simulation backend:', err);
+      }
+      set({
+        autoRevolve: true,
+        beaconRevolving: true,
+        earthSpinEnabled: true,
+      });
+      window.dispatchEvent(new CustomEvent('fsoc:start-all-processes'));
+    }
+  }, [isProcessesRunning, onToggleSim, set]);
 
   return (
     <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
@@ -165,12 +214,12 @@ export const MissionControlPage: React.FC<Props> = ({
       </div>
 
       {/* Viewport Mode Switcher */}
-      <div className="flex items-center justify-between bg-[#1B1D1A] px-3 py-2 rounded-lg border border-[#33362F] text-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#1B1D1A] px-3 py-2 rounded-lg border border-[#33362F] text-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[#9CA195] font-medium uppercase tracking-wider">Viewport:</span>
           <button
             onClick={() => setViewMode('3d')}
-            className={`px-3 py-1 rounded font-mono transition flex items-center gap-1.5 border ${
+            className={`px-3 py-1 rounded font-mono transition flex items-center gap-1.5 border cursor-pointer ${
               viewMode === '3d'
                 ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
                 : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
@@ -180,7 +229,7 @@ export const MissionControlPage: React.FC<Props> = ({
           </button>
           <button
             onClick={() => setViewMode('dual')}
-            className={`px-3 py-1 rounded font-mono transition flex items-center gap-1.5 border ${
+            className={`px-3 py-1 rounded font-mono transition flex items-center gap-1.5 border cursor-pointer ${
               viewMode === 'dual'
                 ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
                 : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
@@ -190,13 +239,36 @@ export const MissionControlPage: React.FC<Props> = ({
           </button>
           <button
             onClick={() => setViewMode('2d_camera')}
-            className={`px-3 py-1 rounded font-mono transition flex items-center gap-1.5 border ${
+            className={`px-3 py-1 rounded font-mono transition flex items-center gap-1.5 border cursor-pointer ${
               viewMode === '2d_camera'
                 ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
                 : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
             }`}
           >
             <Crosshair className="w-3.5 h-3.5" /> 2D Camera Only
+          </button>
+
+          {/* Stop / Start All Calculating Processes Toggle Button */}
+          <button
+            id="btn-toggle-all-processes"
+            onClick={handleToggleAllProcesses}
+            className={`ml-2 px-3 py-1 rounded font-mono text-xs font-semibold transition flex items-center gap-1.5 border shadow-sm cursor-pointer ${
+              isProcessesRunning
+                ? 'bg-[#DC2626] hover:bg-[#B91C1C] active:bg-[#991B1B] text-white border-[#EF4444]'
+                : 'bg-[#16A34A] hover:bg-[#15803D] active:bg-[#166534] text-white border-[#22C55E]'
+            }`}
+            title={
+              isProcessesRunning
+                ? 'Stop all calculation and simulation processes across the software'
+                : 'Start all calculation and simulation processes across the software'
+            }
+          >
+            {isProcessesRunning ? (
+              <Square className="w-3 h-3 fill-current" />
+            ) : (
+              <Play className="w-3 h-3 fill-current" />
+            )}
+            <span>{isProcessesRunning ? 'Stop all processes' : 'Start all processes'}</span>
           </button>
         </div>
 
