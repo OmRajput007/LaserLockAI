@@ -17,6 +17,8 @@ import {
   Volume2,
   VolumeX,
   RefreshCw,
+  Camera,
+  Download,
 } from 'lucide-react';
 import { alarmAudio } from '../services/alarmAudio';
 
@@ -45,6 +47,139 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   const [hasStreamError, setHasStreamError] = useState(false);
   const nextTickTimerRef = useRef<any>(null);
   const lastLoadTimeRef = useRef<number>(Date.now());
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Manual Satellite Camera POV Image Capture State
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [shutterFlash, setShutterFlash] = useState(false);
+  const [lastCapturedImage, setLastCapturedImage] = useState<{ url: string; filename: string; time: string } | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [captureNotice, setCaptureNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<any>(null);
+
+  // Synthesize camera shutter audio click
+  const playShutterSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.07);
+    } catch {
+      // Audio autoplay policy
+    }
+  };
+
+  // Capture satellite camera POV image manually
+  const handleCaptureImage = async () => {
+    setIsCapturing(true);
+    setShutterFlash(true);
+    playShutterSound();
+    setTimeout(() => setShutterFlash(false), 200);
+
+    try {
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const filename = `satellite_pov_${timestamp}.jpg`;
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      // Create high-resolution 640x480 canvas for satellite camera POV snapshot
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context unavailable');
+
+      let imageDrawn = false;
+      try {
+        const res = await fetch(`/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${Date.now()}`);
+        if (res.ok) {
+          const blob = await res.blob();
+          const imgBitmap = await createImageBitmap(blob);
+          ctx.drawImage(imgBitmap, 0, 0, 640, 480);
+          imageDrawn = true;
+        }
+      } catch {
+        imageDrawn = false;
+      }
+
+      if (!imageDrawn && imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+        try {
+          ctx.drawImage(imgRef.current, 0, 0, 640, 480);
+          imageDrawn = true;
+        } catch {
+          // If crossOrigin tainted, fallback
+        }
+      }
+
+      if (!imageDrawn) {
+        ctx.fillStyle = '#0B0D0F';
+        ctx.fillRect(0, 0, 640, 480);
+        ctx.strokeStyle = '#33362F';
+        ctx.strokeRect(10, 10, 620, 460);
+      }
+
+      // Burn-in technical aerospace watermark
+      ctx.save();
+      ctx.font = '10px monospace';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(8, 456, 380, 18);
+      ctx.fillStyle = '#F0FFEA';
+      ctx.fillText(`SAT-POV | UTC: ${now.toISOString()} | 640×480 px | FOV 4°×3°`, 14, 469);
+      ctx.restore();
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const blobUrl = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setLastCapturedImage({ url: blobUrl, filename, time: timeStr });
+        setCaptureNotice(`✓ Saved: ${filename}`);
+
+        if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = setTimeout(() => {
+          setCaptureNotice(null);
+        }, 3500);
+      }, 'image/jpeg', 0.95);
+    } catch (err) {
+      console.error('Failed to capture satellite POV image:', err);
+      setCaptureNotice('✕ Capture failed');
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = setTimeout(() => {
+        setCaptureNotice(null);
+      }, 3000);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  // Keyboard shortcut listener ('c' or 'C') to trigger image capture
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'c' || e.key === 'C') {
+        handleCaptureImage();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewMode]);
 
   // Smooth load-gated streaming: only request next frame once current frame finishes loading
   const handleFrameLoad = () => {
@@ -304,46 +439,72 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     <div className="flex flex-col bg-[#1B1D1A] border border-[#33362F] rounded-lg overflow-hidden shadow-2xl">
       {/* Telemetry band */}
       <div className="flex flex-col px-3.5 py-2.5 bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono gap-2.5">
-        <div className="flex items-center justify-between flex-wrap gap-2">
+        {/* Row 1: Header title on left, "Click image" button in green region on right */}
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-[#FF5F40]">
             <Video className="w-4 h-4 text-[#FF5F40]" />
             <span className="font-semibold tracking-wider text-xs text-[#F0FFEA]">FPA CAMERA VIEWPORT [640 × 480]</span>
           </div>
 
-          {/* View Mode Selector: OpenCV Annotated and OpenCV Raw Feed only */}
+          {/* "Click image" button - added on the green region in the FPA camera viewport area */}
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setViewMode('opencv_annotated')}
-              className={`px-3 py-1 rounded text-xs font-mono transition border ${
-                viewMode === 'opencv_annotated'
-                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
-                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
-              }`}
+              id="btn-click-image"
+              onClick={handleCaptureImage}
+              disabled={isCapturing}
+              className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] active:bg-[#1B1D1A] text-[#FF5F40] border border-[#FF5F40] hover:border-[#FF7459] rounded font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(255,95,64,0.3)] shrink-0"
+              title="Takes images of the satellite camera POV manually (Shortcut: C)"
             >
-              OpenCV Annotated
+              <Camera className="w-3.5 h-3.5 text-[#FF5F40]" />
+              <span>{isCapturing ? 'Capturing...' : 'Click image'}</span>
+              <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">C</kbd>
             </button>
-            <button
-              onClick={() => setViewMode('opencv_raw')}
-              className={`px-3 py-1 rounded text-xs font-mono transition border ${
-                viewMode === 'opencv_raw'
-                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
-                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
-              }`}
-            >
-              OpenCV Raw Feed
-            </button>
-            <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
-              }}
-              className="px-2.5 py-1 rounded text-xs font-mono font-semibold transition flex items-center gap-1.5 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] cursor-pointer ml-1"
-              title="Jump 3D Orbit Camera to face Satellite in front (Shortcut: S or F)"
-            >
-              <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
-              <span>Jump to Sat</span>
-              <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
-            </button>
+            {lastCapturedImage && (
+              <button
+                onClick={() => setShowPreviewModal(true)}
+                className="px-2 py-1 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] rounded text-[11px] font-mono flex items-center gap-1 transition cursor-pointer"
+                title="View last captured satellite POV image"
+              >
+                <Eye className="w-3 h-3 text-[#FF5F40]" />
+                <span>View</span>
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Row 2: View Mode Selector: OpenCV Annotated, OpenCV Raw Feed, Jump to Sat */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+          <button
+            onClick={() => setViewMode('opencv_annotated')}
+            className={`px-3 py-1.5 rounded text-xs font-mono transition border text-center font-medium ${
+              viewMode === 'opencv_annotated'
+                ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
+            }`}
+          >
+            OpenCV Annotated
+          </button>
+          <button
+            onClick={() => setViewMode('opencv_raw')}
+            className={`px-3 py-1.5 rounded text-xs font-mono transition border text-center font-medium ${
+              viewMode === 'opencv_raw'
+                ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
+            }`}
+          >
+            OpenCV Raw Feed
+          </button>
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
+            }}
+            className="px-2.5 py-1.5 rounded text-xs font-mono font-semibold transition flex items-center justify-center gap-1.5 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] cursor-pointer"
+            title="Jump 3D Orbit Camera to face Satellite in front (Shortcut: S or F)"
+          >
+            <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
+            <span>Jump to Sat</span>
+            <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
+          </button>
         </div>
 
         {/* 4 Status Box Chips in a grid */}
@@ -409,12 +570,35 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         <div className="relative w-full max-w-[640px] aspect-[4/3] rounded border border-[#33362F] overflow-hidden bg-[#000000] shadow-2xl flex items-center justify-center">
           <div className="relative w-full h-full bg-[#000000] flex items-center justify-center z-10">
             <img
+              ref={imgRef}
               src={`/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${streamTick}`}
               alt="Live OpenCV Camera Feed"
+              crossOrigin="anonymous"
               onLoad={handleFrameLoad}
               onError={handleFrameError}
               className="w-full h-full object-contain"
             />
+
+            {/* Camera Shutter Flash Effect */}
+            {shutterFlash && (
+              <div className="absolute inset-0 bg-white/70 z-50 pointer-events-none transition-opacity duration-150 animate-pulse" />
+            )}
+
+            {/* Notification Badge when an image is clicked/saved */}
+            {captureNotice && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 bg-[#1B1D1A]/95 border border-[#FF5F40] text-[#FF5F40] rounded shadow-lg text-[11px] font-mono font-semibold flex items-center gap-2 backdrop-blur-sm">
+                <Camera className="w-3.5 h-3.5 text-[#FF5F40]" />
+                <span>{captureNotice}</span>
+                {lastCapturedImage && (
+                  <button
+                    onClick={() => setShowPreviewModal(true)}
+                    className="underline text-[#F0FFEA] hover:text-white cursor-pointer ml-1 text-[10px]"
+                  >
+                    View
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Standby / Offline HUD Overlay if stream is connecting or unavailable */}
             {hasStreamError && (
@@ -750,6 +934,59 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Captured Image Preview Modal */}
+      {showPreviewModal && lastCapturedImage && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1B1D1A] border border-[#33362F] rounded-xl max-w-xl w-full p-4 shadow-2xl flex flex-col gap-3 font-mono">
+            <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-[#FF5F40]" />
+                <span className="text-xs font-semibold text-[#F0FFEA] uppercase tracking-wider">
+                  Satellite Camera POV Snapshot
+                </span>
+              </div>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="text-[#9CA195] hover:text-[#F0FFEA] text-sm p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="relative w-full aspect-[4/3] bg-black rounded border border-[#33362F] overflow-hidden flex items-center justify-center">
+              <img
+                src={lastCapturedImage.url}
+                alt="Captured Satellite POV"
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-[#9CA195] pt-1">
+              <div>
+                <span className="text-[#F0FFEA] font-semibold">{lastCapturedImage.filename}</span>
+                <span className="text-[10px] text-[#5E625A] block">Captured at {lastCapturedImage.time} &bull; 640 × 480 px</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={lastCapturedImage.url}
+                  download={lastCapturedImage.filename}
+                  className="px-3 py-1 bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] font-bold text-xs rounded flex items-center gap-1.5 transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] text-xs rounded transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
