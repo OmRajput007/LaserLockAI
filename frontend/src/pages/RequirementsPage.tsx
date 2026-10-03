@@ -1,11 +1,11 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckSquare, ShieldCheck, RefreshCw } from 'lucide-react';
 import { OfficialRequirementStatus } from '../types';
 import { api } from '../services/api';
 
 export const RequirementsPage: React.FC = () => {
   const [liveReqs, setLiveReqs] = useState<OfficialRequirementStatus[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [, setLoading] = useState<boolean>(true);
 
   const fetchRequirements = async () => {
     try {
@@ -42,18 +42,18 @@ export const RequirementsPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs text-slate-200 pb-12">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA] pb-12">
       {/* Header */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-lg flex items-center justify-between">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-[#1E2124] border border-[#3A4048] flex items-center justify-center text-[#D6D9DC]">
-            <CheckSquare className="w-4 h-4" />
+          <div className="w-8 h-8 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center text-[#FF5F40]">
+            <CheckSquare className="w-4 h-4 text-[#FF5F40]" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
               Requirements Specification & Verification Matrix
             </h2>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <p className="text-[#9CA195] text-xs mt-0.5">
               System Traceability Matrix and Live Telemetry Compliance Evaluation
             </p>
           </div>
@@ -61,22 +61,22 @@ export const RequirementsPage: React.FC = () => {
 
         <button
           onClick={fetchRequirements}
-          className="px-3 py-1.5 bg-[#1A1D20] hover:bg-[#202c42] border border-[#2D3237] text-slate-300 hover:text-white rounded-md font-medium text-xs flex items-center gap-1.5 transition"
+          className="px-3 py-1.5 bg-[#262824] hover:bg-[#FF5F40]/20 border border-[#33362F] hover:border-[#FF5F40]/50 text-[#F0FFEA] rounded font-medium text-xs flex items-center gap-1.5 transition"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-slate-400" /> Refresh Evaluation
+          <RefreshCw className="w-3.5 h-3.5 text-[#FF5F40]" /> Refresh Evaluation
         </button>
       </div>
 
       {/* Live Requirement Evaluation Cards */}
-      <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-4">
-        <div className="flex items-center justify-between pb-3 border-b border-[#252A2E] mb-3">
+      <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4">
+        <div className="flex items-center justify-between pb-3 border-b border-[#33362F] mb-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span className="font-semibold text-xs text-slate-100">
+            <ShieldCheck className="w-4 h-4 text-[#FF5F40]" />
+            <span className="font-semibold text-xs uppercase tracking-wider text-[#F0FFEA]">
               Live Official Requirement Verification
             </span>
           </div>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-[#9CA195]">
             Dynamically evaluated against active simulation telemetry.
           </span>
         </div>
@@ -88,32 +88,32 @@ export const RequirementsPage: React.FC = () => {
             return (
               <div
                 key={i}
-                className="p-3 rounded-lg border border-[#252A2E] bg-[#111417] flex flex-col justify-between"
+                className="p-3 rounded border border-[#33362F] bg-[#262824]/60 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-[11px] font-medium">{req.parameter}</span>
+                    <span className="text-[#9CA195] text-[11px] font-medium">{req.parameter}</span>
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         isPass
-                          ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
+                          ? 'bg-[#FF5F40] text-[#0A0A0A]'
                           : isFail
-                          ? 'bg-rose-950/60 border-rose-700/60 text-rose-400'
-                          : 'bg-amber-950/60 border-amber-700/60 text-amber-400'
+                          ? 'bg-[#262824] border border-[#FF5F40] text-[#FF5F40]'
+                          : 'bg-[#262824] border border-[#33362F] text-[#9CA195]'
                       }`}
                     >
                       {req.status}
                     </span>
                   </div>
                   <div className="mt-2.5">
-                    <span className="text-base font-semibold text-slate-100 block num-mono">{req.actual}</span>
-                    <span className="text-[11px] text-slate-400">Required: {req.required}</span>
+                    <span className="text-base font-semibold text-[#F0FFEA] block font-mono">{req.actual}</span>
+                    <span className="text-[11px] text-[#9CA195]">Required: {req.required}</span>
                   </div>
                 </div>
 
-                <div className="mt-2.5 text-[11px] text-slate-500 pt-2 border-t border-[#252A2E] flex justify-between num-mono">
-                  <span className="font-sans">Margin:</span>
-                  <span className={isPass ? 'text-emerald-400 font-medium' : 'text-rose-400 font-medium'}>
+                <div className="mt-2.5 text-[11px] text-[#9CA195] pt-2 border-t border-[#33362F] flex justify-between font-mono">
+                  <span>Margin:</span>
+                  <span className={isPass ? 'text-[#FF5F40] font-bold' : 'text-[#F0FFEA] font-medium'}>
                     {req.margin !== null && req.margin !== undefined
                       ? `${req.margin > 0 ? '+' : ''}${req.margin.toFixed(2)} ${req.unit}`
                       : '--'}
@@ -126,20 +126,20 @@ export const RequirementsPage: React.FC = () => {
       </div>
 
       {/* Traceability Matrix Table */}
-      <div className="bg-[#121518] border border-[#252A2E] rounded-lg overflow-hidden">
-        <div className="p-3.5 bg-[#111417] border-b border-[#252A2E] flex items-center justify-between">
-          <span className="font-semibold text-xs text-slate-200">
+      <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg overflow-hidden">
+        <div className="p-3.5 bg-[#262824]/80 border-b border-[#33362F] flex items-center justify-between">
+          <span className="font-semibold text-xs uppercase tracking-wider text-[#F0FFEA]">
             System Requirements Traceability Matrix
           </span>
-          <span className="text-emerald-400 text-xs font-medium flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>14 / 14 Requirements Verified</span>
+          <span className="text-[#FF5F40] text-xs font-bold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40]" />
+            <span>✓ 14 / 14 Requirements Verified</span>
           </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#0D1012] border-b border-[#252A2E] text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+            <thead className="bg-[#000000] border-b border-[#33362F] text-[11px] text-[#9CA195] uppercase tracking-wider font-semibold">
               <tr>
                 <th className="p-3">Section</th>
                 <th className="p-3">Requirement Description</th>
@@ -147,15 +147,15 @@ export const RequirementsPage: React.FC = () => {
                 <th className="p-3 text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#252A2E] text-xs">
+            <tbody className="divide-y divide-[#33362F] text-xs">
               {requirementsMatrix.map((r, i) => (
-                <tr key={i} className="hover:bg-[#161f30] transition">
-                  <td className="p-3 font-medium text-slate-300 whitespace-nowrap">{r.section}</td>
-                  <td className="p-3 text-slate-100">{r.req}</td>
-                  <td className="p-3 num-mono text-slate-400">{r.spec}</td>
+                <tr key={i} className="hover:bg-[#262824]/50 transition">
+                  <td className="p-3 font-medium text-[#F0FFEA] whitespace-nowrap">{r.section}</td>
+                  <td className="p-3 text-[#F0FFEA]">{r.req}</td>
+                  <td className="p-3 font-mono text-[#9CA195]">{r.spec}</td>
                   <td className="p-3 text-right whitespace-nowrap">
-                    <span className="px-2 py-0.5 rounded bg-emerald-950/50 border border-emerald-700/50 text-emerald-400 font-medium text-[11px]">
-                      {r.status}
+                    <span className="px-2 py-0.5 rounded bg-[#FF5F40]/15 border border-[#FF5F40]/40 text-[#FF5F40] font-bold text-[11px]">
+                      ✓ {r.status}
                     </span>
                   </td>
                 </tr>

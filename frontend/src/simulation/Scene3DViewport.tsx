@@ -930,22 +930,22 @@ export const createBeaconLabelSprite = (
     ctx.fill();
     ctx.stroke();
 
-    // Red beacon status dot
-    ctx.fillStyle = '#f43f5e';
+    // Orange beacon status dot
+    ctx.fillStyle = '#FF5F40';
     ctx.beginPath();
     ctx.arc(24, 45, 5, 0, Math.PI * 2);
     ctx.fill();
 
     // Top Tag: [ BEACON · tag ]
     ctx.font = 'bold 18px monospace';
-    ctx.fillStyle = '#fca5a5';
+    ctx.fillStyle = '#FF5F40';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(`[ BEACON · ${tag} ]`, 38, 30);
 
     // Bottom Platform Name: ATMOSPHERIC UAV
     ctx.font = 'bold 22px sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#F0FFEA';
     ctx.fillText(text, 38, 58);
   }
 
@@ -979,8 +979,8 @@ export const updateBeaconLabelSprite = (
   if (ctx) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = 'rgba(6, 12, 26, 0.92)';
-    ctx.strokeStyle = isLocked ? 'rgba(16, 185, 129, 0.9)' : 'rgba(244, 63, 94, 0.88)';
+    ctx.fillStyle = 'rgba(27, 29, 26, 0.95)';
+    ctx.strokeStyle = isLocked ? 'rgba(255, 95, 64, 0.9)' : 'rgba(94, 98, 90, 0.88)';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     if (typeof (ctx as any).roundRect === 'function') {
@@ -991,20 +991,20 @@ export const updateBeaconLabelSprite = (
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = isLocked ? '#10b981' : '#f43f5e';
+    ctx.fillStyle = isLocked ? '#FF5F40' : '#5E625A';
     ctx.beginPath();
     ctx.arc(24, 45, 5, 0, Math.PI * 2);
     ctx.fill();
 
     const tag = speedKmh > 0 ? `${speedKmh} km/h` : 'STATIC';
     ctx.font = 'bold 18px monospace';
-    ctx.fillStyle = isLocked ? '#34d399' : '#fca5a5';
+    ctx.fillStyle = isLocked ? '#FF5F40' : '#9CA195';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(`[ BEACON · ${tag} ]`, 38, 30);
 
     ctx.font = 'bold 22px sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#F0FFEA';
     ctx.fillText(speedKmh > 0 ? 'ATMOSPHERIC UAV' : 'GROUND STATION', 38, 58);
   }
 
@@ -1042,9 +1042,9 @@ export const REFERENCE_ALTITUDES: ReferenceAltitudeSpec[] = [
     name: 'Kármán Line',
     shortTag: 'Edge of Space',
     altKm: 100,
-    color: 0x38bdf8,
-    cssColor: '#38bdf8',
-    strokeRgba: 'rgba(56, 189, 248, 0.6)',
+    color: 0xff5f40,
+    cssColor: '#FF5F40',
+    strokeRgba: 'rgba(255, 95, 64, 0.6)',
     dashSize: 4,
     gapSize: 3,
     labelAngle: 0.35,
@@ -1054,9 +1054,9 @@ export const REFERENCE_ALTITUDES: ReferenceAltitudeSpec[] = [
     name: 'LEO Limit',
     shortTag: 'LEO Boundary',
     altKm: 2000,
-    color: 0xfbbf24,
-    cssColor: '#fbbf24',
-    strokeRgba: 'rgba(251, 191, 36, 0.6)',
+    color: 0xf0ffea,
+    cssColor: '#F0FFEA',
+    strokeRgba: 'rgba(240, 255, 234, 0.6)',
     dashSize: 6,
     gapSize: 4,
     labelAngle: 0.55,
@@ -1066,9 +1066,9 @@ export const REFERENCE_ALTITUDES: ReferenceAltitudeSpec[] = [
     name: 'MEO / GPS',
     shortTag: 'GPS Constellation',
     altKm: 20200,
-    color: 0xa855f7,
-    cssColor: '#c084fc',
-    strokeRgba: 'rgba(168, 85, 247, 0.6)',
+    color: 0x9ca195,
+    cssColor: '#9CA195',
+    strokeRgba: 'rgba(156, 161, 149, 0.6)',
     dashSize: 10,
     gapSize: 6,
     labelAngle: 0.75,
@@ -1078,9 +1078,9 @@ export const REFERENCE_ALTITUDES: ReferenceAltitudeSpec[] = [
     name: 'Geostationary',
     shortTag: 'GEO Clarke Belt',
     altKm: 35786,
-    color: 0xf43f5e,
-    cssColor: '#fb7185',
-    strokeRgba: 'rgba(244, 63, 94, 0.6)',
+    color: 0x5e625a,
+    cssColor: '#5E625A',
+    strokeRgba: 'rgba(94, 98, 90, 0.6)',
     dashSize: 14,
     gapSize: 8,
     labelAngle: 0.95,
@@ -1851,15 +1851,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
     if (turbulenceLabelRef.current) {
       turbulenceLabelRef.current.position.set(r20 * 0.72, r20 * 0.45, r20 * 0.52);
-      updateSpriteText(turbulenceLabelRef.current, 'Turbulence Zone', `0–${formatAltAndUnits(20, mode, READABLE_K, earthR)}`, '#38bdf8', 'rgba(14, 165, 233, 0.6)');
+      updateSpriteText(turbulenceLabelRef.current, 'Turbulence Zone', `0–${formatAltAndUnits(20, mode, READABLE_K, earthR)}`, '#FF5F40', 'rgba(255, 95, 64, 0.6)');
     }
     if (thinAtmoLabelRef.current) {
       thinAtmoLabelRef.current.position.set(-r100 * 0.45, r100 * 0.85, r100 * 0.28);
-      updateSpriteText(thinAtmoLabelRef.current, 'Thin Atmosphere', `20–${formatAltAndUnits(100, mode, READABLE_K, earthR)}`, '#818cf8', 'rgba(99, 102, 241, 0.6)');
+      updateSpriteText(thinAtmoLabelRef.current, 'Thin Atmosphere', `20–${formatAltAndUnits(100, mode, READABLE_K, earthR)}`, '#9CA195', 'rgba(156, 161, 149, 0.6)');
     }
     if (karmanLabelRef.current) {
       karmanLabelRef.current.position.set(r100 * Math.cos(0.35), 2.5, r100 * Math.sin(0.35));
-      updateSpriteText(karmanLabelRef.current, 'Kármán Line — Edge of Space', formatAltAndUnits(100, mode, READABLE_K, earthR), '#34d399', 'rgba(16, 185, 129, 0.6)');
+      updateSpriteText(karmanLabelRef.current, 'Kármán Line — Edge of Space', formatAltAndUnits(100, mode, READABLE_K, earthR), '#F0FFEA', 'rgba(240, 255, 234, 0.6)');
     }
   };
 
@@ -2307,7 +2307,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     // High tessellation 96x64 + AdditiveBlending ensures zero polygon facets or darkening artifacts
     const turbGeo = new THREE.SphereGeometry(safeR20, 96, 64);
     const turbMat = new THREE.MeshBasicMaterial({
-      color: 0x0284c7, // sky-600 shaded cyan-blue
+      color: 0x262824,
       transparent: true,
       opacity: 0.12,
       depthWrite: false,
@@ -2324,7 +2324,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     // 2. Faint/Thin Atmosphere Shell (20-100 km)
     const thinGeo = new THREE.SphereGeometry(safeR100, 96, 64);
     const thinMat = new THREE.MeshBasicMaterial({
-      color: 0x60a5fa, // light indigo/periwinkle faint veil
+      color: 0x1B1D1A,
       transparent: true,
       opacity: 0.045,
       depthWrite: false,
@@ -2347,7 +2347,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     }
     const karmanGeo = new THREE.BufferGeometry().setFromPoints(karmanPts);
     const karmanMat = new THREE.LineDashedMaterial({
-      color: 0x38bdf8,
+      color: 0xFF5F40,
       dashSize: 3.5,
       gapSize: 2.5,
       transparent: true,
@@ -2365,8 +2365,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     const turbLabel = createAtmosphereLabelSprite(
       'Turbulence Zone',
       `0–${formatAltAndUnits(20, scaleModeRef.current)}`,
-      '#38bdf8',
-      'rgba(14, 165, 233, 0.6)'
+      '#FF5F40',
+      'rgba(255, 95, 64, 0.6)'
     );
     turbLabel.position.set(r20 * 0.72, r20 * 0.45, r20 * 0.52);
     atmoGroup.add(turbLabel);
@@ -2375,8 +2375,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     const thinLabel = createAtmosphereLabelSprite(
       'Thin Atmosphere',
       `20–${formatAltAndUnits(100, scaleModeRef.current)}`,
-      '#818cf8',
-      'rgba(99, 102, 241, 0.6)'
+      '#9CA195',
+      'rgba(156, 161, 149, 0.6)'
     );
     thinLabel.position.set(-r100 * 0.45, r100 * 0.85, r100 * 0.28);
     atmoGroup.add(thinLabel);
@@ -2385,8 +2385,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     const karmanLabel = createAtmosphereLabelSprite(
       'Kármán Line — Edge of Space',
       formatAltAndUnits(100, scaleModeRef.current),
-      '#34d399',
-      'rgba(16, 185, 129, 0.6)'
+      '#F0FFEA',
+      'rgba(240, 255, 234, 0.6)'
     );
     karmanLabel.position.set(r100 * Math.cos(0.35), 2.5, r100 * Math.sin(0.35));
     atmoGroup.add(karmanLabel);
@@ -2582,8 +2582,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     const fpLabel = createAtmosphereLabelSprite(
       'Ground Footprint',
       `Coverage [El ≥ ${initFpMinEl.toFixed(0)}°]`,
-      '#10b981',
-      'rgba(16, 185, 129, 0.7)'
+      '#FF5F40',
+      'rgba(255, 95, 64, 0.7)'
     );
     fpLabel.position.copy(initFpSatDir.clone().multiplyScalar(globeRadius + 4.5));
     footprintGroup.add(fpLabel);
@@ -3533,8 +3533,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             const statusTag = isInside
               ? `COVERAGE OK: El ${elDeg.toFixed(1)}° (≥ ${minEl.toFixed(0)}°)`
               : `BELOW MASK: El ${elDeg.toFixed(1)}° (< ${minEl.toFixed(0)}°)`;
-            const statusColor = isInside ? '#10b981' : '#f43f5e';
-            const strokeColor = isInside ? 'rgba(16, 185, 129, 0.7)' : 'rgba(244, 63, 94, 0.7)';
+            const statusColor = isInside ? '#FF5F40' : '#5E625A';
+            const strokeColor = isInside ? 'rgba(255, 95, 64, 0.7)' : 'rgba(94, 98, 90, 0.7)';
             updateSpriteText(
               footprintLabelRef.current,
               'Ground Footprint',
@@ -4023,55 +4023,55 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const activePreset = LEO_PRESETS.find((p) => p.id === selectedPresetId);
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#06080B] border border-[#1F2429] rounded-lg overflow-hidden shadow-2xl">
+    <div className="relative w-full h-full flex flex-col bg-[#000000] border border-[#33362F] rounded-lg overflow-hidden">
       {/* 3D Viewport Header - Space-Optimized Mission Control Header */}
-      <div className="flex flex-col bg-[#0A0D10]/95 border-b border-[#1F2429] text-xs font-mono z-10 shrink-0 select-none">
+      <div className="flex flex-col bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono z-10 shrink-0 select-none">
         {/* Row 1: Title, Simulation Playback, Time Warp & Quick Camera Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#1F2429]">
-          <div className="flex items-center gap-2 text-cyan-400">
-            <Box className="w-4 h-4 text-cyan-400" />
-            <span className="font-semibold tracking-wider text-xs text-white">3D LEO KINEMATICS — LaserLockAI</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#33362F]">
+          <div className="flex items-center gap-2 text-[#FF5F40]">
+            <Box className="w-4 h-4 text-[#FF5F40]" />
+            <span className="font-semibold tracking-wider text-xs text-[#F0FFEA]">3D LEO KINEMATICS — LaserLockAI</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Play / Pause Satellite Orbital Motion */}
             <button
               onClick={() => setAutoRevolve(!autoRevolve)}
-              className="px-2.5 py-1 rounded bg-[#12161A] hover:bg-[#181D22] border border-[#252A2E] hover:border-[#3A4048] text-xs flex items-center gap-2 transition"
+              className="px-2.5 py-1 rounded bg-[#262824] hover:bg-[#1B1D1A] border border-[#33362F] hover:border-[#FF5F40] text-xs flex items-center gap-2 transition"
               title={autoRevolve ? 'Pause Satellite Orbital Motion (Spacecraft in Space)' : 'Resume Satellite Orbital Motion'}
             >
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   autoRevolve
-                    ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]'
-                    : 'bg-amber-400'
+                    ? 'bg-[#FF5F40]'
+                    : 'bg-[#5E625A]'
                 }`}
               />
-              <span className="text-slate-300">
+              <span className="text-[#9CA195]">
                 Sat Orbit:{' '}
-                <strong className={autoRevolve ? 'text-emerald-400 font-medium' : 'text-amber-400 font-medium'}>
+                <strong className={autoRevolve ? 'text-[#FF5F40] font-medium' : 'text-[#9CA195] font-medium'}>
                   {autoRevolve ? 'Active' : 'Paused'}
                 </strong>
               </span>
             </button>
 
             {/* Quick Time Warp Badge in Header */}
-            <div className="flex items-center gap-1.5 bg-[#12161A] hover:border-[#3A4048] px-2.5 py-1 rounded border border-[#252A2E] text-xs transition">
-              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span className="text-slate-300 font-medium shrink-0">Time:</span>
+            <div className="flex items-center gap-1.5 bg-[#262824] hover:border-[#FF5F40] px-2.5 py-1 rounded border border-[#33362F] text-xs transition">
+              <Clock className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span className="text-[#9CA195] font-medium shrink-0">Time:</span>
               <select
                 value={simTimeWarp}
                 onChange={(e) => setSimTimeWarp(Number(e.target.value))}
-                className="bg-transparent text-slate-200 font-medium focus:outline-none cursor-pointer text-xs pr-1"
+                className="bg-transparent text-[#F0FFEA] font-medium focus:outline-none cursor-pointer text-xs pr-1"
                 title="Simulation Physical Time Warp (Keplerian Rate)"
               >
-                <option value={1} className="bg-[#12161A] text-slate-200">1× (Real)</option>
-                <option value={60} className="bg-[#12161A] text-slate-200">60× (1m)</option>
-                <option value={120} className="bg-[#12161A] text-slate-200">120× (2m)</option>
-                <option value={360} className="bg-[#12161A] text-slate-200">360× (6m)</option>
-                <option value={1440} className="bg-[#12161A] text-slate-200">1440× (1d)</option>
+                <option value={1} className="bg-[#1B1D1A] text-[#F0FFEA]">1× (Real)</option>
+                <option value={60} className="bg-[#1B1D1A] text-[#F0FFEA]">60× (1m)</option>
+                <option value={120} className="bg-[#1B1D1A] text-[#F0FFEA]">120× (2m)</option>
+                <option value={360} className="bg-[#1B1D1A] text-[#F0FFEA]">360× (6m)</option>
+                <option value={1440} className="bg-[#1B1D1A] text-[#F0FFEA]">1440× (1d)</option>
               </select>
-              <ChevronDown className="w-3 h-3 text-slate-400 pointer-events-none -ml-1 shrink-0" />
+              <ChevronDown className="w-3 h-3 text-[#9CA195] pointer-events-none -ml-1 shrink-0" />
             </div>
 
             {/* Lower Pole View */}
@@ -4081,10 +4081,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 setFocusMode('earth');
                 orbitStateRef.current = { theta: 0, phi: -1.35, radius: 340.0 };
               }}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1.5 text-xs transition"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
               title="Tilt camera directly to Lower Pole (South Pole / Antarctica)"
             >
-              <Compass className="w-3.5 h-3.5 text-slate-400" /> <span>S-Pole</span>
+              <Compass className="w-3.5 h-3.5 text-[#9CA195]" /> <span>S-Pole</span>
             </button>
 
             {/* Upper Pole View */}
@@ -4094,50 +4094,50 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 setFocusMode('earth');
                 orbitStateRef.current = { theta: 0, phi: 1.35, radius: 340.0 };
               }}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1.5 text-xs transition"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
               title="Tilt camera directly to Upper Pole (North Pole / Arctic)"
             >
-              <Compass className="w-3.5 h-3.5 text-slate-400 rotate-180" /> <span>N-Pole</span>
+              <Compass className="w-3.5 h-3.5 text-[#9CA195] rotate-180" /> <span>N-Pole</span>
             </button>
 
             {/* Locate Satellite Button */}
             <button
               onClick={handleLocateSatellite}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-cyan-950/60 text-cyan-300 hover:text-white rounded border border-[#252A2E] hover:border-cyan-500 flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
               title="Instantly orient camera to face satellite on the globe (Shortcut: S)"
             >
-              <Satellite className="w-3.5 h-3.5 text-cyan-400" />
+              <Satellite className="w-3.5 h-3.5 text-[#FF5F40]" />
               <span>Locate Sat</span>
             </button>
 
             {/* Locate Beacon Button */}
             <button
               onClick={handleLocateBeacon}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-rose-950/60 text-rose-300 hover:text-white rounded border border-[#252A2E] hover:border-rose-500 flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
               title="Instantly orient camera to face beacon on the globe (Shortcut: B)"
             >
-              <Radio className="w-3.5 h-3.5 text-rose-400" />
+              <Radio className="w-3.5 h-3.5 text-[#FF5F40]" />
               <span>Locate Beacon</span>
             </button>
 
             {/* Reset Camera View */}
             <button
               onClick={resetCameraView}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1.5 text-xs transition"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
               title="Reset 3D Orbit Camera to Default Earth View"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-400" /> <span>Reset</span>
+              <RotateCcw className="w-3.5 h-3.5 text-[#9CA195]" /> <span>Reset</span>
             </button>
 
             {/* Layer / Overlays Toggle Button */}
             <button
               onClick={() => setShowLayerBar(!showLayerBar)}
-              className="px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white border-[#252A2E] hover:border-[#3A4048]"
+              className="px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] border-[#33362F] hover:border-[#FF5F40]"
               title={showLayerBar ? 'Collapse Scene Overlays Toolbar' : 'Expand Scene Overlays Toolbar (Footprint, Sun, Atmo, Rings, etc.)'}
             >
-              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              <Layers className="w-3.5 h-3.5 text-[#9CA195]" />
               <span>Overlays (7)</span>
-              {showLayerBar ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+              {showLayerBar ? <ChevronUp className="w-3.5 h-3.5 text-[#9CA195]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#9CA195]" />}
             </button>
 
             {/* Pop out in new tab option */}
@@ -4147,26 +4147,26 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 url.searchParams.set('popout', '3d');
                 window.open(url.toString(), '_blank', 'noopener,noreferrer');
               }}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-cyan-950/60 text-cyan-300 hover:text-white rounded border border-[#252A2E] hover:border-cyan-500/80 flex items-center gap-1.5 text-xs transition cursor-pointer font-medium shadow-sm ml-1"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium ml-1"
               title="Pop out 3D Virtual Scene & all settings into a new browser tab"
             >
-              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+              <ExternalLink className="w-3.5 h-3.5 text-[#FF5F40]" />
               <span>Pop out</span>
             </button>
           </div>
         </div>
 
         {/* Row 2: Orbit Selection, Scale Mode, Tune & Speeds */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#0A0D10]/80 border-b border-[#1F2429]">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#1B1D1A]/95 border-b border-[#33362F]">
           <div className="flex flex-wrap items-center gap-2">
             {/* Render Scale Mode Toggle (Compact Segmented Pill) */}
-            <div className="flex items-center bg-[#12161A] p-0.5 rounded border border-[#252A2E] text-xs">
+            <div className="flex items-center bg-[#262824] p-0.5 rounded border border-[#33362F] text-xs">
               <button
                 onClick={() => handleScaleModeChange('TRUE_SCALE')}
                 className={`px-2.5 py-1 rounded transition text-xs ${
                   scaleMode === 'TRUE_SCALE'
-                    ? 'border border-cyan-500/70 bg-cyan-950/40 text-cyan-300 font-medium shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    ? 'border border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                    : 'text-[#9CA195] hover:text-[#F0FFEA] border border-transparent'
                 }`}
                 title="True Physical Scale (1:1): Earth R=100u, LEO 550km = +8.6u, GEO = +561u"
               >
@@ -4176,8 +4176,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 onClick={() => handleScaleModeChange('READABLE_SCALE')}
                 className={`px-2.5 py-1 rounded transition text-xs ${
                   scaleMode === 'READABLE_SCALE'
-                    ? 'border border-cyan-500/70 bg-cyan-950/40 text-cyan-300 font-medium shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    ? 'border border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                    : 'text-[#9CA195] hover:text-[#F0FFEA] border border-transparent'
                 }`}
                 title="Readable Logarithmic Scale: Simultaneously view LEO and GEO"
               >
@@ -4186,25 +4186,25 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             </div>
 
             {/* Quick Preset Selector Dropdown (Space-Optimized with max-w & truncate) */}
-            <div className="flex items-center gap-2 bg-[#12161A] hover:border-[#3A4048] px-2.5 py-1 rounded border border-[#252A2E] text-xs max-w-[280px] transition">
-              <Compass className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span className="text-slate-300 text-xs shrink-0 font-medium">Orbit:</span>
+            <div className="flex items-center gap-2 bg-[#262824] hover:border-[#FF5F40] px-2.5 py-1 rounded border border-[#33362F] text-xs max-w-[280px] transition">
+              <Compass className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span className="text-[#9CA195] text-xs shrink-0 font-medium">Orbit:</span>
               <select
                 value={selectedPresetId}
                 onChange={(e) => handlePresetSelect(e.target.value)}
-                className="bg-transparent text-slate-200 font-medium focus:outline-none cursor-pointer truncate text-xs w-full pr-1"
+                className="bg-transparent text-[#F0FFEA] font-medium focus:outline-none cursor-pointer truncate text-xs w-full pr-1"
                 title="Select Orbit Preset or Custom Parameters"
               >
                 {ORBIT_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#12161A] text-slate-200">
+                  <option key={p.id} value={p.id} className="bg-[#1B1D1A] text-[#F0FFEA]">
                     {p.name}
                   </option>
                 ))}
-                <option value="custom" className="bg-[#12161A] text-amber-400">
+                <option value="custom" className="bg-[#1B1D1A] text-[#FF5F40]">
                   [Custom Parameters]
                 </option>
               </select>
-              <ChevronDown className="w-3 h-3 text-slate-400 pointer-events-none -ml-1 shrink-0" />
+              <ChevronDown className="w-3 h-3 text-[#9CA195] pointer-events-none -ml-1 shrink-0" />
             </div>
 
             {/* Toggle Interactive Tuning Drawer */}
@@ -4212,12 +4212,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowOrbitTuner(!showOrbitTuner)}
               className={`px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition ${
                 showOrbitTuner
-                  ? 'border-cyan-500/70 bg-cyan-950/40 text-cyan-300 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title="Open Interactive Orbit Parameter Sliders"
             >
-              <Sliders className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <Sliders className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
               <span>Tune Orbit</span>
             </button>
 
@@ -4226,12 +4226,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowSpecsTable(!showSpecsTable)}
               className={`px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition ${
                 showSpecsTable
-                  ? 'border-cyan-500/70 bg-cyan-950/40 text-cyan-300 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title="View Real Satellite Speeds & Revolution Periods Table (Keplerian Reference)"
             >
-              <BarChart2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <BarChart2 className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
               <span>Speeds & Periods</span>
             </button>
 
@@ -4240,14 +4240,14 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowBeaconPathPlanner(!showBeaconPathPlanner)}
               className={`px-2.5 py-1 rounded border text-xs flex items-center gap-2 transition ${
                 showBeaconPathPlanner
-                  ? 'border-cyan-500/70 bg-cyan-950/40 text-cyan-300 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-200 hover:text-white border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title="Open 3D Beacon Ground Path Planner (Define Waypoints 1→4 on Earth)"
             >
-              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
               <span>Beacon Path</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1C2127] text-slate-300 font-mono">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1B1D1A] text-[#9CA195] font-mono border border-[#33362F]">
                 {beaconPathWaypoints.length} pts
               </span>
             </button>
@@ -4256,20 +4256,20 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
         {/* Row 3: Scene Display & Physics Layer Buttons (Expandable/Collapsible via Overlays Button) */}
         {showLayerBar && (
-          <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-2 bg-[#080A0D]/95 border-t border-[#1F2429] text-xs animate-in fade-in duration-150">
-            <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider mr-1">LAYERS:</span>
+          <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-2 bg-[#1B1D1A]/95 border-t border-[#33362F] text-xs animate-in fade-in duration-150">
+            <span className="text-[#9CA195] font-bold text-[10px] uppercase tracking-wider mr-1">LAYERS:</span>
 
             {/* Auto LOS Alignment Toggle */}
             <button
               onClick={handleToggleAutoLOS}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 autoLOS
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={autoLOS ? 'Auto LOS is ON (Calibrating FOV to Beacon)' : 'Auto LOS is OFF (Nadir / Gimbal Hold)'}
             >
-              <Locate className={`w-3 h-3 ${autoLOS ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Locate className={`w-3 h-3 ${autoLOS ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Auto LOS: {autoLOS ? 'ON' : 'OFF'}</span>
             </button>
 
@@ -4278,12 +4278,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowFootprint(!showFootprint)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 showFootprint
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={showFootprint ? 'Hide Ground Footprint' : 'Show Ground Footprint'}
             >
-              <Target className={`w-3 h-3 ${showFootprint ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Target className={`w-3 h-3 ${showFootprint ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Footprint: {showFootprint ? 'ON' : 'OFF'}</span>
             </button>
 
@@ -4292,12 +4292,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowSunTerminator(!showSunTerminator)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 showSunTerminator
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={showSunTerminator ? 'Hide Sun Vector & Terminator' : 'Show Sun Vector & Terminator'}
             >
-              <Sun className={`w-3 h-3 ${showSunTerminator ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Sun className={`w-3 h-3 ${showSunTerminator ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Sun/Term: {showSunTerminator ? 'ON' : 'OFF'}</span>
             </button>
 
@@ -4306,12 +4306,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowAtmosphereShells(!showAtmosphereShells)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 showAtmosphereShells
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={showAtmosphereShells ? 'Hide Atmosphere Shells (0-20km, 20-100km, Kármán)' : 'Show Atmosphere Shells'}
             >
-              <Layers className={`w-3 h-3 ${showAtmosphereShells ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Layers className={`w-3 h-3 ${showAtmosphereShells ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Atmo: {showAtmosphereShells ? 'ON' : 'OFF'}</span>
             </button>
 
@@ -4320,12 +4320,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setShowReferenceRings(!showReferenceRings)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 showReferenceRings
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={showReferenceRings ? 'Hide Reference Altitude Rings' : 'Show Reference Altitude Rings (100km, 2000km, 20200km, 35786km)'}
             >
-              <Compass className={`w-3 h-3 ${showReferenceRings ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Compass className={`w-3 h-3 ${showReferenceRings ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Ref Rings: {showReferenceRings ? 'ON' : 'OFF'}</span>
             </button>
 
@@ -4334,12 +4334,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setBeaconRevolving(!beaconRevolving)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 beaconRevolving
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={beaconRevolving ? 'Put Beacon Static on Ground' : 'Revolve Beacon Around Center of Earth on Ground'}
             >
-              <Radio className={`w-3 h-3 ${beaconRevolving ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Radio className={`w-3 h-3 ${beaconRevolving ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Beacon: {beaconRevolving ? 'Revolving' : 'Static'}</span>
             </button>
 
@@ -4360,12 +4360,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               }}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 pathFollowMode
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={pathFollowMode ? 'Disable 3D Waypoint Path Mode' : 'Enable 3D Waypoint Path Mode (1→4)'}
             >
-              <MapPin className={`w-3 h-3 ${pathFollowMode ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <MapPin className={`w-3 h-3 ${pathFollowMode ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Path 1→4: {pathFollowMode ? (pathMotionActive ? 'RUNNING' : 'ON') : 'OFF'}</span>
             </button>
 
@@ -4374,12 +4374,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={handleToggleDrawMode}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 isDrawingPath
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium animate-pulse'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/25 text-[#FF5F40] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title="Click on Earth to add waypoints in 3D"
             >
-              <PenTool className={`w-3 h-3 ${isDrawingPath ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <PenTool className={`w-3 h-3 ${isDrawingPath ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Draw: {isDrawingPath ? 'ACTIVE' : 'OFF'}</span>
             </button>
 
@@ -4388,12 +4388,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               onClick={() => setEarthSpinEnabled(!earthSpinEnabled)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
                 earthSpinEnabled
-                  ? 'border-cyan-500/70 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-medium'
-                  : 'bg-[#12161A] hover:bg-[#181D22] text-slate-400 hover:text-slate-200 border-[#252A2E] hover:border-[#3A4048]'
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
               }`}
               title={earthSpinEnabled ? 'Pause Earth Diurnal Spin' : 'Resume Earth Diurnal Spin'}
             >
-              <Globe className={`w-3 h-3 ${earthSpinEnabled ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Globe className={`w-3 h-3 ${earthSpinEnabled ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
               <span>Earth Spin: {earthSpinEnabled ? 'ON' : 'OFF'}</span>
             </button>
           </div>
@@ -4413,69 +4413,69 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           <div className="absolute bottom-3 right-4 z-20 pointer-events-auto flex items-center gap-2">
             <button
               onClick={handleLocateSatellite}
-              className="bg-slate-950/95 hover:bg-cyan-950/80 backdrop-blur-md border border-cyan-500/80 hover:border-cyan-400 text-cyan-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(6,182,212,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+              className="bg-[#1B1D1A]/95 hover:bg-[#262824] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] rounded px-3 py-1.5 flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
               title="Instantly orient camera to face satellite on the globe (Shortcut: S)"
             >
-              <Satellite className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
-              <span className="font-semibold text-[11px]">Locate satellite</span>
+              <Satellite className="w-3.5 h-3.5 text-[#FF5F40] group-hover:scale-110 transition" />
+              <span className="font-semibold text-[11px]">LOCATE SATELLITE</span>
             </button>
             <button
               onClick={handleLocateBeacon}
-              className="bg-slate-950/95 hover:bg-rose-950/80 backdrop-blur-md border border-rose-500/80 hover:border-rose-400 text-rose-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(244,63,94,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+              className="bg-[#1B1D1A]/95 hover:bg-[#262824] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] rounded px-3 py-1.5 flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
               title="Instantly orient camera to face beacon on the globe (Shortcut: B)"
             >
-              <Radio className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition" />
-              <span className="font-semibold text-[11px]">Locate beacon</span>
+              <Radio className="w-3.5 h-3.5 text-[#FF5F40] group-hover:scale-110 transition" />
+              <span className="font-semibold text-[11px]">LOCATE BEACON</span>
             </button>
           </div>
         )}
 
         {/* Draw Mode Top Floating Indicator Banner (Only shown if Beacon Path Planner panel is closed) */}
         {isDrawingPath && !showBeaconPathPlanner && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-slate-950/95 backdrop-blur-md border border-amber-500/70 text-amber-300 text-xs font-mono px-4 py-1.5 rounded-full shadow-2xl z-30 flex items-center gap-3 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#1B1D1A]/95 border border-[#FF5F40] text-[#F0FFEA] text-xs font-mono px-4 py-1.5 rounded shadow-2xl z-30 flex items-center gap-3 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-150">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F40] animate-ping" />
             <span className="font-semibold">
-              Draw Mode Active: Click on 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed) · Pt 1 is Start, Pt {beaconPathWaypoints.length || 4} is End
+              DRAW MODE ACTIVE: Click on 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed) · Pt 1 is Start, Pt {beaconPathWaypoints.length || 4} is End
             </span>
             <button
               onClick={handleUndoLastWaypoint}
               disabled={beaconPathWaypoints.length === 0}
-              className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-2 py-0.5 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] text-[10px] font-bold transition flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
               title="Undo last placed waypoint (Ctrl+Z)"
             >
-              <Undo2 className="w-3 h-3" />
+              <Undo2 className="w-3 h-3 text-[#FF5F40]" />
               <span>Undo</span>
             </button>
             <button
               onClick={() => setIsDrawingPath(false)}
-              className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition"
+              className="px-2 py-0.5 rounded bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] text-[10px] font-bold transition"
             >
               Done
             </button>
           </div>
         )}
 
-        {/* 3D Beacon Ground Path Planner Drawer / Floating Card (Repositioned to Top-Center HUD to eliminate any overlap with LEO Legend) */}
+        {/* 3D Beacon Ground Path Planner Drawer / Floating Card */}
         {showBeaconPathPlanner && (
           <div
-            className={`absolute ${getPlannerPositionClass()} z-30 font-mono text-xs text-slate-300 pointer-events-auto select-none transition-all duration-200 ${
+            className={`absolute ${getPlannerPositionClass()} z-30 font-mono text-xs text-[#F0FFEA] pointer-events-auto select-none transition-all duration-200 ${
               isPathPlannerMinimized ? 'w-auto' : 'w-84 max-w-[calc(100%-24px)]'
             }`}
           >
             {isPathPlannerMinimized ? (
               <div
-                className="bg-slate-950/95 backdrop-blur-md border border-amber-500/60 rounded-full px-3 py-1.5 shadow-2xl flex items-center gap-2.5 cursor-pointer hover:border-amber-400 transition"
+                className="bg-[#1B1D1A]/95 border border-[#33362F] hover:border-[#FF5F40] rounded px-3 py-1.5 flex items-center gap-2.5 cursor-pointer transition"
                 onClick={() => setIsPathPlannerMinimized(false)}
                 title="Click to expand 3D Beacon Ground Path Planner"
               >
-                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-[9px] uppercase tracking-wider">
-                  <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold text-[9px] uppercase tracking-wider">
+                  <MapPin className="w-3.5 h-3.5 text-[#FF5F40] shrink-0" />
                   <span>BEACON PATH</span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-amber-950 text-amber-300 border border-amber-700/60">
+                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-[#262824] text-[#F0FFEA] border border-[#33362F]">
                   {beaconPathWaypoints.length} PTS
                 </span>
-                <span className={`text-[8.5px] font-bold ${isDrawingPath ? 'text-amber-300 animate-pulse' : pathMotionActive ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`}>
+                <span className={`text-[8.5px] font-bold ${isDrawingPath ? 'text-[#FF5F40] animate-pulse' : pathMotionActive ? 'text-[#FF5F40] animate-pulse' : 'text-[#9CA195]'}`}>
                   {isDrawingPath ? 'DRAWING' : pathMotionActive ? 'RUNNING' : 'STOPPED'}
                 </span>
                 <button
@@ -4484,8 +4484,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     e.stopPropagation();
                     cyclePathPlannerPosition();
                   }}
-                  className="p-1 hover:bg-slate-800 text-slate-400 hover:text-amber-300 rounded-full transition cursor-pointer"
-                  title={`Docked at ${pathPlannerPosition}. Click to cycle position (Top-Center, Top-Left, Bottom-Center).`}
+                  className="p-1 hover:bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] rounded transition cursor-pointer"
+                  title={`Docked at ${pathPlannerPosition}. Click to cycle position.`}
                   aria-label="Cycle panel position"
                 >
                   <Move className="w-3 h-3" />
@@ -4496,27 +4496,27 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     e.stopPropagation();
                     setIsPathPlannerMinimized(false);
                   }}
-                  className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-full transition cursor-pointer"
+                  className="p-0.5 hover:bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] rounded transition cursor-pointer"
                   title="Expand path planner"
                   aria-label="Expand path planner"
                 >
-                  <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                  <ChevronDown className="w-3.5 h-3.5 text-[#FF5F40]" />
                 </button>
               </div>
             ) : (
-              <div className="bg-slate-950/95 backdrop-blur-md border border-amber-500/60 rounded-lg p-3 shadow-2xl space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="bg-[#1B1D1A]/95 border border-[#33362F] rounded-lg p-3 space-y-2.5 max-h-[calc(100vh-220px)] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                  <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
-                    <MapPin className="w-4 h-4 text-amber-400" />
+                <div className="flex items-center justify-between border-b border-[#33362F] pb-1.5">
+                  <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold text-xs">
+                    <MapPin className="w-4 h-4 text-[#FF5F40]" />
                     <span>BEACON 3D GROUND PATH</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={cyclePathPlannerPosition}
-                      className="text-slate-400 hover:text-amber-300 p-1 rounded hover:bg-slate-800 transition"
-                      title={`Docked at ${pathPlannerPosition}. Click to cycle position (Top-Center, Top-Left, Bottom-Center).`}
+                      className="text-[#9CA195] hover:text-[#F0FFEA] p-1 rounded hover:bg-[#262824] transition"
+                      title={`Docked at ${pathPlannerPosition}. Click to cycle position.`}
                       aria-label="Cycle panel position"
                     >
                       <Move className="w-3.5 h-3.5" />
@@ -4524,7 +4524,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsPathPlannerMinimized(true)}
-                      className="text-slate-400 hover:text-white p-0.5 rounded transition"
+                      className="text-[#9CA195] hover:text-[#F0FFEA] p-0.5 rounded transition"
                       title="Minimize panel"
                       aria-label="Minimize panel"
                     >
@@ -4533,7 +4533,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowBeaconPathPlanner(false)}
-                      className="text-slate-400 hover:text-white p-0.5 rounded transition"
+                      className="text-[#9CA195] hover:text-[#F0FFEA] p-0.5 rounded transition"
                       title="Close panel"
                       aria-label="Close panel"
                     >
@@ -4544,24 +4544,24 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
                 {/* Draw Mode Active Banner (Integrated inside card) */}
                 {isDrawingPath && (
-                  <div className="bg-amber-500/15 border border-amber-500/50 rounded p-2 text-amber-300 text-[10.5px] flex items-center justify-between gap-2 animate-in fade-in duration-150">
+                  <div className="bg-[#262824] border border-[#FF5F40] rounded p-2 text-[#F0FFEA] text-[10.5px] flex items-center justify-between gap-2 animate-in fade-in duration-150">
                     <div className="flex items-center gap-1.5 truncate">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-[#FF5F40] animate-ping shrink-0" />
                       <span className="truncate">Click 3D Earth to plot waypoints ({beaconPathWaypoints.length} placed)</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={handleUndoLastWaypoint}
                         disabled={beaconPathWaypoints.length === 0}
-                        className="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[9.5px] font-bold flex items-center gap-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="px-1.5 py-0.5 rounded bg-[#1B1D1A] hover:bg-[#262824] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] text-[9.5px] font-bold flex items-center gap-1 transition disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Undo last waypoint (Ctrl+Z)"
                       >
-                        <Undo2 className="w-2.5 h-2.5" />
+                        <Undo2 className="w-2.5 h-2.5 text-[#FF5F40]" />
                         <span>Undo</span>
                       </button>
                       <button
                         onClick={() => setIsDrawingPath(false)}
-                        className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9.5px] font-bold transition"
+                        className="px-2 py-0.5 rounded bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] text-[9.5px] font-bold transition"
                       >
                         Done
                       </button>
@@ -4576,9 +4576,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       <button
                         onClick={handleStartPathMotion}
                         disabled={beaconPathWaypoints.length < 2}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs flex items-center justify-center gap-1.5 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                        className="flex-1 px-2.5 py-1.5 rounded bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] text-xs flex items-center justify-center gap-1.5 font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        <Play className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+                        <Play className="w-3.5 h-3.5 fill-[#0A0A0A] text-[#0A0A0A]" />
                         <span>
                           {pathLegIndexRef.current >= beaconPathWaypoints.length - 2 && pathLegProgressRef.current >= 1.0
                             ? `Restart Path (Pt 1→${beaconPathWaypoints.length})`
@@ -4588,9 +4588,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     ) : (
                       <button
                         onClick={handlePausePathMotion}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs flex items-center justify-center gap-1.5 font-medium transition shadow-sm"
+                        className="flex-1 px-2.5 py-1.5 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#FF5F40] border border-[#FF5F40] text-xs flex items-center justify-center gap-1.5 font-bold transition"
                       >
-                        <Pause className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <Pause className="w-3.5 h-3.5 fill-[#FF5F40] text-[#FF5F40]" />
                         <span>Pause Motion</span>
                       </button>
                     )}
@@ -4598,10 +4598,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     <button
                       onClick={handleResetPathToStart}
                       disabled={beaconPathWaypoints.length === 0}
-                      className="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs flex items-center gap-1 transition disabled:opacity-40"
+                      className="px-2 py-1.5 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] text-xs flex items-center gap-1 transition disabled:opacity-40"
                       title="Reset beacon back to Point 1 (Starting Point)"
                     >
-                      <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                      <RotateCcw className="w-3.5 h-3.5 text-[#FF5F40]" />
                       <span>Pt 1</span>
                     </button>
                   </div>
@@ -4612,26 +4612,26 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       onClick={handleToggleDrawMode}
                       className={`px-2 py-1 rounded text-[11px] border flex items-center justify-center gap-1 transition ${
                         isDrawingPath
-                          ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold animate-pulse'
-                          : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                          ? 'bg-[#FF5F40]/25 text-[#FF5F40] border-[#FF5F40] font-bold'
+                          : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
                       }`}
                       title="Click anywhere on the 3D Earth globe to plot custom waypoints"
                     >
-                      <PenTool className="w-3 h-3 text-amber-400" />
+                      <PenTool className="w-3 h-3 text-[#FF5F40]" />
                       <span>{isDrawingPath ? 'Plotting…' : 'Draw Custom'}</span>
                     </button>
 
                     <button
                       onClick={handleLoadPreset4PointPath}
-                      className="px-2 py-1 rounded text-[11px] bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-800 flex items-center justify-center gap-1 transition"
+                      className="px-2 py-1 rounded text-[11px] bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] flex items-center justify-center gap-1 transition"
                       title="Load 4-Point Path from reference image (1=Start, 4=End)"
                     >
-                      <CheckCircle className="w-3 h-3 text-cyan-400" />
+                      <CheckCircle className="w-3 h-3 text-[#FF5F40]" />
                       <span>Preset 1→4</span>
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 px-0.5">
+                  <div className="flex items-center justify-between text-[10px] text-[#9CA195] px-0.5">
                     <span>Min 2 pts · Stops at end (Pt {beaconPathWaypoints.length || 4})</span>
                   </div>
 
@@ -4640,36 +4640,36 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     <button
                       onClick={handleUndoLastWaypoint}
                       disabled={beaconPathWaypoints.length === 0}
-                      className="px-2 py-1.5 rounded-lg bg-amber-950/50 hover:bg-amber-900/70 text-amber-300 border border-amber-700/50 text-[10.5px] flex items-center justify-center gap-1.5 font-semibold transition disabled:opacity-35 disabled:cursor-not-allowed shadow-sm"
+                      className="px-2 py-1.5 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] text-[10.5px] flex items-center justify-center gap-1.5 font-semibold transition disabled:opacity-35 disabled:cursor-not-allowed"
                       title="Undo the last waypoint placed on the beacon path (Ctrl+Z)"
                     >
-                      <Undo2 className="w-3.5 h-3.5 text-amber-400" />
+                      <Undo2 className="w-3.5 h-3.5 text-[#FF5F40]" />
                       <span>Undo Point</span>
                     </button>
 
                     <button
                       onClick={handleClearBeaconPath}
                       disabled={beaconPathWaypoints.length === 0}
-                      className="px-2 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-700/50 text-[10.5px] flex items-center justify-center gap-1.5 font-semibold transition disabled:opacity-35 disabled:cursor-not-allowed shadow-sm"
+                      className="px-2 py-1.5 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#FF5F40] border border-[#33362F] hover:border-[#FF5F40] text-[10.5px] flex items-center justify-center gap-1.5 font-semibold transition disabled:opacity-35 disabled:cursor-not-allowed"
                       title="Delete all beacon path waypoints and clear the 3D path line from the simulation"
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <Trash2 className="w-3.5 h-3.5 text-[#FF5F40]" />
                       <span>Delete Path</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Live Status Readout */}
-                <div className="bg-slate-900/90 border border-slate-800 p-2 rounded space-y-1">
+                <div className="bg-[#262824] border border-[#33362F] p-2 rounded space-y-1">
                   <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-400">Path Status:</span>
+                    <span className="text-[#9CA195]">Path Status:</span>
                     <span
                       className={`font-bold ${
                         pathMotionActive
-                          ? 'text-amber-400 animate-pulse'
+                          ? 'text-[#FF5F40] animate-pulse'
                           : pathLegProgressRef.current >= 1.0 && pathLegIndexRef.current >= beaconPathWaypoints.length - 2
-                          ? 'text-emerald-400 font-bold'
-                          : 'text-cyan-400'
+                          ? 'text-[#F0FFEA] font-bold'
+                          : 'text-[#9CA195]'
                       }`}
                     >
                       {pathStatusText}
@@ -4677,35 +4677,31 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   </div>
 
                   {/* Progress Bar */}
-                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-[#1B1D1A] h-1.5 rounded-full overflow-hidden border border-[#33362F]">
                     <div
-                      className={`h-full transition-all duration-150 ${
-                        pathLegProgressRef.current >= 1.0 && pathLegIndexRef.current >= beaconPathWaypoints.length - 2
-                          ? 'bg-emerald-400'
-                          : 'bg-amber-400'
-                      }`}
+                      className="h-full transition-all duration-150 bg-[#FF5F40]"
                       style={{ width: `${pathOverallProgressPct}%` }}
                     />
                   </div>
 
-                  <div className="flex justify-between items-center text-[9px] text-slate-400">
+                  <div className="flex justify-between items-center text-[9px] text-[#9CA195]">
                     <span>{pathCurrentLegDisplay}</span>
                     <span>{pathOverallProgressPct}% Completed</span>
                   </div>
                 </div>
 
-                {/* Plotted Waypoints List (Ref: 1=Start [Green], 4=End [Orange]) */}
-                <div className="border border-slate-800/80 rounded bg-slate-900/60 p-1.5 space-y-1">
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                {/* Plotted Waypoints List */}
+                <div className="border border-[#33362F] rounded bg-[#262824] p-1.5 space-y-1">
+                  <div className="text-[10px] text-[#9CA195] uppercase tracking-wider flex justify-between items-center">
                     <span>Plotted Waypoints ({beaconPathWaypoints.length})</span>
                     <button
                       onClick={handleUndoLastWaypoint}
                       disabled={beaconPathWaypoints.length === 0}
-                      className="text-[9px] text-amber-400 hover:text-amber-300 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed transition font-semibold"
+                      className="text-[9px] text-[#FF5F40] hover:underline flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed transition font-semibold"
                       title="Undo last plotted waypoint (Ctrl+Z)"
                     >
                       <Undo2 className="w-2.5 h-2.5" />
-                      <span>Undo (Ctrl+Z)</span>
+                      <span>Undo</span>
                     </button>
                   </div>
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
@@ -4718,33 +4714,33 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                           key={wp.id}
                           className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[9.5px] font-mono border ${
                             isCurrent
-                              ? 'bg-amber-950/60 border-amber-600 text-amber-200'
-                              : 'bg-slate-950/80 border-slate-800/80 text-slate-300'
+                              ? 'bg-[#FF5F40]/15 border-[#FF5F40] text-[#F0FFEA]'
+                              : 'bg-[#1B1D1A] border-[#33362F] text-[#F0FFEA]'
                           }`}
                         >
                           <div className="flex items-center gap-1.5">
                             <span
                               className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold ${
                                 isStart
-                                  ? 'bg-emerald-500 text-slate-950'
+                                  ? 'bg-[#FF5F40] text-[#0A0A0A]'
                                   : isEnd
-                                  ? 'bg-rose-500 text-white'
-                                  : 'bg-amber-500 text-slate-950'
+                                  ? 'bg-[#F0FFEA] text-[#0A0A0A]'
+                                  : 'bg-[#262824] text-[#F0FFEA] border border-[#33362F]'
                               }`}
                             >
                               {wp.id}
                             </span>
-                            <span className={isStart ? 'text-emerald-300 font-bold' : isEnd ? 'text-rose-300 font-bold' : 'text-slate-300'}>
+                            <span className={isStart ? 'text-[#FF5F40] font-bold' : isEnd ? 'text-[#F0FFEA] font-bold' : 'text-[#9CA195]'}>
                               {isStart ? '1 (START)' : isEnd ? `${wp.id} (END)` : `Point ${wp.id}`}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-slate-400 text-[8.5px]">
+                            <span className="text-[#9CA195] text-[8.5px]">
                               {wp.latDeg.toFixed(1)}°, {wp.lonDeg.toFixed(1)}°
                             </span>
                             <button
                               onClick={() => handleRemoveWaypoint(idx)}
-                              className="text-slate-500 hover:text-rose-400 p-0.5 rounded transition"
+                              className="text-[#9CA195] hover:text-[#FF5F40] p-0.5 rounded transition"
                               title={`Remove Point ${wp.id}`}
                             >
                               <X className="w-2.5 h-2.5" />
@@ -4757,10 +4753,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 </div>
 
                 {/* Speed & Warp Control */}
-                <div className="border-t border-slate-800/80 pt-1.5 space-y-1 text-[10px]">
-                  <div className="flex justify-between items-center text-slate-400">
+                <div className="border-t border-[#33362F] pt-1.5 space-y-1 text-[10px]">
+                  <div className="flex justify-between items-center text-[#9CA195]">
                     <span>Beacon Ground Speed:</span>
-                    <span className="text-amber-300 font-bold">{beaconSpeedKmh} km/h</span>
+                    <span className="text-[#FF5F40] font-bold">{beaconSpeedKmh} km/h</span>
                   </div>
                   <input
                     type="range"
@@ -4774,7 +4770,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       beaconMotionRef.current.speedKmh = spd;
                       satellitePovSync.update({ beaconSpeedKmh: spd });
                     }}
-                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
                   />
                   <div className="flex justify-between gap-1 pt-0.5">
                     {[
@@ -4791,8 +4787,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                         }}
                         className={`flex-1 py-0.5 rounded text-[9px] border transition ${
                           beaconSpeedKmh === r.speed
-                            ? 'bg-amber-950 text-amber-300 border-amber-600 font-bold'
-                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                            ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold'
+                            : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                         }`}
                       >
                         {r.label}
@@ -4801,31 +4797,31 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   </div>
                 </div>
 
-                {/* Quick Reposition & Field of View Status (Matching Reference Image) */}
-                <div className="border-t border-slate-800/80 pt-1.5 space-y-1.5">
+                {/* Quick Reposition & Field of View Status */}
+                <div className="border-t border-[#33362F] pt-1.5 space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={handleCenterTargetOnGlobe}
-                      className="flex-1 px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] flex items-center justify-center gap-1 font-medium transition"
+                      className="flex-1 px-2 py-1 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] text-[10px] flex items-center justify-center gap-1 font-medium transition"
                       title="Center target in satellite optical boresight"
                     >
-                      <Crosshair className="w-3 h-3 text-cyan-400" />
+                      <Crosshair className="w-3 h-3 text-[#FF5F40]" />
                       <span>Center Target</span>
                     </button>
                     <button
                       onClick={handleDisplaceTargetOutsideFov}
-                      className="flex-1 px-2 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] flex items-center justify-center gap-1 font-medium transition"
+                      className="flex-1 px-2 py-1 rounded bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#FF5F40] border border-[#33362F] hover:border-[#FF5F40] text-[10px] flex items-center justify-center gap-1 font-medium transition"
                       title="Displace target outside optical FOV"
                     >
-                      <Maximize2 className="w-3 h-3 text-rose-400" />
+                      <Maximize2 className="w-3 h-3 text-[#FF5F40]" />
                       <span>Displace FOV</span>
                     </button>
                   </div>
 
-                  <div className="flex justify-between items-center text-[10px] bg-slate-900/70 p-1.5 rounded border border-slate-800/60">
-                    <span className="text-slate-400">Status:</span>
-                    <span className={`font-bold ${!isOccludedByEarth && isBeaconInFootprint ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {!isOccludedByEarth && isBeaconInFootprint ? 'IN FIELD OF VIEW' : 'OUTSIDE FIELD OF VIEW'}
+                  <div className="flex justify-between items-center text-[10px] bg-[#262824] p-1.5 rounded border border-[#33362F]">
+                    <span className="text-[#9CA195]">Status:</span>
+                    <span className={`font-bold ${!isOccludedByEarth && isBeaconInFootprint ? 'text-[#F0FFEA]' : 'text-[#FF5F40]'}`}>
+                      {!isOccludedByEarth && isBeaconInFootprint ? '✓ IN FIELD OF VIEW' : '[!] OUTSIDE FIELD OF VIEW'}
                     </span>
                   </div>
                 </div>
@@ -4847,25 +4843,25 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
         {/* Interactive Orbit Tuner Drawer / Popover */}
         {showOrbitTuner && (
-          <div className="absolute top-3 left-3 w-80 max-h-[calc(100%-24px)] overflow-y-auto bg-slate-950/95 backdrop-blur-md border border-cyan-800/80 rounded-lg p-3 font-mono text-xs text-slate-300 shadow-2xl z-30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-            <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs">
-              <Orbit className="w-4 h-4 text-cyan-400" />
+          <div className="absolute top-3 left-3 w-80 max-h-[calc(100%-24px)] overflow-y-auto bg-[#1B1D1A]/95 backdrop-blur-md border border-[#33362F] rounded-lg p-3 font-mono text-xs text-[#F0FFEA] shadow-2xl z-30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-1.5">
+            <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold text-xs">
+              <Orbit className="w-4 h-4 text-[#FF5F40]" />
               <span>SATELLITE ORBIT TUNER</span>
             </div>
             <button
               onClick={() => setShowOrbitTuner(false)}
-              className="text-slate-400 hover:text-white p-0.5 rounded"
+              className="text-[#9CA195] hover:text-[#F0FFEA] p-0.5 rounded"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Scale Mode Selector in Tuner */}
-          <div className="border-b border-slate-800/80 pb-2">
-            <div className="flex justify-between items-center text-slate-400 mb-1 text-[10px]">
+          <div className="border-b border-[#33362F] pb-2">
+            <div className="flex justify-between items-center text-[#9CA195] mb-1 text-[10px]">
               <span className="uppercase tracking-wider">3D Scale Mode:</span>
-              <span className={scaleMode === 'TRUE_SCALE' ? 'text-cyan-300 font-bold' : 'text-amber-300 font-bold'}>
+              <span className="text-[#FF5F40] font-bold">
                 {scaleMode === 'TRUE_SCALE' ? '1:1 True Physical' : 'Readable Logarithmic'}
               </span>
             </div>
@@ -4874,8 +4870,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 onClick={() => handleScaleModeChange('TRUE_SCALE')}
                 className={`px-2 py-1 rounded text-center border text-[10px] transition ${
                   scaleMode === 'TRUE_SCALE'
-                    ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                 }`}
               >
                 True Scale (R=100u)
@@ -4884,8 +4880,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 onClick={() => handleScaleModeChange('READABLE_SCALE')}
                 className={`px-2 py-1 rounded text-center border text-[10px] transition ${
                   scaleMode === 'READABLE_SCALE'
-                    ? 'bg-amber-950 text-amber-300 border-amber-600 font-bold'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                 }`}
               >
                 Readable Scale
@@ -4894,9 +4890,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
             {/* Earth Render Radius Slider */}
             <div className="pt-2">
-              <div className="flex justify-between items-center text-slate-400 mb-1 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-1 text-[10px]">
                 <span>Earth Render Radius ($R_E$):</span>
-                <span className="text-cyan-300 font-bold font-mono">{earthRenderRadius.toFixed(0)}u = 6,378 km</span>
+                <span className="text-[#FF5F40] font-bold font-mono">{earthRenderRadius.toFixed(0)}u = 6,378 km</span>
               </div>
               <input
                 type="range"
@@ -4905,62 +4901,62 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 step="5"
                 value={earthRenderRadius}
                 onChange={(e) => handleEarthRenderRadiusChange(Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
                 title="Adjust Earth 3D render radius"
               />
             </div>
           </div>
 
           {/* Atmosphere Shells & Kármán Line Control */}
-          <div className="border-b border-slate-800/80 pb-2 space-y-1.5">
+          <div className="border-b border-[#33362F] pb-2 space-y-1.5">
             <div className="flex items-center justify-between text-[10px]">
-              <div className="flex items-center gap-1.5 text-sky-400 font-bold uppercase tracking-wider">
-                <Layers className="w-3.5 h-3.5 text-sky-400" />
+              <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold uppercase tracking-wider">
+                <Layers className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Atmosphere Layers:</span>
               </div>
               <button
                 onClick={() => setShowAtmosphereShells(!showAtmosphereShells)}
                 className={`px-2 py-0.5 rounded text-[10px] border transition ${
                   showAtmosphereShells
-                    ? 'bg-sky-950 text-sky-300 border-sky-600 font-bold'
-                    : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                 }`}
               >
                 {showAtmosphereShells ? 'Visible (ON)' : 'Hidden (OFF)'}
               </button>
             </div>
             <div className="grid grid-cols-3 gap-1 text-[9px] font-mono">
-              <div className="bg-slate-900/90 border border-sky-900/60 p-1 rounded">
-                <div className="text-sky-300 font-bold">0–20 km</div>
-                <div className="text-slate-400 text-[8px] leading-tight">Turbulence Zone</div>
-                <div className="text-slate-400 text-[8px]">{formatAltAndUnits(20, scaleMode)}</div>
+              <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
+                <div className="text-[#F0FFEA] font-bold">0–20 km</div>
+                <div className="text-[#9CA195] text-[8px] leading-tight">Turbulence Zone</div>
+                <div className="text-[#9CA195] text-[8px]">{formatAltAndUnits(20, scaleMode)}</div>
               </div>
-              <div className="bg-slate-900/90 border border-indigo-900/60 p-1 rounded">
-                <div className="text-indigo-300 font-bold">20–100 km</div>
-                <div className="text-slate-400 text-[8px] leading-tight">Thin Atmosphere</div>
-                <div className="text-slate-400 text-[8px]">{formatAltAndUnits(100, scaleMode)}</div>
+              <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
+                <div className="text-[#F0FFEA] font-bold">20–100 km</div>
+                <div className="text-[#9CA195] text-[8px] leading-tight">Thin Atmosphere</div>
+                <div className="text-[#9CA195] text-[8px]">{formatAltAndUnits(100, scaleMode)}</div>
               </div>
-              <div className="bg-slate-900/90 border border-emerald-900/60 p-1 rounded">
-                <div className="text-emerald-300 font-bold">100 km</div>
-                <div className="text-slate-400 text-[8px] leading-tight">Kármán Line</div>
-                <div className="text-slate-400 text-[8px]">{formatAltAndUnits(100, scaleMode)}</div>
+              <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
+                <div className="text-[#FF5F40] font-bold">100 km</div>
+                <div className="text-[#9CA195] text-[8px] leading-tight">Kármán Line</div>
+                <div className="text-[#9CA195] text-[8px]">{formatAltAndUnits(100, scaleMode)}</div>
               </div>
             </div>
           </div>
 
-          {/* Standard Reference Altitude Rings Control (Task 2 & 3: 100km, 2000km, 20200km, 35786km) */}
-          <div className="border-b border-slate-800/80 pb-2 space-y-1.5">
+          {/* Standard Reference Altitude Rings Control */}
+          <div className="border-b border-[#33362F] pb-2 space-y-1.5">
             <div className="flex items-center justify-between text-[10px]">
-              <div className="flex items-center gap-1.5 text-purple-400 font-bold uppercase tracking-wider">
-                <Compass className="w-3.5 h-3.5 text-purple-400" />
+              <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold uppercase tracking-wider">
+                <Compass className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Reference Altitude Rings:</span>
               </div>
               <button
                 onClick={() => setShowReferenceRings(!showReferenceRings)}
                 className={`px-2 py-0.5 rounded text-[10px] border transition ${
                   showReferenceRings
-                    ? 'bg-purple-950 text-purple-300 border-purple-600 font-bold'
-                    : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                 }`}
               >
                 {showReferenceRings ? 'Visible (ON)' : 'Hidden (OFF)'}
@@ -4970,13 +4966,13 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               {REFERENCE_ALTITUDES.map((spec) => (
                 <div
                   key={spec.id}
-                  className="bg-slate-900/90 border border-slate-800/80 p-1 rounded"
+                  className="bg-[#262824] border border-[#33362F] p-1 rounded"
                 >
-                  <div className="font-bold flex items-center justify-between" style={{ color: spec.cssColor }}>
+                  <div className="font-bold flex items-center justify-between text-[#F0FFEA]">
                     <span>{spec.name}</span>
-                    <span className="text-[7.5px] uppercase text-slate-500">{spec.shortTag}</span>
+                    <span className="text-[7.5px] uppercase text-[#9CA195]">{spec.shortTag}</span>
                   </div>
-                  <div className="text-slate-300 text-[8.5px] font-medium pt-0.5">
+                  <div className="text-[#9CA195] text-[8.5px] font-medium pt-0.5">
                     {formatAltAndUnits(spec.altKm, scaleMode)}
                   </div>
                 </div>
@@ -4985,70 +4981,67 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           </div>
 
           {/* Sun Direction & Day/Night Terminator Control */}
-          <div className="border-b border-slate-800/80 pb-2 space-y-1.5">
+          <div className="border-b border-[#33362F] pb-2 space-y-1.5">
             <div className="flex items-center justify-between text-[10px]">
-              <div className="flex items-center gap-1.5 text-amber-400 font-bold uppercase tracking-wider">
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
+              <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold uppercase tracking-wider">
+                <Sun className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Sun Direction & Terminator:</span>
               </div>
               <button
                 onClick={() => setShowSunTerminator(!showSunTerminator)}
                 className={`px-2 py-0.5 rounded text-[10px] border transition ${
                   showSunTerminator
-                    ? 'bg-amber-950 text-amber-300 border-amber-600 font-bold'
-                    : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                 }`}
               >
                 {showSunTerminator ? 'Visible (ON)' : 'Hidden (OFF)'}
               </button>
             </div>
-            <div className="text-[9px] text-slate-400 leading-tight">
-              Fixed ECI solar vector (v1 assumption) with perpendicular day/night terminator great circle & shaded night hemisphere.
+            <div className="text-[9px] text-[#9CA195] leading-tight">
+              Fixed ECI solar vector with perpendicular day/night terminator circle & shaded night hemisphere.
             </div>
           </div>
 
-          {/* Active Satellite Ground Footprint (Elevation Mask Geometry - Tasks 1-3) */}
-          <div className="border-b border-slate-800/80 pb-2 space-y-1.5">
+          {/* Active Satellite Ground Footprint */}
+          <div className="border-b border-[#33362F] pb-2 space-y-1.5">
             <div className="flex items-center justify-between text-[10px]">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-bold uppercase tracking-wider">
-                <Target className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold uppercase tracking-wider">
+                <Target className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Ground Footprint Mask:</span>
               </div>
               <button
                 onClick={() => setShowFootprint(!showFootprint)}
                 className={`px-2 py-0.5 rounded text-[10px] border transition ${
                   showFootprint
-                    ? 'bg-emerald-950 text-emerald-300 border-emerald-600 font-bold'
-                    : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                 }`}
               >
                 {showFootprint ? 'Visible (ON)' : 'Hidden (OFF)'}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-1 text-[9px] font-mono">
-              <div className="bg-slate-900/90 border border-slate-800 p-1 rounded">
-                <div className="text-slate-400 text-[8px]">Min Elevation (ε)</div>
-                <div className="text-cyan-300 font-bold">{(handoverData?.min_elevation_deg ?? 10.0).toFixed(1)}°</div>
+              <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
+                <div className="text-[#9CA195] text-[8px]">Min Elevation (ε)</div>
+                <div className="text-[#F0FFEA] font-bold">{(handoverData?.min_elevation_deg ?? 10.0).toFixed(1)}°</div>
               </div>
-              <div className="bg-slate-900/90 border border-slate-800 p-1 rounded">
-                <div className="text-slate-400 text-[8px]">Angular Radius (θ)</div>
-                <div className="text-sky-300 font-bold">{footprintThetaDeg.toFixed(1)}° (~{Math.round(footprintGroundRadiusKm)} km)</div>
+              <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
+                <div className="text-[#9CA195] text-[8px]">Angular Radius (θ)</div>
+                <div className="text-[#F0FFEA] font-bold">{footprintThetaDeg.toFixed(1)}° (~{Math.round(footprintGroundRadiusKm)} km)</div>
               </div>
-              <div className="col-span-2 bg-slate-900/90 border border-slate-800 p-1 rounded flex justify-between items-center">
-                <span className="text-slate-400 text-[8px]">Beacon Status:</span>
-                <span className={isBeaconInFootprint ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                  {isBeaconInFootprint ? `IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)` : `OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
+              <div className="col-span-2 bg-[#262824] border border-[#33362F] p-1 rounded flex justify-between items-center">
+                <span className="text-[#9CA195] text-[8px]">Beacon Status:</span>
+                <span className={isBeaconInFootprint ? 'text-[#F0FFEA] font-bold' : 'text-[#FF5F40] font-bold'}>
+                  {isBeaconInFootprint ? `✓ IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)` : `[!] OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
                 </span>
               </div>
-            </div>
-            <div className="text-[8.5px] text-slate-400 leading-tight">
-              Standard elevation mask geometry: sin(η) = (R_E/r)·cos(ε), θ = 90° - ε - η. Reuses handover min-elevation setting.
             </div>
           </div>
 
           {/* Quick Preset Selector Buttons */}
           <div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">Quick Presets:</div>
+            <div className="text-[10px] text-[#9CA195] uppercase tracking-wider mb-1.5">Quick Presets:</div>
             <div className="grid grid-cols-2 gap-1.5">
               {ORBIT_PRESETS.map((p) => (
                 <button
@@ -5056,8 +5049,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   onClick={() => handlePresetSelect(p.id)}
                   className={`px-2 py-1 text-[10px] rounded text-left border truncate transition ${
                     selectedPresetId === p.id
-                      ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-semibold'
-                      : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-800'
+                      ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-semibold'
+                      : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F]'
                   }`}
                   title={p.description}
                 >
@@ -5068,70 +5061,70 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           </div>
 
           {/* Informational Re-initialization Note */}
-          <div className="bg-blue-950/40 border border-blue-800/60 p-2 rounded text-[10px] text-slate-300 leading-tight">
-            <span className="text-cyan-400 font-bold">Orbit Re-initialization:</span> Instant Keplerian state re-initialization (not a live transfer burn).
+          <div className="bg-[#262824] border border-[#33362F] p-2 rounded text-[10px] text-[#9CA195] leading-tight">
+            <span className="text-[#FF5F40] font-bold">Orbit Re-initialization:</span> Instant Keplerian state re-initialization.
           </div>
 
-          {/* Live Derived Values Panel (Rule 4) */}
-          <div className="bg-slate-900/90 border border-slate-800 p-2 rounded-lg space-y-1 text-[10px]">
-            <div className="text-cyan-400 font-bold uppercase tracking-wider text-[9px] border-b border-slate-800/80 pb-0.5 flex justify-between">
+          {/* Live Derived Values Panel */}
+          <div className="bg-[#262824] border border-[#33362F] p-2 rounded space-y-1 text-[10px]">
+            <div className="text-[#FF5F40] font-bold uppercase tracking-wider text-[9px] border-b border-[#33362F] pb-0.5 flex justify-between">
               <span>Live Derived Keplerian Metrics</span>
-              <span className="text-emerald-400 font-mono">Vis-Viva Active</span>
+              <span className="text-[#F0FFEA] font-mono">Vis-Viva Active</span>
             </div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 font-mono">
               <div>
-                <span className="text-slate-400">Semi-major ($a$):</span>{' '}
-                <span className="text-cyan-300 font-bold">
+                <span className="text-[#9CA195]">Semi-major ($a$):</span>{' '}
+                <span className="text-[#F0FFEA] font-bold">
                   {formatDistAndUnits(derivedA, getRenderOrbitRadius(derivedA - EARTH_RADIUS_KM, scaleMode))}
                 </span>
               </div>
               <div>
-                <span className="text-slate-400">Eccentricity ($e$):</span>{' '}
-                <span className="text-cyan-300 font-bold">{derivedE.toFixed(4)}</span>
+                <span className="text-[#9CA195]">Eccentricity ($e$):</span>{' '}
+                <span className="text-[#F0FFEA] font-bold">{derivedE.toFixed(4)}</span>
               </div>
               <div>
-                <span className="text-slate-400">Current dist ($r$):</span>{' '}
-                <span className="text-sky-300 font-bold">
+                <span className="text-[#9CA195]">Current dist ($r$):</span>{' '}
+                <span className="text-[#F0FFEA] font-bold">
                   {formatDistAndUnits(derivedR, getRenderOrbitRadius(derivedR - EARTH_RADIUS_KM, scaleMode))}
                 </span>
               </div>
-              <div className="col-span-2 pt-0.5 border-t border-slate-800/50 flex justify-between">
-                <span className="text-slate-400">Real Speed ($v$):</span>{' '}
-                <span className="text-emerald-400 font-bold">{formatOrbitalSpeed(derivedSpeed)}</span>
+              <div className="col-span-2 pt-0.5 border-t border-[#33362F] flex justify-between">
+                <span className="text-[#9CA195]">Real Speed ($v$):</span>{' '}
+                <span className="text-[#FF5F40] font-bold">{formatOrbitalSpeed(derivedSpeed)}</span>
               </div>
-              <div className="col-span-2 pt-0.5 border-t border-slate-800/50 flex justify-between">
-                <span className="text-slate-400">Orbital Period ($T$ - 1 Rev):</span>
-                <span className="text-cyan-300 font-bold">{formatOrbitalPeriod(derivedPeriodSec)}</span>
+              <div className="col-span-2 pt-0.5 border-t border-[#33362F] flex justify-between">
+                <span className="text-[#9CA195]">Orbital Period ($T$):</span>
+                <span className="text-[#F0FFEA] font-bold">{formatOrbitalPeriod(derivedPeriodSec)}</span>
               </div>
-              <div className="col-span-2 pt-0.5 border-t border-slate-800/50 flex justify-between">
-                <span className="text-slate-400">Current Altitude ($h$):</span>
-                <span className="text-emerald-300 font-bold">
+              <div className="col-span-2 pt-0.5 border-t border-[#33362F] flex justify-between">
+                <span className="text-[#9CA195]">Current Altitude ($h$):</span>
+                <span className="text-[#F0FFEA] font-bold">
                   {formatAltAndUnits(derivedR - EARTH_RADIUS_KM, scaleMode)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Validation Warnings (Rule 4: perigee >= 150 km drag limit, apogee >= perigee) */}
+          {/* Validation Warnings */}
           {orbitPerigeeKm < 150 && (
-            <div className="bg-rose-950/70 border border-rose-600/80 p-1.5 rounded text-[10px] text-rose-300 font-bold">
-              ⚠️ Atmospheric Drag Violation: Perigee ({orbitPerigeeKm} km) must be ≥ 150 km.
+            <div className="bg-[#1B1D1A] border border-[#FF5F40] p-1.5 rounded text-[10px] text-[#FF5F40] font-bold">
+              [!] Atmospheric Drag Violation: Perigee ({orbitPerigeeKm} km) must be ≥ 150 km.
             </div>
           )}
           {orbitApogeeKm < orbitPerigeeKm && (
-            <div className="bg-rose-950/70 border border-rose-600/80 p-1.5 rounded text-[10px] text-rose-300 font-bold">
-              ⚠️ Invalid Geometry: Apogee ({orbitApogeeKm} km) must be ≥ Perigee ({orbitPerigeeKm} km).
+            <div className="bg-[#1B1D1A] border border-[#FF5F40] p-1.5 rounded text-[10px] text-[#FF5F40] font-bold">
+              [!] Invalid Geometry: Apogee ({orbitApogeeKm} km) must be ≥ Perigee ({orbitPerigeeKm} km).
             </div>
           )}
 
-          {/* Manual Dials (UI) (Rule 4) */}
-          <div className="space-y-2 border-t border-slate-800/80 pt-2 text-[11px]">
+          {/* Manual Dials (UI) */}
+          <div className="space-y-2 border-t border-[#33362F] pt-2 text-[11px]">
             {/* Perigee Altitude (hp) */}
             <div>
-              <div className="flex justify-between items-center text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-0.5 text-[10px]">
                 <span>
                   Perigee Alt ($h_p$):{' '}
-                  <span className="text-slate-500 font-mono text-[9px]">
+                  <span className="text-[#5E625A] font-mono text-[9px]">
                     ({getRenderOrbitRadius(orbitPerigeeKm, scaleMode).toFixed(1)}u)
                   </span>
                 </span>
@@ -5146,11 +5139,11 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       const val = Number(e.target.value);
                       handleCustomParamChange(val, Math.max(val, orbitApogeeKm), orbitInc, orbitRaan, orbitArgPerigeeDeg);
                     }}
-                    className={`w-16 bg-slate-900 border rounded px-1 py-0.5 text-right font-bold font-mono text-[10px] ${
-                      orbitPerigeeKm < 150 ? 'border-rose-500 text-rose-300' : 'border-slate-700 text-cyan-300'
+                    className={`w-16 bg-[#262824] border rounded px-1 py-0.5 text-right font-bold font-mono text-[10px] ${
+                      orbitPerigeeKm < 150 ? 'border-[#FF5F40] text-[#FF5F40]' : 'border-[#33362F] text-[#F0FFEA]'
                     }`}
                   />
-                  <span className="text-slate-500">km</span>
+                  <span className="text-[#9CA195]">km</span>
                 </div>
               </div>
               <input
@@ -5163,17 +5156,17 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   const val = Number(e.target.value);
                   handleCustomParamChange(val, Math.max(val, orbitApogeeKm), orbitInc, orbitRaan, orbitArgPerigeeDeg);
                 }}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
                 title="Perigee altitude slider (min 150 km drag limit)"
               />
             </div>
 
             {/* Apogee Altitude (ha) */}
             <div>
-              <div className="flex justify-between items-center text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-0.5 text-[10px]">
                 <span>
                   Apogee Alt ($h_a$):{' '}
-                  <span className="text-slate-500 font-mono text-[9px]">
+                  <span className="text-[#5E625A] font-mono text-[9px]">
                     ({getRenderOrbitRadius(orbitApogeeKm, scaleMode).toFixed(1)}u)
                   </span>
                 </span>
@@ -5188,11 +5181,11 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       const val = Number(e.target.value);
                       handleCustomParamChange(orbitPerigeeKm, val, orbitInc, orbitRaan, orbitArgPerigeeDeg);
                     }}
-                    className={`w-16 bg-slate-900 border rounded px-1 py-0.5 text-right font-bold font-mono text-[10px] ${
-                      orbitApogeeKm < orbitPerigeeKm ? 'border-rose-500 text-rose-300' : 'border-slate-700 text-cyan-300'
+                    className={`w-16 bg-[#262824] border rounded px-1 py-0.5 text-right font-bold font-mono text-[10px] ${
+                      orbitApogeeKm < orbitPerigeeKm ? 'border-[#FF5F40] text-[#FF5F40]' : 'border-[#33362F] text-[#F0FFEA]'
                     }`}
                   />
-                  <span className="text-slate-500">km</span>
+                  <span className="text-[#9CA195]">km</span>
                 </div>
               </div>
               <input
@@ -5205,16 +5198,16 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   const val = Number(e.target.value);
                   handleCustomParamChange(orbitPerigeeKm, val, orbitInc, orbitRaan, orbitArgPerigeeDeg);
                 }}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
                 title="Apogee altitude slider (min = perigee)"
               />
             </div>
 
             {/* Inclination (i) */}
             <div>
-              <div className="flex justify-between items-center text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-0.5 text-[10px]">
                 <span>Inclination ($i$):</span>
-                <span className="text-cyan-300 font-bold">{orbitInc.toFixed(1)}°</span>
+                <span className="text-[#F0FFEA] font-bold">{orbitInc.toFixed(1)}°</span>
               </div>
               <input
                 type="range"
@@ -5223,15 +5216,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 step="0.5"
                 value={orbitInc}
                 onChange={(e) => handleCustomParamChange(orbitPerigeeKm, orbitApogeeKm, Number(e.target.value), orbitRaan, orbitArgPerigeeDeg)}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* RAAN (Omega) */}
             <div>
-              <div className="flex justify-between items-center text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-0.5 text-[10px]">
                 <span>RAAN ($\Omega$):</span>
-                <span className="text-cyan-300 font-bold">{orbitRaan.toFixed(1)}°</span>
+                <span className="text-[#F0FFEA] font-bold">{orbitRaan.toFixed(1)}°</span>
               </div>
               <input
                 type="range"
@@ -5240,15 +5233,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 step="1"
                 value={orbitRaan}
                 onChange={(e) => handleCustomParamChange(orbitPerigeeKm, orbitApogeeKm, orbitInc, Number(e.target.value), orbitArgPerigeeDeg)}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* Argument of Perigee (omega) */}
             <div>
-              <div className="flex justify-between items-center text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-0.5 text-[10px]">
                 <span>Arg of Perigee ($\omega$):</span>
-                <span className="text-cyan-300 font-bold">{orbitArgPerigeeDeg.toFixed(1)}°</span>
+                <span className="text-[#F0FFEA] font-bold">{orbitArgPerigeeDeg.toFixed(1)}°</span>
               </div>
               <input
                 type="range"
@@ -5257,15 +5250,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 step="1"
                 value={orbitArgPerigeeDeg}
                 onChange={(e) => handleCustomParamChange(orbitPerigeeKm, orbitApogeeKm, orbitInc, orbitRaan, Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* True Anomaly / Orbit Position Scrubber */}
             <div>
-              <div className="flex justify-between items-center text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between items-center text-[#9CA195] mb-0.5 text-[10px]">
                 <span>Starting True Anomaly ($\nu_0$):</span>
-                <span className="text-cyan-300 font-bold">{orbitAnomalyDeg.toFixed(0)}°</span>
+                <span className="text-[#F0FFEA] font-bold">{orbitAnomalyDeg.toFixed(0)}°</span>
               </div>
               <input
                 type="range"
@@ -5277,25 +5270,25 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   const deg = Number(e.target.value);
                   handleCustomParamChange(orbitPerigeeKm, orbitApogeeKm, orbitInc, orbitRaan, orbitArgPerigeeDeg, deg);
                 }}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
           </div>
 
           {/* Physical Simulation Time Warp Controls */}
-          <div className="border-t border-slate-800/80 pt-2 text-[10px] space-y-1.5">
+          <div className="border-t border-[#33362F] pt-2 text-[10px] space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 font-bold uppercase tracking-wider">Physics Time Warp:</span>
-              <span className="text-cyan-300 font-bold">
+              <span className="text-[#9CA195] font-bold uppercase tracking-wider">Physics Time Warp:</span>
+              <span className="text-[#FF5F40] font-bold">
                 {simTimeWarp}× {simTimeWarp === 1 ? '(Real-Time)' : `(1s = ${simTimeWarp >= 60 ? `${simTimeWarp / 60}m` : `${simTimeWarp}s`})`}
               </span>
             </div>
             <div className="flex items-center gap-1 flex-wrap">
               <button
                 onClick={() => setAutoRevolve(!autoRevolve)}
-                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1 font-semibold"
+                className="px-2 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 font-semibold"
               >
-                {autoRevolve ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}
+                {autoRevolve ? <Pause className="w-2.5 h-2.5 text-[#FF5F40]" /> : <Play className="w-2.5 h-2.5 text-[#FF5F40]" />}
                 <span>{autoRevolve ? 'Pause' : 'Revolve'}</span>
               </button>
               {[1, 60, 120, 360, 1440].map((warp) => (
@@ -5304,26 +5297,26 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   onClick={() => setSimTimeWarp(warp)}
                   className={`px-1.5 py-1 rounded border text-[9px] font-mono transition ${
                     simTimeWarp === warp
-                      ? 'bg-cyan-950 text-cyan-300 border-cyan-500 font-bold shadow-sm'
-                      : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 border-slate-800'
+                      ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-bold'
+                      : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] border-[#33362F]'
                   }`}
                   title={warp === 1 ? '1× Real-Time physics (1s = 1s)' : `${warp}× Time Warp`}
                 >
-                  {warp === 1 ? '1× Real' : warp === 60 ? '60× (1s=1m)' : warp === 120 ? '120× (1s=2m)' : warp === 360 ? '360× (1s=6m)' : '1440× (1m=1d)'}
+                  {warp === 1 ? '1× Real' : warp === 60 ? '60×' : warp === 120 ? '120×' : warp === 360 ? '360×' : '1440×'}
                 </button>
               ))}
               <button
                 onClick={() => handlePresetSelect('leo-550-p1')}
-                className="ml-auto text-slate-400 hover:text-cyan-300 flex items-center gap-1 px-1.5 py-1 rounded bg-slate-900 border border-slate-800 text-[9px]"
+                className="ml-auto text-[#9CA195] hover:text-[#F0FFEA] flex items-center gap-1 px-1.5 py-1 rounded bg-[#262824] border border-[#33362F] text-[9px]"
                 title="Reset to LEO-550 Default Orbit"
               >
-                <RotateCcw className="w-2.5 h-2.5" />
+                <RotateCcw className="w-2.5 h-2.5 text-[#FF5F40]" />
                 <span>Reset</span>
               </button>
             </div>
-            <div className="flex items-center justify-between text-[9px] text-slate-500 pt-0.5">
+            <div className="flex items-center justify-between text-[9px] text-[#9CA195] pt-0.5">
               <span>Orbital 1-Rev at {simTimeWarp}×:</span>
-              <span className="text-cyan-400 font-mono">
+              <span className="text-[#F0FFEA] font-mono">
                 {simTimeWarp === 1
                   ? formatOrbitalPeriod(derivedPeriodSec)
                   : `~${(derivedPeriodSec / simTimeWarp).toFixed(1)}s real elapsed`}
@@ -5332,30 +5325,30 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           </div>
 
           {/* Ground Beacon Dynamics Controls */}
-          <div className="border-t border-slate-800/80 pt-2 text-[11px] space-y-2">
+          <div className="border-t border-[#33362F] pt-2 text-[11px] space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-rose-400 font-bold text-[10px] uppercase tracking-wider">
-                <Radio className="w-3.5 h-3.5 text-rose-400" />
+              <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold text-[10px] uppercase tracking-wider">
+                <Radio className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Ground Beacon Dynamics</span>
               </div>
               <button
                 onClick={() => setBeaconRevolving(!beaconRevolving)}
                 className={`px-2 py-0.5 rounded text-[10px] border flex items-center gap-1 transition ${
                   beaconRevolving
-                    ? 'bg-rose-950 text-rose-300 border-rose-700 font-semibold'
-                    : 'bg-amber-950 text-amber-300 border-amber-700 font-semibold'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-semibold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F] font-semibold'
                 }`}
               >
-                {beaconRevolving ? <Pause className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}
+                {beaconRevolving ? <Pause className="w-2.5 h-2.5 text-[#FF5F40]" /> : <Play className="w-2.5 h-2.5 text-[#FF5F40]" />}
                 <span>{beaconRevolving ? 'Revolving' : 'Static (Locked)'}</span>
               </button>
             </div>
 
             {/* Beacon Ground Phase / Position Scrubber */}
             <div>
-              <div className="flex justify-between text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between text-[#9CA195] mb-0.5 text-[10px]">
                 <span>Ground Position Phase ($\nu$):</span>
-                <span className="text-rose-300 font-bold">{beaconAnomalyDeg.toFixed(0)}°</span>
+                <span className="text-[#F0FFEA] font-bold">{beaconAnomalyDeg.toFixed(0)}°</span>
               </div>
               <input
                 type="range"
@@ -5368,15 +5361,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   setBeaconAnomalyDeg(deg);
                   beaconMotionRef.current.anomaly = THREE.MathUtils.degToRad(deg);
                 }}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* Beacon Speed (km/h) & Presets */}
-            <div className="space-y-1.5 pt-1 border-t border-slate-800/60">
-              <div className="flex items-center justify-between text-slate-400 text-[10px]">
+            <div className="space-y-1.5 pt-1 border-t border-[#33362F]">
+              <div className="flex items-center justify-between text-[#9CA195] text-[10px]">
                 <span>Beacon Velocity:</span>
-                <span className="font-mono text-rose-300 font-bold">{beaconSpeedKmh} km/h</span>
+                <span className="font-mono text-[#FF5F40] font-bold">{beaconSpeedKmh} km/h</span>
               </div>
 
               <input
@@ -5391,7 +5384,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   setBeaconRevolving(spd > 0);
                   satellitePovSync.update({ beaconSpeedKmh: spd });
                 }}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
 
               <div className="flex items-center gap-1 flex-wrap">
@@ -5410,8 +5403,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     }}
                     className={`px-1.5 py-0.5 rounded border text-[9px] font-mono transition ${
                       beaconSpeedKmh === rate.speed
-                        ? 'bg-rose-900 text-rose-200 border-rose-500 font-bold shadow-sm'
-                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold'
+                        : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                     }`}
                   >
                     {rate.label}
@@ -5419,9 +5412,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 ))}
               </div>
 
-              <div className="flex items-center justify-between text-[8.5px] text-slate-500 font-mono">
+              <div className="flex items-center justify-between text-[8.5px] text-[#9CA195] font-mono">
                 <span>1 Rev (40,075 km):</span>
-                <span className="text-rose-400 font-bold">
+                <span className="text-[#F0FFEA] font-bold">
                   {formatBeaconRevolutionTime(beaconSpeedKmh)}
                 </span>
               </div>
@@ -5429,9 +5422,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
             {/* Track Inclination Slider */}
             <div>
-              <div className="flex justify-between text-slate-400 mb-0.5 text-[10px]">
+              <div className="flex justify-between text-[#9CA195] mb-0.5 text-[10px]">
                 <span>Ground Track Inclination ($i$):</span>
-                <span className="text-rose-300 font-bold">{beaconInc.toFixed(1)}°</span>
+                <span className="text-[#F0FFEA] font-bold">{beaconInc.toFixed(1)}°</span>
               </div>
               <input
                 type="range"
@@ -5444,28 +5437,28 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                   setBeaconInc(inc);
                   updateBeaconTrackGeometry(inc, beaconRaan);
                 }}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                className="w-full h-1.5 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
           </div>
-          <div className="border-t border-slate-800/80 pt-2 text-[11px] space-y-1.5">
+          <div className="border-t border-[#33362F] pt-2 text-[11px] space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-sky-400 font-bold text-[10px] uppercase tracking-wider">
-                <Globe className="w-3.5 h-3.5 text-sky-400" />
+              <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold text-[10px] uppercase tracking-wider">
+                <Globe className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Earth Diurnal Spin (15°/hr)</span>
               </div>
               <button
                 onClick={() => setEarthSpinEnabled(!earthSpinEnabled)}
                 className={`px-1.5 py-0.5 rounded text-[10px] border ${
                   earthSpinEnabled
-                    ? 'bg-sky-950 text-sky-300 border-sky-700 font-semibold'
-                    : 'bg-slate-900 text-slate-400 border-slate-800'
+                    ? 'bg-[#FF5F40]/15 text-[#F0FFEA] border-[#FF5F40] font-semibold'
+                    : 'bg-[#262824] text-[#9CA195] border-[#33362F]'
                 }`}
               >
                 {earthSpinEnabled ? 'Active (15°/hr)' : 'Paused'}
               </button>
             </div>
-            <div className="flex items-center justify-between text-slate-400 text-[10px]">
+            <div className="flex items-center justify-between text-[#9CA195] text-[10px]">
               <span>Speed Warp:</span>
               <div className="flex items-center gap-1">
                 {[
@@ -5482,8 +5475,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     }}
                     className={`px-1.5 py-0.5 rounded border text-[9px] transition ${
                       earthSpinEnabled && earthSpinMultiplier === rate.mult
-                        ? 'bg-sky-900 text-sky-200 border-sky-600 font-bold'
-                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold'
+                        : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                     }`}
                     title={rate.desc}
                   >
@@ -5504,19 +5497,19 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       >
         {isScaleMinimized ? (
           <div
-            className="bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-300 shadow-xl flex items-center gap-2 cursor-pointer hover:border-slate-700 transition"
+            className="bg-[#000000]/95 backdrop-blur-md border border-[#33362F] rounded px-2.5 py-1.5 font-mono text-[10px] text-[#F0FFEA] shadow-xl flex items-center gap-2 cursor-pointer hover:border-[#FF5F40]/50 transition"
             onClick={() => setIsScaleMinimized(false)}
             title="Click to expand scale indicator"
           >
-            <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[9px] uppercase tracking-wider">
-              <Ruler className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <div className="flex items-center gap-1.5 text-[#FF5F40] font-bold text-[9px] uppercase tracking-wider">
+              <Ruler className="w-3.5 h-3.5 text-[#FF5F40] shrink-0" />
               <span>SCALE</span>
             </div>
             <span
               className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
                 scaleMode === 'TRUE_SCALE'
-                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60'
-                  : 'bg-amber-950 text-amber-300 border border-amber-700/60'
+                  ? 'bg-[#FF5F40]/15 text-[#FF5F40] border border-[#FF5F40]/40'
+                  : 'bg-[#262824] text-[#9CA195] border border-[#33362F]'
               }`}
             >
               {scaleMode === 'TRUE_SCALE' ? 'TRUE (100u)' : 'LOG SCALE'}
@@ -5527,30 +5520,30 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 e.stopPropagation();
                 setIsScaleMinimized(false);
               }}
-              className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+              className="p-0.5 hover:bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] rounded transition cursor-pointer"
               title="Expand scale indicator"
               aria-label="Expand scale indicator"
             >
-              <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#FF5F40]" />
             </button>
           </div>
         ) : (
-          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800/90 rounded-lg p-2.5 font-mono text-[10px] text-slate-300 shadow-xl space-y-1.5 w-64 animate-in fade-in duration-200">
+          <div className="bg-[#000000]/95 backdrop-blur-md border border-[#33362F] rounded p-2.5 font-mono text-[10px] text-[#F0FFEA] shadow-xl space-y-1.5 w-64 animate-in fade-in duration-200">
             <div
-              className="flex items-center justify-between border-b border-slate-800/80 pb-1 cursor-pointer"
+              className="flex items-center justify-between border-b border-[#33362F] pb-1 cursor-pointer"
               onClick={() => setIsScaleMinimized(true)}
               title="Click to minimize scale indicator"
             >
-              <div className="flex items-center gap-1.5 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
-                <Ruler className="w-3.5 h-3.5 text-cyan-400" />
+              <div className="flex items-center gap-1.5 text-[#9CA195] font-bold uppercase tracking-wider text-[9px]">
+                <Ruler className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Scale Indicator</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span
                   className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold ${
                     scaleMode === 'TRUE_SCALE'
-                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60'
-                      : 'bg-amber-950 text-amber-300 border border-amber-700/60'
+                      ? 'bg-[#FF5F40]/15 text-[#FF5F40] border border-[#FF5F40]/40'
+                      : 'bg-[#262824] text-[#9CA195] border border-[#33362F]'
                   }`}
                 >
                   {scaleMode === 'TRUE_SCALE' ? 'TRUE SCALE' : 'READABLE LOG'}
@@ -5561,7 +5554,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     e.stopPropagation();
                     setIsScaleMinimized(true);
                   }}
-                  className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+                  className="p-0.5 hover:bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] rounded transition cursor-pointer"
                   title="Minimize scale indicator"
                   aria-label="Minimize scale indicator"
                 >
@@ -5572,18 +5565,18 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
             {/* Primary Readout */}
             <div className="flex items-baseline justify-between pt-0.5">
-              <div className="text-white font-bold text-[11px]">
+              <div className="text-[#F0FFEA] font-bold text-[11px]">
                 {scaleMode === 'TRUE_SCALE' ? (
-                  <span className="text-cyan-300">
+                  <span className="text-[#FF5F40]">
                     {earthRenderRadius.toFixed(0)}u = {Math.round(EARTH_RADIUS_KM).toLocaleString()} km
                   </span>
                 ) : (
-                  <span className="text-amber-300">
+                  <span className="text-[#F0FFEA]">
                     100u alt = {Math.round(getAltitudeFromRenderOffset(100, scaleMode, READABLE_K, earthRenderRadius)).toLocaleString()} km
                   </span>
                 )}
               </div>
-              <div className="text-[8.5px] text-slate-400 font-mono">
+              <div className="text-[8.5px] text-[#9CA195] font-mono">
                 {scaleMode === 'TRUE_SCALE' ? (
                   <span>1u = {(EARTH_RADIUS_KM / earthRenderRadius).toFixed(1)} km</span>
                 ) : (
@@ -5596,31 +5589,31 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             <div className="pt-0.5">
               <div className="relative flex items-center">
                 {/* Left tick */}
-                <div className="w-[1.5px] h-2.5 bg-slate-400" />
+                <div className="w-[1.5px] h-2.5 bg-[#5E625A]" />
                 {/* Left segment */}
                 <div
                   className={`flex-1 h-[2px] ${
                     scaleMode === 'TRUE_SCALE'
-                      ? 'bg-cyan-400'
-                      : 'bg-gradient-to-r from-amber-400 to-amber-300'
+                      ? 'bg-[#FF5F40]'
+                      : 'bg-[#FF5F40]/60'
                   }`}
                 />
                 {/* Center tick */}
-                <div className="w-[1.5px] h-2 bg-slate-400" />
+                <div className="w-[1.5px] h-2 bg-[#5E625A]" />
                 {/* Right segment */}
                 <div
                   className={`flex-1 h-[2px] ${
                     scaleMode === 'TRUE_SCALE'
-                      ? 'bg-cyan-400'
-                      : 'bg-gradient-to-r from-amber-300 to-amber-500'
+                      ? 'bg-[#FF5F40]'
+                      : 'bg-[#FF5F40]/40'
                   }`}
                 />
                 {/* Right tick */}
-                <div className="w-[1.5px] h-2.5 bg-slate-400" />
+                <div className="w-[1.5px] h-2.5 bg-[#5E625A]" />
               </div>
 
               {/* Under-bar tick labels */}
-              <div className="flex justify-between text-[8px] font-mono text-slate-400 pt-0.5">
+              <div className="flex justify-between text-[8px] font-mono text-[#9CA195] pt-0.5">
                 <span>0u</span>
                 <span>
                   {scaleMode === 'TRUE_SCALE'
@@ -5635,14 +5628,14 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               </div>
             </div>
 
-            {/* Dynamic active orbit readout and not-to-scale warning in READABLE_SCALE */}
+            {/* Dynamic active orbit readout */}
             {scaleMode === 'READABLE_SCALE' && (
-              <div className="text-[8.5px] pt-1 border-t border-amber-900/40 text-amber-300/90 flex items-center justify-between">
+              <div className="text-[8.5px] pt-1 border-t border-[#33362F] text-[#9CA195] flex items-center justify-between">
                 <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40] animate-pulse" />
                   <span>Active Orbit:</span>
                 </span>
-                <span className="font-bold font-mono">
+                <span className="font-bold font-mono text-[#F0FFEA]">
                   {getRenderAltitudeOffset(orbitAltitudeKm, scaleMode, READABLE_K, earthRenderRadius).toFixed(1)}u = {Math.round(orbitAltitudeKm).toLocaleString()} km
                 </span>
               </div>
@@ -5653,23 +5646,23 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
       {/* Overlay HUD Telemetry in 3D with Minimize / Expand Feature */}
       <div
-        className={`absolute bottom-3 left-3 bg-slate-950/90 backdrop-blur border border-slate-800 p-2.5 rounded-lg font-mono text-[10px] space-y-1 text-slate-300 pointer-events-auto shadow-xl z-20 select-none transition-all duration-200 ${
+        className={`absolute bottom-3 left-3 bg-[#000000]/95 backdrop-blur border border-[#33362F] p-2.5 rounded font-mono text-[10px] space-y-1 text-[#F0FFEA] pointer-events-auto shadow-xl z-20 select-none transition-all duration-200 ${
           isTrackerMinimized ? 'max-w-[280px]' : 'max-w-[min(540px,calc(100%-320px))]'
         }`}
       >
         <div
-          className={`text-cyan-400 font-bold flex justify-between items-center gap-3 cursor-pointer ${
-            !isTrackerMinimized ? 'border-b border-slate-800 pb-1.5 mb-1.5' : ''
+          className={`text-[#FF5F40] font-bold flex justify-between items-center gap-3 cursor-pointer ${
+            !isTrackerMinimized ? 'border-b border-[#33362F] pb-1.5 mb-1.5' : ''
           }`}
           onClick={() => setIsTrackerMinimized((prev) => !prev)}
           title={isTrackerMinimized ? 'Click to expand constellation tracker' : 'Click to minimize constellation tracker'}
         >
           <div className="flex items-center gap-1.5 truncate">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40] shrink-0"></span>
             <span className="tracking-wider truncate">ORBITAL CONSTELLATION TRACKER</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className={scaleMode === 'TRUE_SCALE' ? 'text-cyan-300 text-[9px] font-bold' : 'text-amber-300 text-[9px] font-bold'}>
+            <span className={scaleMode === 'TRUE_SCALE' ? 'text-[#FF5F40] text-[9px] font-bold' : 'text-[#9CA195] text-[9px] font-bold'}>
               [{scaleMode}]
             </span>
             <button
@@ -5678,12 +5671,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 e.stopPropagation();
                 setIsTrackerMinimized((prev) => !prev);
               }}
-              className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+              className="p-0.5 hover:bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] rounded transition cursor-pointer"
               title={isTrackerMinimized ? 'Expand tracker' : 'Minimize tracker'}
               aria-label={isTrackerMinimized ? 'Expand tracker' : 'Minimize tracker'}
             >
               {isTrackerMinimized ? (
-                <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#FF5F40]" />
               ) : (
                 <Minus className="w-3.5 h-3.5" />
               )}
@@ -5693,33 +5686,33 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
         {!isTrackerMinimized && (
           <div className="space-y-1 max-h-[55vh] overflow-y-auto pr-1">
-            <div>Central Body: <span className="text-white">Earth ({formatDistAndUnits(EARTH_RADIUS_KM, globeRadius)})</span></div>
+            <div>Central Body: <span className="text-[#F0FFEA] font-semibold">Earth ({formatDistAndUnits(EARTH_RADIUS_KM, globeRadius)})</span></div>
             <div>
-              Active Satellite: <span className="text-cyan-300 font-bold">{activePreset ? activePreset.shortName : 'Custom Orbit'}</span>
+              Active Satellite: <span className="text-[#FF5F40] font-bold">{activePreset ? activePreset.shortName : 'Custom Orbit'}</span>
             </div>
             <div>
               Orbit Shape:{' '}
-              <span className="text-sky-300 font-bold">
+              <span className="text-[#F0FFEA] font-bold">
                 {formatAltAndUnits(orbitPerigeeKm, scaleMode)} × {formatAltAndUnits(orbitApogeeKm, scaleMode)} (e={derivedE.toFixed(4)}) | Inc: {orbitInc.toFixed(1)}°
               </span>
             </div>
             <div>
               Orbital Speed & Period (1 Rev):{' '}
-              <span className="text-emerald-400 font-bold">
+              <span className="text-[#FF5F40] font-bold">
                 {formatOrbitalSpeed(derivedSpeed)}
               </span>{' '}
               |{' '}
-              <span className="text-cyan-300 font-bold">
+              <span className="text-[#F0FFEA] font-bold">
                 1 Rev: {formatOrbitalPeriod(derivedPeriodSec)}
               </span>
             </div>
-            <div className="text-[9px] text-slate-400">
+            <div className="text-[9px] text-[#9CA195]">
               Kepler Orbit: a = {formatDistAndUnits(derivedA, getRenderOrbitRadius(derivedA - EARTH_RADIUS_KM, scaleMode))} | r = {formatDistAndUnits(derivedR, getRenderOrbitRadius(derivedR - EARTH_RADIUS_KM, scaleMode))}
             </div>
-            <div>Target Entity: <span className="text-emerald-400 font-bold">Ground Station ({formatAltAndUnits(0, scaleMode)})</span></div>
+            <div>Target Entity: <span className="text-[#F0FFEA] font-bold">Ground Station ({formatAltAndUnits(0, scaleMode)})</span></div>
             <div>
               Beacon Platform:{' '}
-              <span className={beaconSpeedKmh > 0 ? 'text-rose-300 font-bold' : 'text-amber-400 font-bold'}>
+              <span className={beaconSpeedKmh > 0 ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-bold'}>
                 {beaconSpeedKmh > 0
                   ? `ATMOSPHERIC UAV (${beaconSpeedKmh} km/h [1 Rev = ${formatBeaconRevolutionTime(beaconSpeedKmh)}])`
                   : 'STATIC GROUND STATION (HOVER / LOCKED)'}
@@ -5727,7 +5720,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             </div>
             <div>
               Earth Spin & Clock:{' '}
-              <span className={earthSpinEnabled ? 'text-sky-300 font-bold' : 'text-slate-500 font-bold'}>
+              <span className={earthSpinEnabled ? 'text-[#F0FFEA] font-bold' : 'text-[#5E625A] font-bold'}>
                 {earthSpinEnabled
                   ? `SIDEREAL SPIN (${simTimeWarp}× Time Warp [${simTimeWarp === 1 ? '1s=1s Real-Time' : `1s = ${simTimeWarp >= 60 ? `${simTimeWarp / 60}m` : `${simTimeWarp}s`}`}])`
                   : 'INERTIAL LOCKED (PAUSED)'}
@@ -5735,76 +5728,76 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             </div>
             <div>
               Slant Range:{' '}
-              <span className="text-cyan-300 font-bold">{formatDistAndUnits(currentSlantRangeKm, currentSlantRange)}</span>
+              <span className="text-[#FF5F40] font-bold">{formatDistAndUnits(currentSlantRangeKm, currentSlantRange)}</span>
             </div>
             <div>
               PAT State:{' '}
               {isOccludedByEarth ? (
-                <span className="text-rose-400 font-bold animate-pulse">OCCLUDED BY EARTH LIMB (NO LOS)</span>
+                <span className="text-[#FF5F40] font-bold animate-pulse">! OCCLUDED BY EARTH LIMB (NO LOS)</span>
               ) : !autoLOS ? (
-                <span className="text-slate-400 font-bold">AUTO LOS OFF (HOLDING NADIR ATTITUDE)</span>
+                <span className="text-[#9CA195] font-bold">AUTO LOS OFF (HOLDING NADIR ATTITUDE)</span>
               ) : slewAngularError > 1.5 ? (
-                <span className="text-amber-400 font-bold animate-pulse">
-                  SLEWING TO BEACON LOS ({slewAngularError.toFixed(1)}° OFF-AXIS)
+                <span className="text-[#FF5F40] font-bold animate-pulse">
+                  ! SLEWING TO BEACON LOS ({slewAngularError.toFixed(1)}° OFF-AXIS)
                 </span>
               ) : autoRevolve ? (
-                <span className="text-emerald-400 font-bold">ACTIVE PAT TRACKING (CLEAR LOS)</span>
+                <span className="text-[#F0FFEA] font-bold">✓ ACTIVE PAT TRACKING (CLEAR LOS)</span>
               ) : (
-                <span className="text-emerald-400 font-bold">LOCKED ON BEACON (CLEAR LOS)</span>
+                <span className="text-[#F0FFEA] font-bold">✓ LOCKED ON BEACON (CLEAR LOS)</span>
               )}
             </div>
             {showAtmosphereShells && (
-              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+              <div className="pt-1 border-t border-[#33362F] text-[10px]">
                 Atmospheric Shells:{' '}
-                <span className="text-sky-300 font-bold">
+                <span className="text-[#F0FFEA] font-bold">
                   Turbulence ({formatAltAndUnits(20, scaleMode)})
                 </span>{' '}
                 |{' '}
-                <span className="text-indigo-300 font-bold">
+                <span className="text-[#9CA195] font-bold">
                   Thin ({formatAltAndUnits(100, scaleMode)})
                 </span>{' '}
                 |{' '}
-                <span className="text-emerald-300 font-bold">
+                <span className="text-[#FF5F40] font-bold">
                   Kármán Line ({formatAltAndUnits(100, scaleMode)})
                 </span>
               </div>
             )}
             {showReferenceRings && (
-              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+              <div className="pt-1 border-t border-[#33362F] text-[10px]">
                 Reference Rings:{' '}
                 {REFERENCE_ALTITUDES.map((spec, i) => (
-                  <span key={spec.id} style={{ color: spec.cssColor }}>
+                  <span key={spec.id} className="text-[#F0FFEA]">
                     {spec.name} ({formatAltAndUnits(spec.altKm, scaleMode)}){i < REFERENCE_ALTITUDES.length - 1 ? ' | ' : ''}
                   </span>
                 ))}
               </div>
             )}
             {showSunTerminator && (
-              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+              <div className="pt-1 border-t border-[#33362F] text-[10px]">
                 Solar Illumination:{' '}
-                <span className="text-amber-300 font-bold">
+                <span className="text-[#FF5F40] font-bold">
                   Sun Vector [{FIXED_SUN_DIR.x.toFixed(2)}, {FIXED_SUN_DIR.y.toFixed(2)}, {FIXED_SUN_DIR.z.toFixed(2)}]
                 </span>{' '}
                 |{' '}
-                <span className="text-yellow-300 font-bold">
+                <span className="text-[#F0FFEA] font-bold">
                   Terminator Great Circle
                 </span>{' '}
                 |{' '}
-                <span className="text-slate-400 font-bold">
+                <span className="text-[#9CA195] font-bold">
                   Night Shading
                 </span>
               </div>
             )}
             {showFootprint && (
-              <div className="pt-1 border-t border-slate-800/80 text-[10px]">
+              <div className="pt-1 border-t border-[#33362F] text-[10px]">
                 Ground Footprint ({`El ≥ ${(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°`}):{' '}
-                <span className={isBeaconInFootprint ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                <span className={isBeaconInFootprint ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-bold'}>
                   {isBeaconInFootprint
-                    ? `BEACON IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)`
-                    : `BEACON OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
+                    ? `✓ BEACON IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)`
+                    : `✕ BEACON OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
                 </span>{' '}
                 |{' '}
-                <span className="text-slate-400">
+                <span className="text-[#9CA195]">
                   Radius θ = {footprintThetaDeg.toFixed(1)}° ({Math.round(footprintGroundRadiusKm).toLocaleString()} km)
                 </span>
               </div>
@@ -5815,20 +5808,20 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
       {/* Legend with Minimize / Expand Feature */}
       <div
-        className={`absolute top-3 right-3 bg-slate-950/90 backdrop-blur border border-slate-800 px-3 py-2 rounded-lg font-mono text-[10px] text-slate-400 pointer-events-auto shadow-xl hidden sm:block z-20 transition-all duration-200 select-none ${
+        className={`absolute top-3 right-3 bg-[#000000]/95 backdrop-blur border border-[#33362F] px-3 py-2 rounded font-mono text-[10px] text-[#9CA195] pointer-events-auto shadow-xl hidden sm:block z-20 transition-all duration-200 select-none ${
           isLegendMinimized ? 'max-w-[195px]' : 'max-w-[340px]'
         }`}
       >
         <div
           className={`flex items-center justify-between gap-3 cursor-pointer ${
-            !isLegendMinimized ? 'border-b border-slate-800 pb-1.5 mb-1.5' : ''
+            !isLegendMinimized ? 'border-b border-[#33362F] pb-1.5 mb-1.5' : ''
           }`}
           onClick={() => setIsLegendMinimized((prev) => !prev)}
           title={isLegendMinimized ? 'Click to expand legend' : 'Click to minimize legend'}
         >
           <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
-            <span className="text-[11px] font-bold text-slate-200 tracking-wider">LEO CONSTELLATION</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40] shrink-0"></span>
+            <span className="text-[11px] font-bold text-[#F0FFEA] tracking-wider">LEO CONSTELLATION</span>
           </div>
           <button
             type="button"
@@ -5836,12 +5829,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
               e.stopPropagation();
               setIsLegendMinimized((prev) => !prev);
             }}
-            className="p-0.5 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded transition cursor-pointer"
+            className="p-0.5 hover:bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] rounded transition cursor-pointer"
             title={isLegendMinimized ? 'Expand legend' : 'Minimize legend'}
             aria-label={isLegendMinimized ? 'Expand legend' : 'Minimize legend'}
           >
             {isLegendMinimized ? (
-              <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#FF5F40]" />
             ) : (
               <Minus className="w-3.5 h-3.5" />
             )}
@@ -5851,105 +5844,104 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         {!isLegendMinimized && (
           <div className="space-y-1.5 max-h-[min(50vh,calc(100vh-420px))] overflow-y-auto pr-1">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-cyan-400 inline-block border-dashed"></span>
-              <span className="text-cyan-300 font-medium">Active Optical LOS Beam</span>
+              <span className="w-3 h-0.5 bg-[#FF5F40] inline-block border-dashed"></span>
+              <span className="text-[#FF5F40] font-medium">Active Optical LOS Beam</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-rose-500 inline-block border-dashed"></span>
-              <span className="text-rose-400 font-medium">Earth Limb Blocked LOS</span>
+              <span className="w-3 h-0.5 bg-[#5E625A] inline-block border-dashed"></span>
+              <span className="text-[#9CA195] font-medium">Earth Limb Blocked LOS</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-sky-400 inline-block"></span>
+              <span className="w-3 h-0.5 bg-[#F0FFEA] inline-block"></span>
               <span>Selected Satellite Orbit ({formatAltAndUnits(orbitAltitudeKm, scaleMode)})</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-[#252A2E] inline-block border-dashed"></span>
+              <span className="w-3 h-0.5 bg-[#33362F] inline-block border-dashed"></span>
               <span>Walker Constellation Shells ({formatAltAndUnits(550, scaleMode)})</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-indigo-400 inline-block border-dashed"></span>
+              <span className="w-3 h-0.5 bg-[#9CA195] inline-block border-dashed"></span>
               <span>Polar Sun-Synchronous SSO ({formatAltAndUnits(700, scaleMode)}, 97.8°)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-rose-500 inline-block border-dashed"></span>
-              <span className="text-rose-300">Beacon Ground Track ({formatAltAndUnits(0, scaleMode)})</span>
+              <span className="w-3 h-0.5 bg-[#FF5F40] inline-block border-dashed"></span>
+              <span className="text-[#FF5F40]">Beacon Ground Track ({formatAltAndUnits(0, scaleMode)})</span>
             </div>
 
-            {/* Scene Markers (Fixed Screen-Space Billboards - Tasks 1-6) */}
-            <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">SCENE MARKERS (SCREEN-SPACE)</div>
+            {/* Scene Markers (Fixed Screen-Space Billboards) */}
+            <div className="text-[10px] font-bold text-[#F0FFEA] pt-1 border-t border-[#33362F]">SCENE MARKERS (SCREEN-SPACE)</div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F40] inline-block"></span>
               <span>Satellite Marker ({BASE_MARKER_PX}px / {ACTIVE_MARKER_PX}px active)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#F0FFEA] inline-block border border-[#33362F]"></span>
               <span>Beacon Target Marker ({BASE_MARKER_PX}px / {ACTIVE_MARKER_PX}px active)</span>
             </div>
 
             {/* Atmospheric Shells in Legend */}
             {showAtmosphereShells && (
               <>
-                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">ATMOSPHERIC LAYERS</div>
+                <div className="text-[10px] font-bold text-[#F0FFEA] pt-1 border-t border-[#33362F]">ATMOSPHERIC LAYERS</div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-2 bg-sky-600/50 border border-sky-400/80 rounded-[2px] inline-block"></span>
-                  <span className="text-sky-300">Turbulence Zone (0–20 km, {formatAltAndUnits(20, scaleMode)})</span>
+                  <span className="w-3 h-2 bg-[#262824] border border-[#33362F] rounded-[2px] inline-block"></span>
+                  <span className="text-[#F0FFEA]">Turbulence Zone (0–20 km, {formatAltAndUnits(20, scaleMode)})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-2 bg-indigo-500/30 border border-indigo-400/50 rounded-[2px] inline-block"></span>
-                  <span className="text-indigo-200">Thin Atmosphere (20–100 km, {formatAltAndUnits(100, scaleMode)})</span>
+                  <span className="w-3 h-2 bg-[#1B1D1A] border border-[#33362F] rounded-[2px] inline-block"></span>
+                  <span className="text-[#9CA195]">Thin Atmosphere (20–100 km, {formatAltAndUnits(100, scaleMode)})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-0.5 bg-emerald-400 border-dashed inline-block"></span>
-                  <span className="text-emerald-300">Kármán Line — Edge of Space ({formatAltAndUnits(100, scaleMode)})</span>
+                  <span className="w-3 h-0.5 bg-[#FF5F40] border-dashed inline-block"></span>
+                  <span className="text-[#FF5F40]">Kármán Line — Edge of Space ({formatAltAndUnits(100, scaleMode)})</span>
                 </div>
               </>
             )}
 
-            {/* Ground Footprint in Legend (Tasks 1-3) */}
+            {/* Ground Footprint in Legend */}
             {showFootprint && (
               <>
-                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">GROUND FOOTPRINT</div>
+                <div className="text-[10px] font-bold text-[#F0FFEA] pt-1 border-t border-[#33362F]">GROUND FOOTPRINT</div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-0.5 bg-emerald-400 inline-block"></span>
-                  <span className="text-emerald-300 font-medium">In Coverage (El ≥ {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
+                  <span className="w-3 h-0.5 bg-[#FF5F40] inline-block"></span>
+                  <span className="text-[#FF5F40] font-medium">In Coverage (El ≥ {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-0.5 bg-rose-500 inline-block"></span>
-                  <span className="text-rose-400 font-medium">Outside Mask (El &lt; {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
+                  <span className="w-3 h-0.5 bg-[#5E625A] inline-block"></span>
+                  <span className="text-[#9CA195] font-medium">Outside Mask (El &lt; {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
                 </div>
               </>
             )}
 
-            {/* Solar Direction & Day/Night Terminator in Legend (Tasks 1-4) */}
+            {/* Solar Direction & Day/Night Terminator in Legend */}
             {showSunTerminator && (
               <>
-                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">SOLAR ILLUMINATION</div>
+                <div className="text-[10px] font-bold text-[#F0FFEA] pt-1 border-t border-[#33362F]">SOLAR ILLUMINATION</div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-0.5 bg-amber-400 border-dashed inline-block"></span>
-                  <span className="text-amber-300 font-medium">Day/Night Terminator (Dawn/Dusk)</span>
+                  <span className="w-3 h-0.5 bg-[#FF5F40] border-dashed inline-block"></span>
+                  <span className="text-[#FF5F40] font-medium">Day/Night Terminator (Dawn/Dusk)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-0.5 bg-yellow-300 inline-block"></span>
-                  <span className="text-yellow-300">Sun Direction Vector (ECI Fixed)</span>
+                  <span className="w-3 h-0.5 bg-[#F0FFEA] inline-block"></span>
+                  <span className="text-[#F0FFEA]">Sun Direction Vector (ECI Fixed)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-2 bg-slate-900 border border-slate-700/80 rounded-[2px] inline-block"></span>
-                  <span className="text-slate-400">Night-Side Shaded Hemisphere</span>
+                  <span className="w-3 h-2 bg-[#1B1D1A] border border-[#33362F] rounded-[2px] inline-block"></span>
+                  <span className="text-[#9CA195]">Night-Side Shaded Hemisphere</span>
                 </div>
               </>
             )}
 
-            {/* Standard Reference Altitude Rings in Legend (Task 2 & 3) */}
+            {/* Standard Reference Altitude Rings in Legend */}
             {showReferenceRings && (
               <>
-                <div className="text-[10px] font-bold text-slate-300 pt-1 border-t border-slate-800">REFERENCE ALTITUDES</div>
+                <div className="text-[10px] font-bold text-[#F0FFEA] pt-1 border-t border-[#33362F]">REFERENCE ALTITUDES</div>
                 {REFERENCE_ALTITUDES.map((spec) => (
                   <div key={spec.id} className="flex items-center gap-2">
                     <span
-                      className="w-3 h-0.5 border-dashed inline-block"
-                      style={{ backgroundColor: spec.cssColor }}
+                      className="w-3 h-0.5 border-dashed inline-block bg-[#9CA195]"
                     ></span>
-                    <span style={{ color: spec.cssColor }}>
+                    <span className="text-[#9CA195]">
                       {spec.name} ({formatAltAndUnits(spec.altKm, scaleMode)})
                     </span>
                   </div>
@@ -5961,37 +5953,37 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       </div>
       </div>
 
-      {/* Real Satellite Speeds & Revolution Periods Reference Modal (Images 1 & 2) */}
+      {/* Real Satellite Speeds & Revolution Periods Reference Modal */}
       {showSpecsTable && (
-        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-cyan-800/80 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto flex flex-col font-mono text-xs animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute inset-0 bg-[#000000]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto flex flex-col font-mono text-xs animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/70">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#33362F] bg-[#000000]/70">
               <div className="flex items-center gap-2">
-                <Table className="w-4 h-4 text-cyan-400" />
-                <span className="font-bold text-slate-100 text-sm tracking-wide">
+                <Table className="w-4 h-4 text-[#FF5F40]" />
+                <span className="font-bold text-[#F0FFEA] text-sm tracking-wide">
                   REAL SATELLITE SPEEDS & REVOLUTION PERIODS
                 </span>
-                <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-700/60 text-cyan-300 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded bg-[#FF5F40]/15 border border-[#FF5F40]/40 text-[#FF5F40] text-[10px] font-bold">
                   Keplerian Physics
                 </span>
               </div>
               <button
                 onClick={() => setShowSpecsTable(false)}
-                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition"
+                className="p-1 text-[#9CA195] hover:text-[#F0FFEA] rounded hover:bg-[#262824] transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Explanation / Verification Notice */}
-            <div className="px-4 py-2 bg-slate-950/40 border-b border-slate-800/60 text-[11px] text-slate-300 space-y-1">
+            <div className="px-4 py-2 bg-[#000000]/40 border-b border-[#33362F] text-[11px] text-[#F0FFEA] space-y-1">
               <p>
                 In the simulation, every satellite revolves at its exact physical speed derived from{' '}
-                <span className="text-cyan-300 font-bold">Kepler's Third Law</span> (T = 2π√(a³/μ)) and{' '}
-                <span className="text-emerald-300 font-bold">Vis-Viva equation</span> (v = √(μ/r)).
+                <span className="text-[#FF5F40] font-bold">Kepler's Third Law</span> (T = 2π√(a³/μ)) and{' '}
+                <span className="text-[#FF5F40] font-bold">Vis-Viva equation</span> (v = √(μ/r)).
               </p>
-              <p className="text-slate-400 text-[10px]">
+              <p className="text-[#9CA195] text-[10px]">
                 Earth Gravitational Parameter μ = 398,600.44 km³/s², Earth Radius R_E = 6,378.14 km.
               </p>
             </div>
@@ -6000,7 +5992,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             <div className="p-4 overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-700 text-slate-400 text-[10px] uppercase tracking-wider">
+                  <tr className="border-b border-[#33362F] text-[#9CA195] text-[10px] uppercase tracking-wider">
                     <th className="py-2 px-2.5">Orbit Profile</th>
                     <th className="py-2 px-2.5">Altitude</th>
                     <th className="py-2 px-2.5">Speed (km/h)</th>
@@ -6008,7 +6000,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                     <th className="py-2 px-2.5 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/80 text-[11px]">
+                <tbody className="divide-y divide-[#33362F] text-[11px]">
                   {[
                     {
                       id: 'leo-vleo',
@@ -6017,7 +6009,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       speed: '~28,037 km/h',
                       speedKms: '7.79 km/s',
                       period: '~88.3 minutes (1 hr 28 min)',
-                      color: 'text-emerald-400',
                     },
                     {
                       id: 'leo-equatorial',
@@ -6026,7 +6017,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       speed: '~27,724 km/h',
                       speedKms: '7.70 km/s',
                       period: '~91.4 minutes (1 hr 31 min)',
-                      color: 'text-cyan-400',
                     },
                     {
                       id: 'leo-550-p1',
@@ -6035,7 +6025,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       speed: '~27,320 km/h',
                       speedKms: '7.59 km/s',
                       period: '~95.5 minutes (1 hr 35 min)',
-                      color: 'text-sky-400',
                     },
                     {
                       id: 'leo-polar-sso',
@@ -6044,7 +6033,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       speed: '~27,029 km/h',
                       speedKms: '7.51 km/s',
                       period: '~98.6 minutes (1 hr 38 min)',
-                      color: 'text-indigo-400',
                     },
                     {
                       id: 'leo-high',
@@ -6053,7 +6041,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       speed: '~26,208 km/h',
                       speedKms: '7.28 km/s',
                       period: '~108.1 minutes (1 hr 48 min)',
-                      color: 'text-purple-400',
                     },
                     {
                       id: 'geo-equatorial',
@@ -6062,38 +6049,37 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       speed: '~11,070 km/h',
                       speedKms: '3.08 km/s',
                       period: '~23 hours 56 minutes (1 Sidereal Day)',
-                      color: 'text-amber-400',
                     },
                   ].map((row) => {
                     const isActive = selectedPresetId === row.id;
                     return (
                       <tr
                         key={row.id}
-                        className={`transition hover:bg-slate-800/40 ${
-                          isActive ? 'bg-cyan-950/30 font-semibold' : ''
+                        className={`transition hover:bg-[#262824]/50 ${
+                          isActive ? 'bg-[#FF5F40]/10 font-semibold' : ''
                         }`}
                       >
                         <td className="py-2.5 px-2.5">
                           <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-cyan-400 animate-pulse' : 'bg-slate-600'}`} />
-                            <span className={isActive ? 'text-white font-bold' : 'text-slate-200'}>
+                            <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-[#FF5F40] animate-pulse' : 'bg-[#5E625A]'}`} />
+                            <span className={isActive ? 'text-[#F0FFEA] font-bold' : 'text-[#9CA195]'}>
                               {row.profile}
                             </span>
                           </div>
                         </td>
-                        <td className="py-2.5 px-2.5 text-slate-300 font-mono">
+                        <td className="py-2.5 px-2.5 text-[#F0FFEA] font-mono">
                           {row.alt}
                         </td>
                         <td className="py-2.5 px-2.5 font-mono">
-                          <span className={`font-bold ${row.color}`}>{row.speed}</span>
-                          <span className="text-slate-500 text-[10px] ml-1.5 font-normal">({row.speedKms})</span>
+                          <span className="font-bold text-[#FF5F40]">{row.speed}</span>
+                          <span className="text-[#9CA195] text-[10px] ml-1.5 font-normal">({row.speedKms})</span>
                         </td>
-                        <td className="py-2.5 px-2.5 text-slate-300 font-mono">
+                        <td className="py-2.5 px-2.5 text-[#F0FFEA] font-mono">
                           {row.period}
                         </td>
                         <td className="py-2.5 px-2.5 text-right">
                           {isActive ? (
-                            <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-cyan-950 border border-cyan-500 text-cyan-300 shadow-sm">
+                            <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-[#FF5F40] text-[#0A0A0A] shadow-sm">
                               Active Orbit
                             </span>
                           ) : (
@@ -6102,7 +6088,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                                 handlePresetSelect(row.id);
                                 setShowSpecsTable(false);
                               }}
-                              className="px-2.5 py-1 rounded text-[10px] bg-slate-800 hover:bg-cyan-900/60 hover:text-cyan-200 text-slate-300 border border-slate-700 transition"
+                              className="px-2.5 py-1 rounded text-[10px] bg-[#262824] hover:bg-[#FF5F40]/20 hover:text-[#FF5F40] text-[#F0FFEA] border border-[#33362F] transition"
                             >
                               Engage Orbit
                             </button>
@@ -6116,15 +6102,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             </div>
 
             {/* Simulation Clock & Time Warp Controls */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950/60 space-y-2">
+            <div className="p-4 border-t border-[#33362F] bg-[#000000]/60 space-y-2">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <div className="text-slate-300 font-bold text-[11px] flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  <div className="text-[#F0FFEA] font-bold text-[11px] flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#FF5F40]" />
                     <span>Physical Simulation Time Warp:</span>
-                    <span className="text-cyan-300 font-bold">{simTimeWarp}×</span>
+                    <span className="text-[#FF5F40] font-bold">{simTimeWarp}×</span>
                   </div>
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-[#9CA195]">
                     {simTimeWarp === 1
                       ? '1:1 True Real-Time (1 satellite revolution takes the full orbital period in real life)'
                       : `At ${simTimeWarp}× warp: 1 second = ${simTimeWarp >= 60 ? `${simTimeWarp / 60} minutes` : `${simTimeWarp} seconds`}. 550 km revolution completes in ~${(5727.4 / simTimeWarp).toFixed(1)}s.`}
@@ -6138,8 +6124,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                       onClick={() => setSimTimeWarp(warp)}
                       className={`px-2 py-1 rounded border text-[10px] font-mono transition ${
                         simTimeWarp === warp
-                          ? 'bg-cyan-950 text-cyan-300 border-cyan-500 font-bold shadow'
-                          : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-700'
+                          ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold shadow'
+                          : 'bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F]'
                       }`}
                     >
                       {warp === 1 ? '1× (Real)' : warp === 60 ? '60× (1s=1m)' : warp === 120 ? '120×' : warp === 360 ? '360×' : '1440× (1m=1d)'}

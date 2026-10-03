@@ -1,23 +1,6 @@
-﻿/**
- * HandoverPanel.tsx
- * =================
- * Compact HUD panel showing real-time satellite handover status.
- *
- * Displays:
- *  - Active satellite index + backup satellite index
- *  - Current handover state (IDLE / TRANSFERRING / NO_COVERAGE)
- *  - Link state badge (LINK_OK / LINK_BLOCKED / NO_COVERAGE)
- *  - Backup acquisition progress bar
- *  - Cumulative metrics (count, successes, NO_COVERAGE time)
- *  - Per-event log (last 5 events)
- *
- * Usage:
- *   import HandoverPanel from './HandoverPanel';
- *   <HandoverPanel handover={telemetry.handover} />
- */
-
 import React from 'react';
-import { Radio, Satellite, AlertTriangle, CheckCircle, XCircle, Activity, Clock } from 'lucide-react';
+import { Radio, Satellite, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { THEME } from '../theme';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,29 +39,27 @@ interface HandoverPanelProps {
   backupAcquireSteps?: number;  // default 3
 }
 
-// ── Colour helpers ────────────────────────────────────────────────────────────
+// ── Colour & status helpers ───────────────────────────────────────────────────
 
-const stateColor = (state: string) => {
+const stateBadgeStyle = (state: string) => {
   switch (state) {
-    case 'IDLE':         return '#22c55e'; // green
-    case 'TRANSFERRING': return '#f59e0b'; // amber
-    case 'NO_COVERAGE':  return '#ef4444'; // red
-    default:             return '#94a3b8'; // slate
+    case 'IDLE':
+      return { background: THEME.accentSoft, border: `1px solid ${THEME.accent}`, color: THEME.text };
+    case 'TRANSFERRING':
+      return { background: THEME.surface2, border: `1px solid ${THEME.accent}`, color: THEME.accent };
+    case 'NO_COVERAGE':
+      return { background: THEME.surface2, border: `1px solid ${THEME.border}`, color: THEME.textMuted };
+    default:
+      return { background: THEME.surface2, border: `1px solid ${THEME.border}`, color: THEME.textMuted };
   }
-};
-
-const linkColor = (ls: string) => {
-  if (ls === 'LINK_OK')      return '#22c55e';
-  if (ls === 'NO_COVERAGE')  return '#ef4444';
-  return '#f59e0b'; // LINK_BLOCKED
 };
 
 const BadgeIcon = ({ state }: { state: string }) => {
   if (state === 'LINK_OK' || state === 'IDLE')
-    return <CheckCircle size={12} style={{ color: '#22c55e', display: 'inline', marginRight: 3 }} />;
+    return <CheckCircle size={12} style={{ color: THEME.accent, display: 'inline', marginRight: 4 }} />;
   if (state === 'NO_COVERAGE')
-    return <XCircle size={12} style={{ color: '#ef4444', display: 'inline', marginRight: 3 }} />;
-  return <AlertTriangle size={12} style={{ color: '#f59e0b', display: 'inline', marginRight: 3 }} />;
+    return <XCircle size={12} style={{ color: THEME.textMuted, display: 'inline', marginRight: 4 }} />;
+  return <AlertTriangle size={12} style={{ color: THEME.accent, display: 'inline', marginRight: 4 }} />;
 };
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -88,25 +69,26 @@ const HandoverPanel: React.FC<HandoverPanelProps> = ({ handover, backupAcquireSt
     return (
       <div style={styles.container}>
         <div style={styles.header}>
-          <Radio size={13} style={{ marginRight: 5 }} />
-          <span style={styles.title}>Handover</span>
-          <span style={{ ...styles.badge, background: '#334155' }}>DISABLED</span>
+          <Radio size={13} style={{ marginRight: 6, color: THEME.accent }} />
+          <span style={styles.title}>HANDOVER</span>
+          <span style={{ ...styles.badge, background: THEME.surface2, color: THEME.textMuted }}>DISABLED</span>
         </div>
-        <p style={styles.dimText}>Enable handover via Settings → Orbital → Handover Config</p>
+        <p style={styles.dimText}>ENABLE VIA SETTINGS → ORBITAL → HANDOVER</p>
       </div>
     );
   }
 
   const m = handover.metrics;
   const progressPct = Math.min(100, (handover.backup_acquire_progress / backupAcquireSteps) * 100);
+  const badgeStyle = stateBadgeStyle(handover.state);
 
   return (
     <div style={styles.container}>
       {/* ── Header ── */}
       <div style={styles.header}>
-        <Radio size={13} style={{ marginRight: 5, color: '#38bdf8' }} />
-        <span style={styles.title}>Satellite Handover</span>
-        <span style={{ ...styles.badge, background: stateColor(handover.state) + '33', border: `1px solid ${stateColor(handover.state)}`, color: stateColor(handover.state) }}>
+        <Radio size={13} style={{ marginRight: 6, color: THEME.accent }} />
+        <span style={styles.title}>SATELLITE HANDOVER</span>
+        <span style={{ ...styles.badge, ...badgeStyle }}>
           {handover.state}
         </span>
       </div>
@@ -121,12 +103,11 @@ const HandoverPanel: React.FC<HandoverPanelProps> = ({ handover, backupAcquireSt
           az={handover.active_vis_az_deg}
           range={handover.active_range_km}
           willLose={handover.will_lose_soon}
-          color="#38bdf8"
         />
         <div style={styles.arrowCol}>
           {handover.state === 'TRANSFERRING'
-            ? <div style={{ color: '#f59e0b', fontSize: 18, fontWeight: 700 }}>⇒</div>
-            : <div style={{ color: '#475569', fontSize: 16 }}>⇒</div>}
+            ? <div style={{ color: THEME.accent, fontSize: 18, fontWeight: 700 }}>⇒</div>
+            : <div style={{ color: THEME.textDisabled, fontSize: 16 }}>⇒</div>}
         </div>
         <SatBlock
           label="BACKUP"
@@ -136,19 +117,18 @@ const HandoverPanel: React.FC<HandoverPanelProps> = ({ handover, backupAcquireSt
           az={handover.backup_vis_az_deg}
           range={handover.backup_range_km}
           willLose={false}
-          color="#818cf8"
         />
       </div>
 
       {/* ── Link state ── */}
       <div style={styles.linkRow}>
         <BadgeIcon state={handover.link_state} />
-        <span style={{ color: linkColor(handover.link_state), fontSize: 11, fontWeight: 600 }}>
+        <span style={{ color: handover.link_state === 'LINK_OK' ? THEME.text : THEME.accent, fontSize: 11, fontWeight: 600 }}>
           {handover.link_state}
         </span>
         {handover.will_lose_soon && (
-          <span style={{ marginLeft: 8, color: '#f59e0b', fontSize: 10 }}>
-            ⚠ Loss predicted
+          <span style={{ marginLeft: 8, color: THEME.accent, fontSize: 10 }}>
+            [!] LOSS PREDICTED
           </span>
         )}
       </div>
@@ -156,7 +136,7 @@ const HandoverPanel: React.FC<HandoverPanelProps> = ({ handover, backupAcquireSt
       {/* ── Transfer progress bar ── */}
       {handover.state === 'TRANSFERRING' && (
         <div style={{ marginTop: 6 }}>
-          <div style={styles.dimText}>Backup acquisition: {handover.backup_acquire_progress}/{backupAcquireSteps}</div>
+          <div style={styles.dimText}>BACKUP ACQUISITION: {handover.backup_acquire_progress}/{backupAcquireSteps}</div>
           <div style={styles.progressTrack}>
             <div style={{ ...styles.progressFill, width: `${progressPct}%` }} />
           </div>
@@ -165,12 +145,12 @@ const HandoverPanel: React.FC<HandoverPanelProps> = ({ handover, backupAcquireSt
 
       {/* ── Metrics ── */}
       <div style={styles.metricsGrid}>
-        <MetricCell label="Handovers" value={m.handover_count} />
-        <MetricCell label="Succeeded" value={m.successful_handovers} color="#22c55e" />
-        <MetricCell label="Failed" value={m.failed_handovers} color={m.failed_handovers > 0 ? '#ef4444' : undefined} />
-        <MetricCell label="No Coverage" value={`${m.total_no_coverage_s.toFixed(1)}s`} color={m.total_no_coverage_s > 0 ? '#f59e0b' : undefined} />
+        <MetricCell label="HANDOVERS" value={m.handover_count} />
+        <MetricCell label="SUCCEEDED" value={m.successful_handovers} color={THEME.accent} />
+        <MetricCell label="FAILED" value={m.failed_handovers} color={m.failed_handovers > 0 ? THEME.accent : undefined} />
+        <MetricCell label="NO COV" value={`${m.total_no_coverage_s.toFixed(1)}s`} color={m.total_no_coverage_s > 0 ? THEME.accent : undefined} />
         {m.mean_acquisition_time_s != null && (
-          <MetricCell label="Mean Acq." value={`${m.mean_acquisition_time_s.toFixed(2)}s`} />
+          <MetricCell label="MEAN ACQ" value={`${m.mean_acquisition_time_s.toFixed(2)}s`} />
         )}
       </div>
     </div>
@@ -187,32 +167,37 @@ interface SatBlockProps {
   az: number;
   range: number;
   willLose: boolean;
-  color: string;
 }
 
-const SatBlock: React.FC<SatBlockProps> = ({ label, idx, canSee, el, az, range, willLose, color }) => (
-  <div style={{ flex: 1, background: '#0f172a', borderRadius: 6, padding: '5px 7px', border: `1px solid ${color}33` }}>
-    <div style={{ fontSize: 9, color, fontWeight: 700, letterSpacing: 1 }}>{label} SAT-{idx + 1}</div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-      <Satellite size={12} style={{ color: canSee ? color : '#ef4444' }} />
-      <span style={{ fontSize: 10, color: canSee ? '#e2e8f0' : '#ef4444' }}>
+const SatBlock: React.FC<SatBlockProps> = ({ label, idx, canSee, el, az, range, willLose }) => (
+  <div style={{
+    flex: 1,
+    background: THEME.surface2,
+    borderRadius: 6,
+    padding: '6px 8px',
+    border: `1px solid ${THEME.border}`
+  }}>
+    <div style={{ fontSize: 9, color: THEME.accent, fontWeight: 700, letterSpacing: 1 }}>{label} SAT-{idx + 1}</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+      <Satellite size={12} style={{ color: canSee ? THEME.accent : THEME.textDisabled }} />
+      <span style={{ fontSize: 10, color: canSee ? THEME.text : THEME.textMuted }}>
         {canSee ? 'VISIBLE' : 'NO LOS'}
       </span>
     </div>
-    <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
-      El {el.toFixed(1)}° · Az {az.toFixed(1)}°
+    <div style={{ fontSize: 9, color: THEME.textMuted, marginTop: 2 }}>
+      EL {el.toFixed(1)}° · AZ {az.toFixed(1)}°
     </div>
-    <div style={{ fontSize: 9, color: '#64748b' }}>
-      {range.toFixed(0)} km
+    <div style={{ fontSize: 9, color: THEME.textMuted }}>
+      {range.toFixed(0)} KM
     </div>
-    {willLose && <div style={{ fontSize: 9, color: '#f59e0b', marginTop: 2 }}>⚠ Loss predicted</div>}
+    {willLose && <div style={{ fontSize: 9, color: THEME.accent, marginTop: 2 }}>[!] LOSS PREDICTED</div>}
   </div>
 );
 
 const MetricCell: React.FC<{ label: string; value: string | number; color?: string }> = ({ label, value, color }) => (
-  <div style={{ textAlign: 'center', padding: '3px 4px', background: '#0f172a', borderRadius: 4 }}>
-    <div style={{ fontSize: 9, color: '#64748b' }}>{label}</div>
-    <div style={{ fontSize: 12, fontWeight: 700, color: color || '#e2e8f0' }}>{value}</div>
+  <div style={{ textAlign: 'center', padding: '4px', background: THEME.surface2, borderRadius: 4, border: `1px solid ${THEME.border}` }}>
+    <div style={{ fontSize: 8, color: THEME.textMuted, letterSpacing: 0.5 }}>{label}</div>
+    <div style={{ fontSize: 11, fontWeight: 700, color: color || THEME.text, marginTop: 2 }}>{value}</div>
   </div>
 );
 
@@ -220,16 +205,15 @@ const MetricCell: React.FC<{ label: string; value: string | number; color?: stri
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    background: 'rgba(15, 23, 42, 0.92)',
-    backdropFilter: 'blur(8px)',
-    border: '1px solid rgba(56, 189, 248, 0.25)',
-    borderRadius: 10,
-    padding: '10px 12px',
-    color: '#e2e8f0',
-    fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+    background: THEME.surface1,
+    border: `1px solid ${THEME.border}`,
+    borderRadius: 8,
+    padding: '12px 14px',
+    color: THEME.text,
+    fontFamily: THEME.fontFamily,
     minWidth: 260,
     maxWidth: 340,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+    boxShadow: 'none',
   },
   header: {
     display: 'flex',
@@ -240,7 +224,7 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 11,
     fontWeight: 700,
-    color: '#38bdf8',
+    color: THEME.accent,
     letterSpacing: 1,
     flex: 1,
   },
@@ -261,25 +245,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 24,
+    width: 20,
     flexShrink: 0,
   },
   linkRow: {
     display: 'flex',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
     fontSize: 11,
   },
   progressTrack: {
     height: 4,
-    background: '#252A2E',
+    background: THEME.surface2,
     borderRadius: 2,
-    marginTop: 3,
+    marginTop: 4,
     overflow: 'hidden',
+    border: `1px solid ${THEME.border}`,
   },
   progressFill: {
     height: '100%',
-    background: '#f59e0b',
+    background: THEME.accent,
     borderRadius: 2,
     transition: 'width 0.3s',
   },
@@ -291,7 +276,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   dimText: {
     fontSize: 9,
-    color: '#475569',
+    color: THEME.textMuted,
   },
 };
 

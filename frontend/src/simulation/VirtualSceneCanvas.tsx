@@ -31,12 +31,12 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
     const height = canvas.height;
     const scale = width / worldWidth; // Screen coordinate to Canvas pixel scale (~0.35)
 
-    // Clear background (Deep space dark)
-    ctx.fillStyle = '#06080B';
+    // Clear background (Pure black)
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, width, height);
 
     // Coordinate Grid (100px world spacing)
-    ctx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
+    ctx.strokeStyle = 'rgba(51, 54, 47, 0.4)';
     ctx.lineWidth = 1;
     for (let x = 0; x <= worldWidth; x += 100) {
       const cx = x * scale;
@@ -54,7 +54,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
     }
 
     // World Center Axis Lines (origin at 1000, 1000)
-    ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
+    ctx.strokeStyle = 'rgba(156, 161, 149, 0.4)';
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(width / 2, 0);
@@ -82,14 +82,14 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
           ctx.lineTo(corners[i][0], corners[i][1]);
         }
         ctx.closePath();
-        ctx.strokeStyle = target?.is_in_fov ? '#10b981' : '#06b6d4';
+        ctx.strokeStyle = target?.is_in_fov ? '#FF5F40' : '#F0FFEA';
         ctx.lineWidth = 1.5;
-        ctx.fillStyle = target?.is_in_fov ? 'rgba(16, 185, 129, 0.08)' : 'rgba(6, 182, 212, 0.05)';
+        ctx.fillStyle = target?.is_in_fov ? 'rgba(255, 95, 64, 0.12)' : 'rgba(240, 255, 234, 0.05)';
         ctx.fill();
         ctx.stroke();
 
         // Rays from camera aperture to frustum corners
-        ctx.strokeStyle = 'rgba(6, 182, 212, 0.25)';
+        ctx.strokeStyle = 'rgba(255, 95, 64, 0.25)';
         ctx.setLineDash([2, 2]);
         corners.forEach(([cx_c, cy_c]) => {
           ctx.beginPath();
@@ -101,13 +101,13 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
       }
 
       // Camera optical aperture position
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = '#FF5F40';
       ctx.beginPath();
       ctx.arc(camPosAx, camPosAy, 4, 0, Math.PI * 2);
       ctx.fill();
 
       // Camera boresight reticle at target depth
-      ctx.strokeStyle = '#60a5fa';
+      ctx.strokeStyle = '#F0FFEA';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(bx, by, 6, 0, Math.PI * 2);
@@ -119,7 +119,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
       ctx.stroke();
 
       // Optical Boresight Line of Sight (LOS) ray
-      ctx.strokeStyle = 'rgba(96, 165, 250, 0.45)';
+      ctx.strokeStyle = 'rgba(240, 255, 234, 0.35)';
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
       ctx.moveTo(camPosAx, camPosAy);
@@ -133,7 +133,7 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
     allTargets.forEach((t) => {
       if (t.trajectory_trail && t.trajectory_trail.length > 1) {
         ctx.beginPath();
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
+        ctx.strokeStyle = 'rgba(255, 95, 64, 0.5)';
         ctx.lineWidth = 1.5;
         for (let i = 0; i < t.trajectory_trail.length; i++) {
           const [wx, wy] = t.trajectory_trail[i];
@@ -157,16 +157,16 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
 
       // Glow halo
       const grad = ctx.createRadialGradient(tx, ty, 1, tx, ty, 16);
-      grad.addColorStop(0, isLocked ? 'rgba(16, 185, 129, 0.9)' : 'rgba(244, 63, 94, 0.8)');
-      grad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+      grad.addColorStop(0, isLocked ? 'rgba(255, 95, 64, 0.9)' : 'rgba(255, 95, 64, 0.4)');
+      grad.addColorStop(1, 'rgba(255, 95, 64, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(tx, ty, 16, 0, Math.PI * 2);
       ctx.fill();
 
       // Shape rendering
-      ctx.fillStyle = isLocked ? '#10b981' : '#ff4d6d';
-      ctx.strokeStyle = '#ffffff';
+      ctx.fillStyle = isLocked ? '#FF5F40' : '#262824';
+      ctx.strokeStyle = '#FF5F40';
       ctx.lineWidth = 1;
 
       if (t.shape === 'Circle' || t.shape === 'Gaussian') {
@@ -181,8 +181,8 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
       }
 
       // Target Label with 3D coordinates (X, Y, Z)
-      ctx.fillStyle = isLocked ? '#a7f3d0' : '#fca5a5';
-      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.fillStyle = '#F0FFEA';
+      ctx.font = '10px "IBM Plex Mono", monospace';
       ctx.fillText(
         `BEACON #${t.target_id} (${t.world_x.toFixed(0)}, ${t.world_y.toFixed(0)}, Z:${t.world_z.toFixed(0)})`,
         tx + 10,
@@ -192,50 +192,50 @@ export const VirtualSceneCanvas: React.FC<VirtualSceneProps> = ({
   }, [target, targets, camera, disturbance, worldWidth, worldHeight]);
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#0A0D10] border border-[#1F2429] rounded-lg overflow-hidden shadow-2xl">
+    <div className="relative w-full h-full flex flex-col bg-[#1B1D1A] border border-[#33362F] rounded-lg overflow-hidden shadow-2xl">
       {/* Top Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#0A0D10]/95 border-b border-[#1F2429] text-xs">
-        <div className="flex items-center gap-2 text-cyan-400 font-mono">
-          <Compass className="w-4 h-4 text-cyan-400 animate-pulse" />
-          <span className="font-semibold tracking-wider">VIRTUAL ENVIRONMENT [2000 × 2000px]</span>
+      <div className="flex items-center justify-between px-3 py-2 bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono">
+        <div className="flex items-center gap-2 text-[#FF5F40]">
+          <Compass className="w-4 h-4 text-[#FF5F40] animate-pulse" />
+          <span className="font-semibold tracking-wider uppercase">VIRTUAL ENVIRONMENT [2000 × 2000px]</span>
         </div>
-        <div className="flex items-center gap-3 font-mono text-slate-400 text-[11px]">
-          <span>FOV: <strong className="text-white">4.0° × 3.0°</strong></span>
-          <span className="text-slate-600">|</span>
+        <div className="flex items-center gap-3 font-mono text-[#9CA195] text-[11px]">
+          <span>FOV: <strong className="text-[#F0FFEA]">4.0° × 3.0°</strong></span>
+          <span className="text-[#33362F]">|</span>
           <span>Target Status: {target?.is_in_fov ? (
-            <span className="text-emerald-400 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-700/50">INSIDE FOV</span>
+            <span className="text-[#FF5F40] font-bold bg-[#FF5F40]/15 px-1.5 py-0.5 rounded border border-[#FF5F40]">✓ INSIDE FOV</span>
           ) : (
-            <span className="text-amber-400 font-bold bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-700/50">OUTSIDE FOV</span>
+            <span className="text-[#9CA195] font-bold bg-[#262824] px-1.5 py-0.5 rounded border border-[#33362F]">✕ OUTSIDE FOV</span>
           )}</span>
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="relative flex-1 flex items-center justify-center p-2 bg-[#06080B]">
+      <div className="relative flex-1 flex items-center justify-center p-2 bg-[#000000]">
         <canvas
           ref={canvasRef}
           width={700}
           height={700}
-          className="w-full h-full max-h-[640px] aspect-square object-contain rounded border border-[#1F2429] shadow-inner"
+          className="w-full h-full max-h-[640px] aspect-square object-contain rounded border border-[#33362F] shadow-inner"
         />
 
         {/* Legend */}
-        <div className="absolute bottom-4 left-4 bg-[#0A0D10]/90 backdrop-blur border border-[#1F2429] p-2.5 rounded font-mono text-[10px] space-y-1 text-slate-300">
+        <div className="absolute bottom-4 left-4 bg-[#1B1D1A]/90 backdrop-blur border border-[#33362F] p-2.5 rounded font-mono text-[10px] space-y-1 text-[#F0FFEA]">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block"></span>
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#FF5F40] inline-block"></span>
             <span>Optical Beacon Spot ({target?.shape || 'Square'} 10x10 px)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-2 border border-cyan-400 bg-cyan-400/20 inline-block"></span>
+            <span className="w-3 h-2 border border-[#FF5F40] bg-[#FF5F40]/20 inline-block"></span>
             <span>Camera 4°×3° FOV Frustum Projection</span>
           </div>
           <div className="flex items-center gap-2">
-            <Crosshair className="w-3 h-3 text-[#D6D9DC]" />
+            <Crosshair className="w-3 h-3 text-[#FF5F40]" />
             <span>Camera Boresight (Pan: {camera?.pan_deg.toFixed(2)}°, Tilt: {camera?.tilt_deg.toFixed(2)}°)</span>
           </div>
         </div>
 
-        <div className="absolute top-4 right-4 bg-[#0A0D10]/90 backdrop-blur border border-[#1F2429] px-3 py-1.5 rounded font-mono text-[11px] text-cyan-400">
+        <div className="absolute top-4 right-4 bg-[#1B1D1A]/90 backdrop-blur border border-[#33362F] px-3 py-1.5 rounded font-mono text-[11px] text-[#FF5F40]">
           COORDINATES: X/Y/Z (CARTESIAN 3D)
         </div>
       </div>

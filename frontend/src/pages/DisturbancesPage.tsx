@@ -1,9 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   CloudRain,
   Wind,
   AlertTriangle,
-  Sliders,
   Activity,
   Zap,
   EyeOff,
@@ -13,13 +12,7 @@ import {
   CloudFog,
   Umbrella,
   ShieldAlert,
-  Compass,
-  Layers,
   Sparkles,
-  TrendingDown,
-  RefreshCw,
-  Play,
-  RotateCcw,
 } from 'lucide-react';
 import { SystemConfig, SimulationTelemetry, DisturbanceConfig } from '../types';
 import { api } from '../services/api';
@@ -65,7 +58,7 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
           disturbance: { ...prev.disturbance, ...res.config },
         }));
       }
-      showFeedback(`Benchmark Scenario [${preset.toUpperCase()}] applied successfully!`);
+      showFeedback(`✓ Benchmark Scenario [${preset.toUpperCase()}] applied successfully!`);
     } catch (e: any) {
       showFeedback(`Failed to apply preset: ${e.message}`);
     } finally {
@@ -88,7 +81,7 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
   const handleTriggerOcclusion = async () => {
     try {
       const res = await api.triggerOcclusion(distCfg?.occlusion_duration_s ?? 1.5);
-      showFeedback(`Optical Line-of-Sight Occlusion triggered for ${res.duration_s}s!`);
+      showFeedback(`✓ Optical Line-of-Sight Occlusion triggered for ${res.duration_s}s!`);
     } catch (e: any) {
       showFeedback(`Failed to trigger occlusion: ${e.message}`);
     }
@@ -107,38 +100,33 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
       camera_jitter_max_px: turbAmp,
       camera_jitter_frequency_hz: 18.0,
     });
-    showFeedback(`Injected atmospheric turbulence (±${turbAmp.toFixed(1)}px jitter, scaled by path fraction ${(atmoFrac * 100).toFixed(1)}%)!`);
+    showFeedback(`✓ Injected atmospheric turbulence (±${turbAmp.toFixed(1)}px jitter, scaled by path fraction ${(atmoFrac * 100).toFixed(1)}%)!`);
   };
 
-  // Atmospheric conditions styling
-  const atmoMeta: Record<string, { icon: any; color: string; desc: string; trans: string }> = {
+  // Atmospheric conditions metadata
+  const atmoMeta: Record<string, { icon: any; desc: string; trans: string }> = {
     Clear: {
       icon: Sun,
-      color: 'text-amber-400',
       desc: 'Nominal baseline optical visibility (beta ~ 0.05 /km)',
       trans: '95% Transmission',
     },
     Haze: {
       icon: Wind,
-      color: 'text-yellow-400',
       desc: 'Moderate aerosol scattering & contrast attenuation (beta ~ 0.45 /km)',
       trans: '64% Transmission',
     },
     Fog: {
       icon: CloudFog,
-      color: 'text-slate-300',
       desc: 'Heavy Mie particulate scattering & diffuse path radiance wash (beta ~ 1.85 /km)',
       trans: '16% Transmission',
     },
     Rain: {
       icon: Umbrella,
-      color: 'text-cyan-400',
       desc: 'Falling precipitation streaks & dynamic optical scattering (Marshall-Palmer)',
       trans: '42% Transmission',
     },
     'Low Light': {
       icon: Moon,
-      color: 'text-indigo-400',
       desc: 'Low ambient illumination, photon shot noise dominance, reduced SNR',
       trans: '90% Transmission (Dimmed)',
     },
@@ -148,23 +136,23 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
   const AtmoIcon = currentAtmo.icon;
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
       {/* Top Banner: Disturbance and Noise Engine */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-            <ShieldAlert className="w-5 h-5 text-rose-400" />
+          <div className="w-9 h-9 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center">
+            <ShieldAlert className="w-5 h-5 text-[#FF5F40]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
                 Disturbance & Noise Engine
               </h2>
-              <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-rose-500/10 border border-rose-500/30 text-rose-300">
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[#FF5F40]/15 border border-[#FF5F40]/40 text-[#FF5F40]">
                 Environmental Perturbations
               </span>
             </div>
-            <p className="text-slate-400 text-[11px] mt-0.5">
+            <p className="text-[#9CA195] text-[11px] mt-0.5">
               Multi-Noise (Gaussian, S&P, Poisson), Jitter (±20 px), Atmosphere, Platform Motion (±20 px), Blur & Occlusion
             </p>
           </div>
@@ -172,26 +160,26 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
 
         {/* Live Atmosphere & Occlusion Badges */}
         <div className="flex items-center gap-3">
-          <div className="px-3 py-1.5 rounded-lg bg-[#121518] border border-[#252A2E] flex items-center gap-2">
-            <AtmoIcon className={`w-4 h-4 ${currentAtmo.color}`} />
+          <div className="px-3 py-1.5 rounded bg-[#262824] border border-[#33362F] flex items-center gap-2">
+            <AtmoIcon className="w-4 h-4 text-[#FF5F40]" />
             <div>
-              <div className="text-[10px] text-slate-500 uppercase">Atmosphere</div>
-              <div className="font-semibold text-slate-200 text-xs">{distCfg?.atmospheric_condition || 'Clear'}</div>
+              <div className="text-[10px] text-[#9CA195] uppercase">Atmosphere</div>
+              <div className="font-bold text-[#F0FFEA] text-xs">{distCfg?.atmospheric_condition || 'Clear'}</div>
             </div>
           </div>
 
           <div
-            className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded border flex items-center gap-2 ${
               distTelem?.is_occluded
-                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                : 'bg-[#121518] border-[#252A2E] text-slate-300'
+                ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40]'
+                : 'bg-[#262824] border-[#33362F] text-[#F0FFEA]'
             }`}
           >
-            {distTelem?.is_occluded ? <EyeOff className="w-4 h-4 text-rose-400" /> : <Eye className="w-4 h-4 text-emerald-400" />}
+            {distTelem?.is_occluded ? <EyeOff className="w-4 h-4 text-[#FF5F40]" /> : <Eye className="w-4 h-4 text-[#F0FFEA]" />}
             <div>
-              <div className="text-[10px] text-slate-500 uppercase">LOS Beam Path</div>
-              <div className="font-semibold text-xs">
-                {distTelem?.is_occluded ? `Occluded (${distTelem.occlusion_remaining_s.toFixed(1)}s)` : 'Clear Transmission'}
+              <div className="text-[10px] text-[#9CA195] uppercase">LOS Beam Path</div>
+              <div className="font-bold text-xs">
+                {distTelem?.is_occluded ? `! Occluded (${distTelem.occlusion_remaining_s.toFixed(1)}s)` : '✓ Clear Transmission'}
               </div>
             </div>
           </div>
@@ -199,35 +187,35 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
       </div>
 
       {feedback && (
-        <div className="p-2.5 rounded-lg bg-blue-500/10 border border-[#3A4048] text-blue-200 text-xs font-medium flex items-center justify-between">
+        <div className="p-2.5 rounded bg-[#262824] border border-[#FF5F40] text-[#FF5F40] text-xs font-bold flex items-center justify-between">
           <span>{feedback}</span>
-          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white">✕</button>
+          <button onClick={() => setFeedback(null)} className="text-[#9CA195] hover:text-[#F0FFEA]">✕</button>
         </div>
       )}
 
       {/* Benchmark Test Scenarios (One-Click Presets) */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-xl space-y-3">
-        <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-          <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs uppercase tracking-wider">
-            <Sparkles className="w-4 h-4 text-[#D6D9DC]" />
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg space-y-3">
+        <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+          <div className="flex items-center gap-2 text-[#F0FFEA] font-semibold text-xs uppercase tracking-wider">
+            <Sparkles className="w-4 h-4 text-[#FF5F40]" />
             <span>Benchmark Evaluation Scenarios</span>
           </div>
-          <span className="text-xs text-slate-400">
-            Active: <strong className="text-slate-100 font-medium">{distCfg?.preset_scenario || 'Normal'}</strong>
+          <span className="text-xs text-[#9CA195]">
+            Active: <strong className="text-[#FF5F40] font-bold">{distCfg?.preset_scenario || 'Normal'}</strong>
           </span>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
           {[
-            { id: 'Normal', label: 'Normal', icon: Sun, color: 'text-emerald-400' },
-            { id: 'High Noise', label: 'High Noise', icon: AlertTriangle, color: 'text-amber-400' },
-            { id: 'High Jitter', label: 'High Jitter', icon: Activity, color: 'text-purple-400' },
-            { id: 'Haze', label: 'Haze', icon: Wind, color: 'text-amber-300' },
-            { id: 'Fog', label: 'Fog', icon: CloudFog, color: 'text-slate-300' },
-            { id: 'Rain', label: 'Rain', icon: Umbrella, color: 'text-[#D6D9DC]' },
-            { id: 'Low Light', label: 'Low Light', icon: Moon, color: 'text-indigo-400' },
-            { id: 'Fast Motion', label: 'Fast Motion', icon: Zap, color: 'text-amber-400' },
-            { id: 'Combined Disturbance', label: 'Combined', icon: ShieldAlert, color: 'text-rose-400' },
+            { id: 'Normal', label: 'Normal', icon: Sun },
+            { id: 'High Noise', label: 'High Noise', icon: AlertTriangle },
+            { id: 'High Jitter', label: 'High Jitter', icon: Activity },
+            { id: 'Haze', label: 'Haze', icon: Wind },
+            { id: 'Fog', label: 'Fog', icon: CloudFog },
+            { id: 'Rain', label: 'Rain', icon: Umbrella },
+            { id: 'Low Light', label: 'Low Light', icon: Moon },
+            { id: 'Fast Motion', label: 'Fast Motion', icon: Zap },
+            { id: 'Combined Disturbance', label: 'Combined', icon: ShieldAlert },
           ].map((sc) => {
             const SIcon = sc.icon;
             const active = distCfg?.preset_scenario === sc.id;
@@ -236,13 +224,13 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                 key={sc.id}
                 onClick={() => handleApplyPreset(sc.id as any)}
                 disabled={isApplying}
-                className={`p-2.5 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition text-center ${
+                className={`p-2.5 rounded border flex flex-col items-center justify-center gap-1.5 transition text-center font-mono ${
                   active
-                    ? 'bg-[#1E2124] border-[#3A4048] text-slate-100 font-medium'
-                    : 'bg-[#121518] border-[#252A2E] text-slate-400 hover:text-slate-200 hover:border-[#2D3237]'
+                    ? 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] font-bold shadow'
+                    : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]/50'
                 }`}
               >
-                <SIcon className={`w-4 h-4 ${active ? sc.color : 'text-slate-500'}`} />
+                <SIcon className={`w-4 h-4 ${active ? 'text-[#0A0A0A]' : 'text-[#FF5F40]'}`} />
                 <span className="text-[11px] truncate">{sc.label}</span>
               </button>
             );
@@ -254,22 +242,22 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
         {/* ========================================================================= */}
         {/* COLUMN 1: MULTI-NOISE ENGINE & SENSOR READOUT                             */}
         {/* ========================================================================= */}
-        <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-            <h3 className="text-slate-200 font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+            <h3 className="text-[#F0FFEA] font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
+              <AlertTriangle className="w-4 h-4 text-[#FF5F40]" />
               Noise Injection Models
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-[#1A1D20] text-slate-300 border border-[#22324e]">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#262824] text-[#9CA195] border border-[#33362F] font-mono">
               Max σ ≤ 20 px
             </span>
           </div>
 
           {/* Simultaneous Noise Checkboxes */}
           <div className="space-y-2">
-            <span className="text-slate-400 text-xs">Active Noise Models (Simultaneous):</span>
+            <span className="text-[#9CA195] text-xs">Active Noise Models (Simultaneous):</span>
             <div className="space-y-1.5">
-              <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#121518] border border-[#252A2E] cursor-pointer hover:border-[#2D3237] transition">
+              <label className="flex items-center justify-between p-2.5 rounded bg-[#262824] border border-[#33362F] cursor-pointer hover:border-[#FF5F40]/50 transition">
                 <div className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
@@ -282,14 +270,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                       const nt = cnt > 1 ? 'Multi-Noise' : nextG ? 'Gaussian' : nextSP ? 'Salt & Pepper' : nextP ? 'Poisson' : 'None';
                       handleUpdateDisturbance({ gaussian_noise_enabled: nextG, noise_type: nt });
                     }}
-                    className="accent-slate-500 rounded"
+                    className="accent-[#FF5F40] rounded"
                   />
-                  <span className="font-medium text-slate-200 text-xs">Gaussian Readout Noise</span>
+                  <span className="font-semibold text-[#F0FFEA] text-xs">Gaussian Readout Noise</span>
                 </div>
-                <span className="text-[11px] text-slate-400">Normal (N ~ 0, σ²)</span>
+                <span className="text-[11px] text-[#9CA195]">Normal (N ~ 0, σ²)</span>
               </label>
 
-              <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#121518] border border-[#252A2E] cursor-pointer hover:border-[#2D3237] transition">
+              <label className="flex items-center justify-between p-2.5 rounded bg-[#262824] border border-[#33362F] cursor-pointer hover:border-[#FF5F40]/50 transition">
                 <div className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
@@ -302,14 +290,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                       const nt = cnt > 1 ? 'Multi-Noise' : nextG ? 'Gaussian' : nextSP ? 'Salt & Pepper' : nextP ? 'Poisson' : 'None';
                       handleUpdateDisturbance({ salt_pepper_enabled: nextSP, noise_type: nt });
                     }}
-                    className="accent-slate-500 rounded"
+                    className="accent-[#FF5F40] rounded"
                   />
-                  <span className="font-medium text-slate-200 text-xs">Salt & Pepper Noise</span>
+                  <span className="font-semibold text-[#F0FFEA] text-xs">Salt & Pepper Noise</span>
                 </div>
-                <span className="text-[11px] text-slate-400">Impulsive Corruption</span>
+                <span className="text-[11px] text-[#9CA195]">Impulsive Corruption</span>
               </label>
 
-              <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#121518] border border-[#252A2E] cursor-pointer hover:border-[#2D3237] transition">
+              <label className="flex items-center justify-between p-2.5 rounded bg-[#262824] border border-[#33362F] cursor-pointer hover:border-[#FF5F40]/50 transition">
                 <div className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
@@ -322,20 +310,20 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                       const nt = cnt > 1 ? 'Multi-Noise' : nextG ? 'Gaussian' : nextSP ? 'Salt & Pepper' : nextP ? 'Poisson' : 'None';
                       handleUpdateDisturbance({ poisson_noise_enabled: nextP, noise_type: nt });
                     }}
-                    className="accent-slate-500 rounded"
+                    className="accent-[#FF5F40] rounded"
                   />
-                  <span className="font-medium text-slate-200 text-xs">Poisson Photon Shot Noise</span>
+                  <span className="font-semibold text-[#F0FFEA] text-xs">Poisson Photon Shot Noise</span>
                 </div>
-                <span className="text-[11px] text-slate-400">Quantum Statistics</span>
+                <span className="text-[11px] text-[#9CA195]">Quantum Statistics</span>
               </label>
             </div>
           </div>
 
           {/* Noise Standard Deviation Slider (Max 20 px) */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-300">Gaussian Noise Std Dev (σ):</span>
-              <span className="text-[#E8EAED] font-medium num-mono">{distCfg?.noise_std_dev ?? 5.0} px (Limit ≤ 20)</span>
+              <span className="text-[#9CA195]">Gaussian Noise Std Dev (σ):</span>
+              <span className="text-[#FF5F40] font-bold font-mono">{distCfg?.noise_std_dev ?? 5.0} px (Limit ≤ 20)</span>
             </div>
             <input
               type="range"
@@ -344,20 +332,20 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
               step="0.5"
               value={distCfg?.noise_std_dev ?? 5.0}
               onChange={(e) => handleUpdateDisturbance({ noise_std_dev: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+              className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
             />
-            <div className="flex justify-between text-[10px] text-slate-500">
+            <div className="flex justify-between text-[10px] text-[#9CA195]">
               <span>0.0 px (Clean)</span>
               <span>10.0 px</span>
-              <span className="text-rose-400">20.0 px (Severe)</span>
+              <span className="text-[#FF5F40]">20.0 px (Severe)</span>
             </div>
           </div>
 
           {/* Salt & Pepper Ratio Slider */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-300">Salt & Pepper Density:</span>
-              <span className="text-[#E8EAED] font-medium num-mono">{((distCfg?.salt_pepper_ratio ?? 0.02) * 100).toFixed(1)}%</span>
+              <span className="text-[#9CA195]">Salt & Pepper Density:</span>
+              <span className="text-[#F0FFEA] font-bold font-mono">{((distCfg?.salt_pepper_ratio ?? 0.02) * 100).toFixed(1)}%</span>
             </div>
             <input
               type="range"
@@ -366,15 +354,15 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
               step="0.005"
               value={distCfg?.salt_pepper_ratio ?? 0.02}
               onChange={(e) => handleUpdateDisturbance({ salt_pepper_ratio: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+              className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
             />
           </div>
 
           {/* Forced SNR Reduction */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-300">Forced SNR Attenuation:</span>
-              <span className="text-amber-400 font-medium num-mono">{distCfg?.snr_reduction_db ?? 0.0} dB</span>
+              <span className="text-[#9CA195]">Forced SNR Attenuation:</span>
+              <span className="text-[#FF5F40] font-bold font-mono">{distCfg?.snr_reduction_db ?? 0.0} dB</span>
             </div>
             <input
               type="range"
@@ -383,7 +371,7 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
               step="1"
               value={distCfg?.snr_reduction_db ?? 0.0}
               onChange={(e) => handleUpdateDisturbance({ snr_reduction_db: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-amber-500"
+              className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
             />
           </div>
         </div>
@@ -391,19 +379,19 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
         {/* ========================================================================= */}
         {/* COLUMN 2: CAMERA JITTER & PLATFORM MOTION                                 */}
         {/* ========================================================================= */}
-        <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-            <h3 className="text-slate-200 font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
-              <Activity className="w-4 h-4 text-purple-400" />
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+            <h3 className="text-[#F0FFEA] font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
+              <Activity className="w-4 h-4 text-[#FF5F40]" />
               Camera Jitter & Platform Motion
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#262824] text-[#FF5F40] border border-[#33362F] font-mono">
               Max ±20 px/frame
             </span>
           </div>
 
           {/* Camera Jitter (High-Frequency Mechanical Vibration) */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -417,19 +405,19 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                       camera_jitter_max_px: amp,
                     });
                   }}
-                  className="accent-slate-500 rounded"
+                  className="accent-[#FF5F40] rounded"
                 />
-                <span className="text-slate-200 font-medium uppercase text-xs">Camera Jitter</span>
+                <span className="text-[#F0FFEA] font-semibold uppercase text-xs">Camera Jitter</span>
               </label>
-              <span className="text-[11px] text-slate-400 num-mono">
+              <span className="text-[11px] text-[#9CA195] font-mono">
                 Offset: ({distTelem?.jitter_offset_x_px?.toFixed(1) ?? '0.0'}, {distTelem?.jitter_offset_y_px?.toFixed(1) ?? '0.0'}) px
               </span>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Jitter Amplitude:</span>
-                <span className="text-slate-200 font-medium num-mono">±{distCfg?.camera_jitter_max_px ?? 0} px/frame (Max ±20)</span>
+                <span className="text-[#9CA195]">Jitter Amplitude:</span>
+                <span className="text-[#F0FFEA] font-bold font-mono">±{distCfg?.camera_jitter_max_px ?? 0} px/frame (Max ±20)</span>
               </div>
               <input
                 type="range"
@@ -444,14 +432,14 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                     camera_jitter_enabled: val > 0,
                   });
                 }}
-                className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Vibration Frequency:</span>
-                <span className="text-[#E8EAED] font-medium num-mono">{distCfg?.camera_jitter_frequency_hz ?? 15.0} Hz</span>
+                <span className="text-[#9CA195]">Vibration Frequency:</span>
+                <span className="text-[#FF5F40] font-bold font-mono">{distCfg?.camera_jitter_frequency_hz ?? 15.0} Hz</span>
               </div>
               <input
                 type="range"
@@ -460,13 +448,13 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                 step="1"
                 value={distCfg?.camera_jitter_frequency_hz ?? 15.0}
                 onChange={(e) => handleUpdateDisturbance({ camera_jitter_frequency_hz: parseFloat(e.target.value) })}
-                className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
           </div>
 
           {/* Platform Motion (Mobile Terminal Base Kinematics) */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -480,46 +468,49 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                       platform_motion_max_px: amp,
                     });
                   }}
-                  className="accent-slate-500 rounded"
+                  className="accent-[#FF5F40] rounded"
                 />
-                <span className="text-slate-200 font-medium uppercase text-xs">Mobile Platform Motion</span>
+                <span className="text-[#F0FFEA] font-semibold uppercase text-xs">Mobile Platform Motion</span>
               </label>
-              <span className="text-[11px] text-slate-400 num-mono">
+              <span className="text-[11px] text-[#9CA195] font-mono">
                 Offset: ({distTelem?.platform_offset_x_px?.toFixed(1) ?? '0.0'}, {distTelem?.platform_offset_y_px?.toFixed(1) ?? '0.0'}) px
               </span>
             </div>
 
             <div>
-              <span className="text-slate-400 text-[11px]">Trajectory Pattern:</span>
+              <span className="text-[#9CA195] text-[11px]">Trajectory Pattern:</span>
               <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-                {(['Linear', 'Sinusoidal', 'Circular', 'Figure of 8', 'Spiral', 'Random'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() =>
-                      handleUpdateDisturbance({
-                        platform_motion_type: m,
-                        platform_motion_enabled: true,
-                        ...((!distCfg?.platform_motion_max_px || distCfg.platform_motion_max_px === 0)
-                          ? { platform_motion_max_px: 12.0 }
-                          : {}),
-                      })
-                    }
-                    className={`py-1 px-1.5 rounded-lg text-[11px] font-medium border transition ${
-                      distCfg?.platform_motion_type === m
-                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/40'
-                        : 'bg-[#1A1D20] text-slate-400 border-[#22324e] hover:text-slate-200'
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
+                {(['Linear', 'Sinusoidal', 'Circular', 'Figure of 8', 'Spiral', 'Random'] as const).map((m) => {
+                  const active = distCfg?.platform_motion_type === m;
+                  return (
+                    <button
+                      key={m}
+                      onClick={() =>
+                        handleUpdateDisturbance({
+                          platform_motion_type: m,
+                          platform_motion_enabled: true,
+                          ...((!distCfg?.platform_motion_max_px || distCfg.platform_motion_max_px === 0)
+                            ? { platform_motion_max_px: 12.0 }
+                            : {}),
+                        })
+                      }
+                      className={`py-1 px-1.5 rounded text-[11px] font-mono border transition ${
+                        active
+                          ? 'bg-[#FF5F40] text-[#0A0A0A] font-bold border-[#FF5F40]'
+                          : 'bg-[#1B1D1A] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Motion Amplitude:</span>
-                <span className="text-slate-200 font-medium num-mono">±{distCfg?.platform_motion_max_px ?? 0} px/frame (Max ±20)</span>
+                <span className="text-[#9CA195]">Motion Amplitude:</span>
+                <span className="text-[#F0FFEA] font-bold font-mono">±{distCfg?.platform_motion_max_px ?? 0} px/frame (Max ±20)</span>
               </div>
               <input
                 type="range"
@@ -534,24 +525,24 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                     platform_motion_enabled: val > 0,
                   });
                 }}
-                className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
           </div>
 
           {/* Sudden Camera Shock / Wind Gust */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2 text-xs">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={distCfg?.sudden_camera_movement_enabled ?? false}
                   onChange={(e) => handleUpdateDisturbance({ sudden_camera_movement_enabled: e.target.checked })}
-                  className="accent-slate-500 rounded"
+                  className="accent-[#FF5F40] rounded"
                 />
-                <span className="text-slate-300 font-medium">Sudden Wind Shock / Impulses</span>
+                <span className="text-[#F0FFEA] font-semibold">Sudden Wind Shock / Impulses</span>
               </label>
-              <span className="text-rose-400 num-mono font-medium">±{distCfg?.sudden_movement_max_px ?? 12} px</span>
+              <span className="text-[#FF5F40] font-mono font-bold">±{distCfg?.sudden_movement_max_px ?? 12} px</span>
             </div>
           </div>
         </div>
@@ -559,20 +550,20 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
         {/* ========================================================================= */}
         {/* COLUMN 3: ATMOSPHERE, BLUR, OCCLUSION & TRACKING HEALTH                   */}
         {/* ========================================================================= */}
-        <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-            <h3 className="text-slate-200 font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
-              <CloudRain className="w-4 h-4 text-[#D6D9DC]" />
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+            <h3 className="text-[#F0FFEA] font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
+              <CloudRain className="w-4 h-4 text-[#FF5F40]" />
               Atmospheric & Channel Effects
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-[#1A1D20] text-[#E8EAED] border border-[#22324e] num-mono">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#262824] text-[#FF5F40] border border-[#33362F] font-mono">
               T={((distTelem?.atmospheric_transmittance ?? 1.0) * 100).toFixed(0)}%
             </span>
           </div>
 
           {/* Atmospheric Selection */}
           <div className="space-y-1.5">
-            <span className="text-slate-400 text-xs">Transmission Condition:</span>
+            <span className="text-[#9CA195] text-xs">Transmission Condition:</span>
             <div className="grid grid-cols-2 gap-1.5">
               {(['Clear', 'Haze', 'Fog', 'Rain', 'Low Light'] as const).map((cond) => {
                 const active = distCfg?.atmospheric_condition === cond;
@@ -582,13 +573,13 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                   <button
                     key={cond}
                     onClick={() => handleUpdateDisturbance({ atmospheric_condition: cond })}
-                    className={`p-2 rounded-lg border flex items-center gap-2 text-left transition ${
+                    className={`p-2 rounded border flex items-center gap-2 text-left transition font-mono ${
                       active
-                        ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048] font-medium'
-                        : 'bg-[#121518] text-slate-400 border-[#252A2E] hover:text-slate-200'
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] font-bold border-[#FF5F40]'
+                        : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${active ? meta.color : 'text-slate-500'}`} />
+                    <Icon className={`w-3.5 h-3.5 ${active ? 'text-[#0A0A0A]' : 'text-[#FF5F40]'}`} />
                     <span className="text-xs">{cond}</span>
                   </button>
                 );
@@ -597,83 +588,83 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
           </div>
 
           {/* Atmospheric Path Fraction & Turbulence Injection */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                <Wind className="w-3.5 h-3.5 text-[#D6D9DC]" /> Path Fraction
+              <span className="text-[#F0FFEA] font-semibold flex items-center gap-1.5">
+                <Wind className="w-3.5 h-3.5 text-[#FF5F40]" /> Path Fraction
               </span>
-              <span className="num-mono text-[#D6D9DC] font-medium">
+              <span className="font-mono text-[#FF5F40] font-bold">
                 {(((telemetry?.tracking?.atmosphere_path_frac ?? telemetry?.orbital?.link?.atmosphere_path_frac ?? (telemetry?.scenario_mode === 'Orbital' ? 0.0 : 1.0))) * 100).toFixed(1)}%
               </span>
             </div>
 
             {((telemetry?.tracking?.atmosphere_path_frac ?? telemetry?.orbital?.link?.atmosphere_path_frac ?? (telemetry?.scenario_mode === 'Orbital' ? 0.0 : 1.0)) <= 1e-4) ? (
-              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-start gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="p-2 rounded bg-[#1B1D1A] border border-[#33362F] text-[#9CA195] text-[11px] flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#FF5F40] shrink-0 mt-0.5" />
                 <span>Vacuum link: turbulence and blur do not apply.</span>
               </div>
             ) : (
-              <div className="text-[11px] text-slate-400">
+              <div className="text-[11px] text-[#9CA195]">
                 Atmospheric turbulence applies in proportion to path fraction ({(((telemetry?.tracking?.atmosphere_path_frac ?? 1.0)) * 100).toFixed(1)}%).
               </div>
             )}
 
             <button
               onClick={handleInjectTurbulence}
-              className="w-full py-1.5 px-3 rounded-lg bg-[#1E2124] hover:bg-[#252A2E]/25 text-[#E8EAED] border border-[#3A4048] font-medium text-xs transition flex items-center justify-center gap-1.5"
+              className="w-full py-1.5 px-3 rounded bg-[#1B1D1A] hover:bg-[#FF5F40]/20 text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 font-bold text-xs transition flex items-center justify-center gap-1.5 uppercase tracking-wider"
             >
-              <Wind className="w-3.5 h-3.5" /> Inject Turbulence
+              <Wind className="w-3.5 h-3.5 text-[#FF5F40]" /> Inject Turbulence
             </button>
           </div>
 
           {/* Temporary Occlusion Obstacle (Tests Kalman Coasting) */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                <EyeOff className="w-3.5 h-3.5 text-rose-400" /> Temporary Occlusion
+              <span className="text-[#F0FFEA] font-semibold flex items-center gap-1.5">
+                <EyeOff className="w-3.5 h-3.5 text-[#FF5F40]" /> Temporary Occlusion
               </span>
-              <span className={distTelem?.is_occluded ? 'text-rose-400 font-semibold' : 'text-emerald-400 font-medium'}>
-                {distTelem?.is_occluded ? 'Blocked' : 'Unobstructed'}
+              <span className={distTelem?.is_occluded ? 'text-[#FF5F40] font-bold' : 'text-[#F0FFEA] font-medium'}>
+                {distTelem?.is_occluded ? '! Blocked' : '✓ Unobstructed'}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={handleTriggerOcclusion}
-                className="flex-1 py-1.5 px-3 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-medium text-xs transition"
+                className="flex-1 py-1.5 px-3 rounded bg-[#1B1D1A] hover:bg-[#FF5F40]/15 text-[#FF5F40] border border-[#33362F] hover:border-[#FF5F40]/50 font-bold text-xs transition uppercase tracking-wider"
               >
                 Trigger Occlusion Event
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs text-[#9CA195] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={distCfg?.temporary_occlusion_enabled ?? false}
                   onChange={(e) => handleUpdateDisturbance({ temporary_occlusion_enabled: e.target.checked })}
-                  className="accent-rose-500 rounded"
+                  className="accent-[#FF5F40] rounded"
                 />
                 <span>Periodic</span>
               </label>
             </div>
 
-            <div className="flex justify-between text-[11px] text-slate-400">
+            <div className="flex justify-between text-[11px] text-[#9CA195]">
               <span>Duration: {distCfg?.occlusion_duration_s ?? 1.0}s</span>
               <span>Interval: Every {distCfg?.occlusion_period_s ?? 6.0}s</span>
             </div>
           </div>
 
           {/* Motion Blur & Beacon Flicker */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2 text-xs">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={distCfg?.motion_blur_enabled ?? false}
                   onChange={(e) => handleUpdateDisturbance({ motion_blur_enabled: e.target.checked })}
-                  className="accent-slate-500 rounded"
+                  className="accent-[#FF5F40] rounded"
                 />
-                <span className="text-slate-300 font-medium">Dynamic Motion Blur</span>
+                <span className="text-[#F0FFEA] font-semibold">Dynamic Motion Blur</span>
               </label>
-              <span className="text-slate-400 font-mono text-[11px]">Kernel {distCfg?.motion_blur_kernel_size ?? 5}×{distCfg?.motion_blur_kernel_size ?? 5}</span>
+              <span className="text-[#9CA195] font-mono text-[11px]">Kernel {distCfg?.motion_blur_kernel_size ?? 5}×{distCfg?.motion_blur_kernel_size ?? 5}</span>
             </div>
 
             <div className="flex items-center justify-between">
@@ -682,23 +673,23 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
                   type="checkbox"
                   checked={distCfg?.beacon_flicker_enabled ?? false}
                   onChange={(e) => handleUpdateDisturbance({ beacon_flicker_enabled: e.target.checked })}
-                  className="accent-slate-500 rounded"
+                  className="accent-[#FF5F40] rounded"
                 />
-                <span className="text-slate-300 font-medium">Beacon Flicker Modulation</span>
+                <span className="text-[#F0FFEA] font-semibold">Beacon Flicker Modulation</span>
               </label>
-              <span className="text-slate-400 num-mono text-[11px]">{distCfg?.beacon_flicker_frequency_hz ?? 10} Hz</span>
+              <span className="text-[#FF5F40] font-bold font-mono text-[11px]">{distCfg?.beacon_flicker_frequency_hz ?? 10} Hz</span>
             </div>
           </div>
 
           {/* Robust Tracking Verification Health Telemetry */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-1.5 text-xs">
-            <div className="text-slate-300 font-medium uppercase tracking-wider border-b border-[#252A2E] pb-1.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-1.5 text-xs">
+            <div className="text-[#F0FFEA] font-semibold uppercase tracking-wider border-b border-[#33362F] pb-1.5">
               Tracking Verification Health
             </div>
 
             <div className="flex justify-between">
-              <span className="text-slate-400">Effective Beacon SNR:</span>
-              <span className="text-[#D6D9DC] font-medium num-mono">
+              <span className="text-[#9CA195]">Effective Beacon SNR:</span>
+              <span className="text-[#FF5F40] font-bold font-mono">
                 {distTelem?.effective_snr_db !== null && distTelem?.effective_snr_db !== undefined
                   ? `${distTelem.effective_snr_db.toFixed(1)} dB`
                   : '--'}
@@ -706,20 +697,20 @@ export const DisturbancesPage: React.FC<Props> = ({ config, telemetry, onUpdateC
             </div>
 
             <div className="flex justify-between">
-              <span className="text-slate-400">Beacon Detection:</span>
-              <span className={detTelem?.beacon_detected ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                {detTelem?.beacon_detected ? 'Detected' : 'Coasting'}
+              <span className="text-[#9CA195]">Beacon Detection:</span>
+              <span className={detTelem?.beacon_detected ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-medium'}>
+                {detTelem?.beacon_detected ? '✓ Detected' : '● Coasting'}
               </span>
             </div>
 
             <div className="flex justify-between">
-              <span className="text-slate-400">PAT Tracking State:</span>
-              <span className="text-amber-400 font-medium num-mono">{trackTelem?.state || 'SEARCHING'}</span>
+              <span className="text-[#9CA195]">PAT Tracking State:</span>
+              <span className="text-[#F0FFEA] font-bold font-mono">{trackTelem?.state || 'SEARCHING'}</span>
             </div>
 
             <div className="flex justify-between">
-              <span className="text-slate-400">Centroid Error:</span>
-              <span className="text-slate-200 num-mono">{trackTelem?.total_error_px?.toFixed(1) ?? '--'} px</span>
+              <span className="text-[#9CA195]">Centroid Error:</span>
+              <span className="text-[#F0FFEA] font-mono">{trackTelem?.total_error_px?.toFixed(1) ?? '--'} px</span>
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@ import HandoverPanel from './HandoverPanel';
 import { satellitePovSync } from './satellitePovSync';
 import { getRealisticEarthTextures } from './earthTexture';
 import { createRealSatelliteModel } from './satelliteModel';
+import { THEME } from '../theme';
 
 interface Props {
   orbitalTelemetry: OrbitalTelemetry | null;
@@ -67,37 +68,37 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     const ctx = canvas.getContext('2d');
     if (ctx) {
       // Background badge
-      ctx.fillStyle = 'rgba(7, 10, 18, 0.85)';
-      ctx.roundRect ? ctx.roundRect(4, 4, 248, 72, 10) : ctx.rect(4, 4, 248, 72);
+      ctx.fillStyle = 'rgba(27, 29, 26, 0.92)';
+      ctx.roundRect ? ctx.roundRect(4, 4, 248, 72, 8) : ctx.rect(4, 4, 248, 72);
       ctx.fill();
 
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 1.5;
       ctx.strokeStyle = color;
       ctx.stroke();
 
       // Icon circle
       ctx.beginPath();
-      ctx.arc(36, 40, 20, 0, Math.PI * 2);
+      ctx.arc(36, 40, 18, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
 
       // Icon letter
-      ctx.font = 'bold 20px monospace';
-      ctx.fillStyle = '#070a12';
+      ctx.font = 'bold 16px "IBM Plex Mono", monospace';
+      ctx.fillStyle = '#0A0A0A';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(iconChar, 36, 40);
 
       // Label text
-      ctx.font = 'bold 22px monospace';
-      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px "IBM Plex Mono", monospace';
+      ctx.fillStyle = '#F0FFEA';
       ctx.textAlign = 'left';
       ctx.fillText(text, 68, 36);
 
       // Subtitle
-      ctx.font = '14px monospace';
-      ctx.fillStyle = color;
-      ctx.fillText('LaserLockAI', 68, 56);
+      ctx.font = '12px "IBM Plex Mono", monospace';
+      ctx.fillStyle = '#9CA195';
+      ctx.fillText('OPTICAL FSOC', 68, 56);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -233,7 +234,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
 
     // 1. Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x03060c);
+    scene.background = new THREE.Color(0x000000);
     sceneRef.current = scene;
 
     // 2. Camera
@@ -253,7 +254,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     sunLight.position.set(30, 15, 30);
     scene.add(sunLight);
 
-    const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.25);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambientLight);
 
     // 5. Earth Globe (Scale: 1 scene unit = 1000 km)
@@ -278,20 +279,20 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     const cloudMat = new THREE.MeshStandardMaterial({
       map: textures.clouds,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.35,
       depthWrite: false,
     });
     const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
     earthMesh.add(cloudMesh);
 
-    // 6. Faint Atmosphere Shell at 100 km
+    // 6. Subtle Atmosphere Shell at 100 km
     // Atmosphere radius = (6378.137 + 100.0) / 1000 = 6.478137 units
     const ATMOSPHERE_RADIUS_UNITS = 6.478137;
     const atmosGeo = new THREE.SphereGeometry(ATMOSPHERE_RADIUS_UNITS, 48, 48);
     const atmosMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: 0x33362F,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.12,
       side: THREE.BackSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -303,11 +304,11 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     // 7. Preset Orbit Reference Rings
     // Spot check: LEO 550 km -> 6.928 units
     const presetRingsGroup = new THREE.Group();
-    presetRingsGroup.add(createOrbitRing(6378.137 + 300, 0x334155, 0.25, true));   // LEO 300
-    presetRingsGroup.add(createOrbitRing(6378.137 + 550, 0x0284c7, 0.4, true));    // LEO 550 (default)
-    presetRingsGroup.add(createOrbitRing(6378.137 + 2000, 0x334155, 0.25, true));  // LEO 2000
-    presetRingsGroup.add(createOrbitRing(6378.137 + 20200, 0x1e293b, 0.2, true)); // MEO
-    presetRingsGroup.add(createOrbitRing(6378.137 + 35786, 0x475569, 0.35, true)); // GEO
+    presetRingsGroup.add(createOrbitRing(6378.137 + 300, 0x262824, 0.3, true));   // LEO 300
+    presetRingsGroup.add(createOrbitRing(6378.137 + 550, 0x33362F, 0.6, true));    // LEO 550 (default)
+    presetRingsGroup.add(createOrbitRing(6378.137 + 2000, 0x262824, 0.3, true));  // LEO 2000
+    presetRingsGroup.add(createOrbitRing(6378.137 + 20200, 0x1B1D1A, 0.25, true)); // MEO
+    presetRingsGroup.add(createOrbitRing(6378.137 + 35786, 0x262824, 0.3, true)); // GEO
     scene.add(presetRingsGroup);
 
     // 8. Active Camera Platform 3D Satellite Model & Billboard
@@ -315,7 +316,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     // Authentic 3D Real Satellite: Gold MLI, Solar Wings, FSOC Optical Terminal
     const camSat3D = createRealSatelliteModel({
       size: 0.44, // Preserves exact 0.4-unit footprint (matching previous r=0.2 sphere)
-      accentColor: 0x06b6d4,
+      accentColor: 0xFF5F40,
       isGoldMLI: true,
       includeOpticalTurret: true,
       includeAntenna: true,
@@ -325,7 +326,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     camGroup.add(camSat3D);
 
     // Glowing sprite halo & label
-    const camSprite = createMarkerSprite('CAMERA', '#06b6d4', 'C');
+    const camSprite = createMarkerSprite('CAMERA', '#FF5F40', 'C');
     camSprite.position.set(0, 0.6, 0);
     camGroup.add(camSprite);
     scene.add(camGroup);
@@ -335,7 +336,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     const beaconGroup = new THREE.Group();
     const beaconSat3D = createRealSatelliteModel({
       size: 0.44, // Preserves exact 0.4-unit footprint
-      accentColor: 0x10b981,
+      accentColor: 0xF0FFEA,
       isGoldMLI: true,
       includeOpticalTurret: true,
       includeAntenna: true,
@@ -344,7 +345,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     });
     beaconGroup.add(beaconSat3D);
 
-    const beaconSprite = createMarkerSprite('BEACON', '#10b981', 'B');
+    const beaconSprite = createMarkerSprite('BEACON', '#F0FFEA', 'B');
     beaconSprite.position.set(0, 0.6, 0);
     beaconGroup.add(beaconSprite);
     scene.add(beaconGroup);
@@ -354,7 +355,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     const backupGroup = new THREE.Group();
     const backupSat3D = createRealSatelliteModel({
       size: 0.40, // Preserves exact footprint (matching previous r=0.18 sphere)
-      accentColor: 0x818cf8,
+      accentColor: 0x9CA195,
       isGoldMLI: true,
       includeOpticalTurret: true,
       includeAntenna: true,
@@ -363,7 +364,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     });
     backupGroup.add(backupSat3D);
 
-    const backupSprite = createMarkerSprite('BACKUP SAT', '#818cf8', 'S2');
+    const backupSprite = createMarkerSprite('BACKUP SAT', '#9CA195', 'S2');
     backupSprite.position.set(0, 0.6, 0);
     backupGroup.add(backupSprite);
     backupGroup.visible = false;
@@ -373,7 +374,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     // 10. Active Line of Sight (LOS) — Solid Line
     const losGeo = new THREE.BufferGeometry();
     losGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
-    const losMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 2 });
+    const losMat = new THREE.LineBasicMaterial({ color: 0xFF5F40, linewidth: 2 });
     const losLine = new THREE.Line(losGeo, losMat);
     scene.add(losLine);
     losLineRef.current = losLine;
@@ -382,7 +383,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     const backupLosGeo = new THREE.BufferGeometry();
     backupLosGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
     const backupLosMat = new THREE.LineDashedMaterial({
-      color: 0x818cf8,
+      color: 0x9CA195,
       linewidth: 1.5,
       dashSize: 0.3,
       gapSize: 0.15,
@@ -397,20 +398,20 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
 
     // 11. Camera FOV Frustum (4° x 3° Cone wireframe)
     const frustumGeo = new THREE.BufferGeometry();
-    const frustumMat = new THREE.LineBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.8 });
+    const frustumMat = new THREE.LineBasicMaterial({ color: 0xFF5F40, transparent: true, opacity: 0.7 });
     const frustumLines = new THREE.LineSegments(frustumGeo, frustumMat);
     scene.add(frustumLines);
     frustumLinesRef.current = frustumLines;
 
     // 12. Trajectory Trails
     const beaconTrailGeo = new THREE.BufferGeometry();
-    const beaconTrailMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 2 });
+    const beaconTrailMat = new THREE.LineBasicMaterial({ color: 0x5E625A, linewidth: 1.5 });
     const beaconTrail = new THREE.Line(beaconTrailGeo, beaconTrailMat);
     scene.add(beaconTrail);
     beaconTrailRef.current = beaconTrail;
 
     const cameraTrailGeo = new THREE.BufferGeometry();
-    const cameraTrailMat = new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 1.5 });
+    const cameraTrailMat = new THREE.LineBasicMaterial({ color: 0x33362F, linewidth: 1.5 });
     const cameraTrail = new THREE.Line(cameraTrailGeo, cameraTrailMat);
     scene.add(cameraTrail);
     cameraTrailRef.current = cameraTrail;
@@ -539,7 +540,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     }
 
     // 4. Update Line of Sight (LOS) and Color by Link State
-    // Color mapping: OK -> Green (0x10b981), BLOCKED -> Red (0xef4444), OUT_OF_FOV -> Amber (0xf59e0b)
+    // Active link: Filled orange 0xFF5F40 when OK; Muted 0x5E625A when blocked; 0x9CA195 when out of FOV
     if (losLineRef.current) {
       const positions = losLineRef.current.geometry.attributes.position as THREE.BufferAttribute;
       if (positions) {
@@ -548,11 +549,11 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
         positions.needsUpdate = true;
       }
 
-      let losColor = 0x10b981; // OK
+      let losColor = 0xFF5F40; // OK (Coral-Orange)
       if (link.link_state === 'LINK_BLOCKED') {
-        losColor = 0xef4444; // Red: Earth occultation / blocked
+        losColor = 0x5E625A; // Earth occultation / blocked (Muted dark gray)
       } else if (link.is_out_of_fov || Math.abs(link.az_body_deg) > 2.0 || Math.abs(link.el_body_deg) > 1.5) {
-        losColor = 0xf59e0b; // Amber: Outside 4° x 3° FOV
+        losColor = 0x9CA195; // Outside FOV (Muted secondary gray)
       }
 
       const mat = losLineRef.current.material as THREE.LineBasicMaterial;
@@ -585,13 +586,13 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       backupLosLineRef.current.computeLineDistances();
       backupLosLineRef.current.visible = true;
 
-      // Color backup link: indigo when seeing, red when blocked
+      // Color backup link: 0x9CA195 when seeing, 0x33362F when blocked
       const hoData = orbitalTelemetry.handover;
       const backupCanSee = hoData ? hoData.backup_vis_can_see : true;
       const bMat = backupLosLineRef.current.material as THREE.LineDashedMaterial;
       if (bMat) {
-        bMat.color.setHex(backupCanSee ? 0x818cf8 : 0xef4444);
-        bMat.opacity = backupCanSee ? 0.8 : 0.4;
+        bMat.color.setHex(backupCanSee ? 0x9CA195 : 0x33362F);
+        bMat.opacity = backupCanSee ? 0.75 : 0.35;
       }
     } else {
       if (backupMarkerRef.current) backupMarkerRef.current.visible = false;
@@ -797,58 +798,58 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     const { link } = orbitalTelemetry;
     if (link.link_state === 'LINK_BLOCKED') {
       return (
-        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-700 font-bold">
-          <ShieldAlert className="w-3 h-3 text-rose-400" /> LINK BLOCKED (EARTH OCCULTATION)
+        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1B1D1A] text-[#FF5F40] border border-[#FF5F40] font-bold text-[10px] tracking-wider">
+          <ShieldAlert className="w-3.5 h-3.5 text-[#FF5F40]" /> LINK BLOCKED (OCCULTATION)
         </span>
       );
     }
     if (link.is_out_of_fov || Math.abs(link.az_body_deg) > 2.0 || Math.abs(link.el_body_deg) > 1.5) {
       return (
-        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-700 font-bold">
-          <AlertTriangle className="w-3 h-3 text-amber-400" /> OUT OF FOV (FOV: 4°×3°)
+        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1B1D1A] text-[#F0FFEA] border border-[#33362F] font-bold text-[10px] tracking-wider">
+          <AlertTriangle className="w-3.5 h-3.5 text-[#FF5F40]" /> OUT OF FOV (FOV: 4°×3°)
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700 font-bold">
-        <CheckCircle className="w-3 h-3 text-emerald-400" /> OPTICAL LINK ESTABLISHED (OK)
+      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1B1D1A] text-[#F0FFEA] border border-[#FF5F40] font-bold text-[10px] tracking-wider">
+        <CheckCircle className="w-3.5 h-3.5 text-[#FF5F40]" /> OPTICAL LINK ESTABLISHED (OK)
       </span>
     );
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[#03060c] border border-slate-800 rounded-lg overflow-hidden shadow-2xl">
+    <div className="relative w-full h-full flex flex-col bg-[#000000] border border-[#33362F] rounded-lg overflow-hidden">
       {/* 3D Viewport Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/90 border-b border-slate-800 text-xs font-mono">
-        <div className="flex items-center gap-2 text-cyan-400">
-          <Globe className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: '30s' }} />
-          <span className="font-semibold tracking-wider">3D ORBITAL EARTH VIEW [THREE.JS DOUBLE-PRECISION]</span>
-          <span className="text-[10px] text-slate-500 font-normal">(1 UNIT = 1000 KM)</span>
+      <div className="flex items-center justify-between px-3 py-2 bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono">
+        <div className="flex items-center gap-2 text-[#FF5F40]">
+          <Globe className="w-4 h-4 text-[#FF5F40] animate-spin" style={{ animationDuration: '30s' }} />
+          <span className="font-semibold tracking-wider">3D ORBITAL EARTH VIEW</span>
+          <span className="text-[10px] text-[#9CA195] font-normal">(1 UNIT = 1000 KM)</span>
         </div>
 
         <div className="flex items-center gap-2 text-[11px]">
           {/* Locate Satellite Button */}
           <button
             onClick={handleLocateSatellite}
-            className="px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold cursor-pointer bg-cyan-950/50 hover:bg-cyan-900 text-cyan-300 border-cyan-700/80 hover:border-cyan-400"
+            className="px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold cursor-pointer bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]"
             title="Instantly orient camera to face satellite in 3D orbit (Shortcut: S)"
           >
-            <Satellite className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Locate Sat</span>
+            <Satellite className="w-3.5 h-3.5 text-[#FF5F40]" />
+            <span>LOCATE SAT</span>
           </button>
 
           {/* Locate Beacon Button */}
           <button
             onClick={handleLocateBeacon}
-            className="px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold cursor-pointer bg-rose-950/50 hover:bg-rose-900 text-rose-300 border-rose-700/80 hover:border-rose-400"
+            className="px-2.5 py-1 rounded border flex items-center gap-1.5 transition font-semibold cursor-pointer bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]"
             title="Instantly orient camera to face beacon in 3D orbit (Shortcut: B)"
           >
-            <Radio className="w-3.5 h-3.5 text-rose-400" />
-            <span>Locate Beacon</span>
+            <Radio className="w-3.5 h-3.5 text-[#FF5F40]" />
+            <span>LOCATE BEACON</span>
           </button>
 
           {/* Follow Camera Toggle */}
-          <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white select-none">
+          <label className="flex items-center gap-1.5 cursor-pointer text-[#9CA195] hover:text-[#F0FFEA] select-none text-[10px]">
             <input
               type="checkbox"
               checked={followCamera}
@@ -859,26 +860,26 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
                   handleResetView();
                 }
               }}
-              className="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0"
+              className="rounded bg-[#262824] border-[#33362F] text-[#FF5F40] focus:ring-0 focus:ring-offset-0"
             />
-            <Eye className="w-3 h-3 text-cyan-400" /> Follow Camera
+            <Eye className="w-3 h-3 text-[#FF5F40]" /> FOLLOW CAMERA
           </label>
 
-          <span className="text-slate-600">|</span>
+          <span className="text-[#33362F]">|</span>
 
           {/* Reset View Button */}
           <button
             onClick={handleResetView}
-            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded border border-slate-700 flex items-center gap-1.5 transition font-semibold"
+            className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 transition font-semibold text-[11px]"
             title="Reset 3D Orbit Camera to Default Earth View"
           >
-            <RefreshCw className="w-3 h-3" /> Reset View
+            <RefreshCw className="w-3 h-3 text-[#FF5F40]" /> RESET VIEW
           </button>
         </div>
       </div>
 
       {/* WebGL Canvas Container */}
-      <div ref={mountRef} className="relative flex-1 w-full h-full min-h-[380px] cursor-grab active:cursor-grabbing" />
+      <div ref={mountRef} className="relative flex-1 w-full h-full min-h-[380px] cursor-grab active:cursor-grabbing bg-[#000000]" />
 
       {/* Top Left Link Status Overlay */}
       <div className="absolute top-12 left-3 font-mono text-[11px] pointer-events-none">
@@ -886,41 +887,37 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       </div>
 
       {/* Top Right Legend Overlay */}
-      <div className="absolute top-12 right-3 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[10px] text-slate-300 pointer-events-none space-y-1.5 shadow-xl">
-        <div className="text-cyan-400 font-bold border-b border-slate-800/80 pb-1 uppercase tracking-wider">
-          Visual Legend & Scale
+      <div className="absolute top-12 right-3 bg-[#1B1D1A]/95 border border-[#33362F] p-2.5 rounded font-mono text-[10px] text-[#9CA195] pointer-events-none space-y-1.5">
+        <div className="text-[#FF5F40] font-bold border-b border-[#33362F] pb-1 uppercase tracking-wider">
+          VISUAL LEGEND & SCALE
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span>
-          <span>Camera Platform (Satellite / UAV)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F40] inline-block"></span>
+          <span className="text-[#F0FFEA]">CAMERA PLATFORM (LEO SAT)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
-          <span>Beacon Platform (Satellite / UAV)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#F0FFEA] inline-block"></span>
+          <span className="text-[#F0FFEA]">BEACON PLATFORM (UAV/SAT)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-emerald-400 inline-block"></span>
-          <span>Active Link (Solid)</span>
+          <span className="w-3 h-0.5 bg-[#FF5F40] inline-block"></span>
+          <span>ACTIVE LINK (SOLID)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 border-t-2 border-dashed border-indigo-400 inline-block"></span>
-          <span className="text-indigo-300">Backup Link (Dashed)</span>
+          <span className="w-3 h-0.5 border-t border-dashed border-[#9CA195] inline-block"></span>
+          <span>BACKUP LINK (DASHED)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-rose-500 inline-block"></span>
-          <span>LOS Blocked (Earth Body)</span>
+          <span className="w-3 h-0.5 bg-[#5E625A] inline-block"></span>
+          <span>LOS BLOCKED (OCCULTATION)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-amber-400 inline-block"></span>
-          <span>LOS Out of FOV</span>
+          <span className="w-3 h-0.5 border-t border-dashed border-[#5E625A] inline-block"></span>
+          <span>OUT OF FOV</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-3 h-0.5 bg-rose-400 inline-block border-t border-dashed"></span>
-          <span>Beacon Orbit Trail</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded border border-cyan-400/50 bg-cyan-900/20 inline-block"></span>
-          <span>100 km Atmosphere Shell</span>
+          <span className="w-2.5 h-2.5 rounded border border-[#33362F] bg-[#262824] inline-block"></span>
+          <span>100 KM ATMOSPHERE RIM</span>
         </div>
       </div>
 
@@ -935,39 +932,39 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
       <div className="absolute bottom-3 right-4 z-20 pointer-events-auto flex items-center gap-2">
         <button
           onClick={handleLocateSatellite}
-          className="bg-slate-950/95 hover:bg-cyan-950/80 backdrop-blur-md border border-cyan-500/80 hover:border-cyan-400 text-cyan-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(6,182,212,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+          className="bg-[#1B1D1A]/95 hover:bg-[#262824] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] rounded px-3 py-1.5 flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
           title="Instantly orient camera to face satellite in 3D orbit (Shortcut: S)"
         >
-          <Satellite className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
-          <span className="font-semibold text-[11px]">Locate satellite</span>
+          <Satellite className="w-3.5 h-3.5 text-[#FF5F40] group-hover:scale-110 transition" />
+          <span className="font-semibold text-[11px]">LOCATE SATELLITE</span>
         </button>
         <button
           onClick={handleLocateBeacon}
-          className="bg-slate-950/95 hover:bg-rose-950/80 backdrop-blur-md border border-rose-500/80 hover:border-rose-400 text-rose-300 hover:text-white rounded-full px-3.5 py-1.5 shadow-[0_0_12px_rgba(244,63,94,0.25)] flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
+          className="bg-[#1B1D1A]/95 hover:bg-[#262824] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] rounded px-3 py-1.5 flex items-center gap-1.5 text-xs font-mono transition group cursor-pointer"
           title="Instantly orient camera to face beacon in 3D orbit (Shortcut: B)"
         >
-          <Radio className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition" />
-          <span className="font-semibold text-[11px]">Locate beacon</span>
+          <Radio className="w-3.5 h-3.5 text-[#FF5F40] group-hover:scale-110 transition" />
+          <span className="font-semibold text-[11px]">LOCATE BEACON</span>
         </button>
       </div>
 
       {/* Bottom Floating Stats Strip */}
-      <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur border border-slate-800 p-2.5 rounded font-mono text-[11px] text-slate-300 pointer-events-none flex flex-wrap gap-4 shadow-xl">
+      <div className="absolute bottom-3 left-3 bg-[#1B1D1A]/95 border border-[#33362F] p-2 rounded font-mono text-[10px] text-[#9CA195] pointer-events-none flex flex-wrap gap-4">
         <div>
-          <span className="text-slate-400">Scale: </span>
-          <span className="text-white font-bold">1 unit = 1000 km</span>
+          <span className="text-[#9CA195]">SCALE: </span>
+          <span className="text-[#F0FFEA] font-bold">1 UNIT = 1000 KM</span>
         </div>
         <div>
-          <span className="text-slate-400">Earth Radius: </span>
-          <span className="text-cyan-300 font-bold">6378.1 km (6.378u)</span>
+          <span className="text-[#9CA195]">EARTH RADIUS: </span>
+          <span className="text-[#F0FFEA] font-bold">6378.1 KM (6.378u)</span>
         </div>
         <div>
-          <span className="text-slate-400">Atmosphere Rim: </span>
-          <span className="text-cyan-300 font-bold">100 km (6.478u)</span>
+          <span className="text-[#9CA195]">ATMOSPHERE RIM: </span>
+          <span className="text-[#F0FFEA] font-bold">100 KM (6.478u)</span>
         </div>
         <div>
-          <span className="text-slate-400">Controls: </span>
-          <span className="text-slate-300">Drag = Orbit | Scroll = Zoom</span>
+          <span className="text-[#9CA195]">CONTROLS: </span>
+          <span className="text-[#9CA195]">DRAG = ORBIT | SCROLL = ZOOM</span>
         </div>
       </div>
     </div>

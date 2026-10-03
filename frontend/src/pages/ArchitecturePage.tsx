@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Network, CheckCircle2 } from 'lucide-react';
 
 export const ArchitecturePage: React.FC = () => {
@@ -16,25 +16,25 @@ export const ArchitecturePage: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs text-slate-200">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
       {/* Header */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-lg flex items-center justify-between">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-[#1E2124] border border-[#3A4048] flex items-center justify-center text-[#D6D9DC]">
-            <Network className="w-4 h-4" />
+          <div className="w-8 h-8 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center text-[#FF5F40]">
+            <Network className="w-4 h-4 text-[#FF5F40]" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
               System Architecture & Subsystem Modules
             </h2>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <p className="text-[#9CA195] text-xs mt-0.5">
               Modular Coarse Pointing, Acquisition and Tracking (PAT) Platform Architecture
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-950/40 border border-emerald-700/50 text-emerald-400 text-xs font-medium">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>All Subsystems Operational</span>
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded bg-[#FF5F40]/15 border border-[#FF5F40]/40 text-[#FF5F40] text-xs font-bold">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#FF5F40]" />
+          <span>✓ All Subsystems Operational</span>
         </div>
       </div>
 
@@ -43,18 +43,18 @@ export const ArchitecturePage: React.FC = () => {
         {modules.map((m) => (
           <div
             key={m.title}
-            className="p-4 rounded-lg border border-[#252A2E] bg-[#121518] hover:border-[#2a3852] transition flex flex-col justify-between"
+            className="p-4 rounded-lg border border-[#33362F] bg-[#1B1D1A] hover:border-[#FF5F40]/50 transition flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm text-slate-100">
+                <span className="font-semibold text-xs text-[#F0FFEA] uppercase tracking-wide">
                   {m.title}
                 </span>
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-950/40 border border-emerald-700/50 text-emerald-400">
-                  Integrated
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#262824] border border-[#33362F] text-[#FF5F40]">
+                  ✓ Integrated
                 </span>
               </div>
-              <p className="text-slate-400 text-xs leading-relaxed">{m.desc}</p>
+              <p className="text-[#9CA195] text-xs leading-relaxed">{m.desc}</p>
             </div>
           </div>
         ))}

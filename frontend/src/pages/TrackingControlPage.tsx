@@ -1,9 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Activity,
   Target,
   Settings2,
-  Sliders,
   Shield,
   Zap,
   Search,
@@ -11,12 +10,6 @@ import {
   AlertTriangle,
   CheckCircle,
   RefreshCw,
-  Compass,
-  Play,
-  Pause,
-  BarChart2,
-  Layers,
-  ArrowRight,
   TrendingUp,
 } from 'lucide-react';
 import { SystemConfig, SimulationTelemetry } from '../types';
@@ -54,7 +47,7 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
         ...prev,
         control: { ...prev.control, mode: nextMode },
       }));
-      showFeedback(`Control Mode switched to: ${nextMode}`);
+      showFeedback(`✓ Control Mode switched to: ${nextMode}`);
     } catch (e: any) {
       showFeedback(`Error setting mode: ${e.message}`);
     } finally {
@@ -88,7 +81,7 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
         ...prev,
         tracking: { ...prev.tracking, algorithm: algo },
       }));
-      showFeedback(`Tracking filter set to: ${algo}`);
+      showFeedback(`✓ Tracking filter set to: ${algo}`);
     } catch (e: any) {
       showFeedback(`Error setting filter: ${e.message}`);
     }
@@ -103,53 +96,11 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
           tracking: { ...prev.tracking, search_pattern: pattern },
         }));
       }
-      showFeedback(`Search action [${action.toUpperCase()}] executed`);
+      showFeedback(`✓ Search action [${action.toUpperCase()}] executed`);
     } catch (e: any) {
       showFeedback(`Error triggering search: ${e.message}`);
     }
   };
-
-  // State badge styling
-  const stateBadgeConfig: Record<string, { bg: string; text: string; border: string; desc: string }> = {
-    LOCKED: {
-      bg: 'bg-emerald-950/80',
-      text: 'text-emerald-400',
-      border: 'border-emerald-600',
-      desc: 'Boresight locked within threshold for >= 5 consecutive frames',
-    },
-    TRACKING: {
-      bg: 'bg-cyan-950/80',
-      text: 'text-cyan-400',
-      border: 'border-cyan-600',
-      desc: 'Active optical beacon tracking via Kalman state estimation',
-    },
-    ACQUIRING: {
-      bg: 'bg-amber-950/80',
-      text: 'text-amber-400',
-      border: 'border-amber-600',
-      desc: 'Beacon acquired in FOV; converging PID loop towards center boresight',
-    },
-    REACQUIRING: {
-      bg: 'bg-orange-950/80',
-      text: 'text-orange-400',
-      border: 'border-orange-600',
-      desc: 'Beacon re-detected after temporary loss; re-centering within <= 1.0s',
-    },
-    SEARCHING: {
-      bg: 'bg-purple-950/80',
-      text: 'text-purple-400',
-      border: 'border-purple-600',
-      desc: 'Target outside FOV; executing systematic autonomous raster/sector search',
-    },
-    LOST: {
-      bg: 'bg-rose-950/80',
-      text: 'text-rose-400',
-      border: 'border-rose-600',
-      desc: 'Target lost or occluded; Kalman coasting dead-reckoning active',
-    },
-  };
-
-  const currentBadge = stateBadgeConfig[patState] || stateBadgeConfig.SEARCHING;
 
   // Real-time tracking positions
   const xm = tracking?.measured_x;
@@ -179,24 +130,27 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
   const tiltSlew = Math.abs(camera?.tilt_rate_deg_s ?? 0);
   const slewPass = panSlew <= 5.01 && tiltSlew <= 5.01;
 
+  const isStateLocked = patState === 'LOCKED';
+  const isStateActive = ['TRACKING', 'ACQUIRING', 'REACQUIRING'].includes(patState);
+
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
       {/* Top Banner: Closed-Loop Overview & PAT State Machine Badge */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-[#3A4048]/20 flex items-center justify-center">
-            <Activity className="w-5 h-5 text-[#D6D9DC]" />
+          <div className="w-9 h-9 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center">
+            <Activity className="w-5 h-5 text-[#FF5F40]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
                 Kalman Filter & 2-Axis PID Gimbal Control
               </h2>
-              <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-500/10 border border-[#3A4048] text-[#E8EAED]">
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[#FF5F40]/15 border border-[#FF5F40]/40 text-[#FF5F40]">
                 Closed-Loop Active
               </span>
             </div>
-            <p className="text-slate-400 text-[11px] mt-0.5">
+            <p className="text-[#9CA195] text-[11px] mt-0.5">
               Continuous Closed Loop: Frame → Detection → Centroid → Kalman → Error → PID → Slew Limit (≤5°/s) → Camera
             </p>
           </div>
@@ -204,9 +158,15 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
 
         {/* Live PAT State Badge */}
         <div className="flex items-center gap-3">
-          <div className={`px-4 py-2 rounded-lg border flex flex-col items-center justify-center ${currentBadge.bg} ${currentBadge.border}`}>
-            <span className="text-[10px] text-slate-400 uppercase font-medium">PAT State</span>
-            <span className={`text-sm font-bold tracking-wider ${currentBadge.text}`}>
+          <div className={`px-4 py-2 rounded border flex flex-col items-center justify-center ${
+            isStateLocked
+              ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40]'
+              : isStateActive
+              ? 'bg-[#FF5F40]/15 text-[#FF5F40] border-[#FF5F40]/40'
+              : 'bg-[#262824] text-[#9CA195] border-[#33362F]'
+          }`}>
+            <span className={`text-[10px] uppercase font-bold ${isStateLocked ? 'text-[#0A0A0A]' : 'text-[#9CA195]'}`}>PAT State</span>
+            <span className="text-sm font-bold tracking-wider">
               {patState}
             </span>
           </div>
@@ -214,85 +174,85 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
           <button
             onClick={handleToggleControlMode}
             disabled={isUpdating}
-            className={`px-3 py-2 rounded-lg font-medium transition flex items-center gap-2 border text-xs ${
+            className={`px-3 py-2 rounded font-bold transition flex items-center gap-2 border text-xs uppercase tracking-wider ${
               isClosedLoop
-                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
-                : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300'
+                ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] shadow'
+                : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
             }`}
           >
-            <Zap className={`w-3.5 h-3.5 ${isClosedLoop ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <Zap className="w-3.5 h-3.5" />
             <span>Mode: {isClosedLoop ? 'Closed-Loop PID' : 'Open-Loop Manual'}</span>
           </button>
         </div>
       </div>
 
       {actionMessage && (
-        <div className="p-2.5 rounded-lg bg-blue-500/10 border border-[#3A4048] text-blue-200 text-xs font-medium flex items-center justify-between">
+        <div className="p-2.5 rounded bg-[#262824] border border-[#FF5F40] text-[#FF5F40] text-xs font-bold flex items-center justify-between">
           <span>{actionMessage}</span>
-          <button onClick={() => setActionMessage(null)} className="text-slate-400 hover:text-white">✕</button>
+          <button onClick={() => setActionMessage(null)} className="text-[#9CA195] hover:text-[#F0FFEA]">✕</button>
         </div>
       )}
 
       {/* Closed-Loop Pipeline Flow Architecture Bar */}
-      <div className="bg-[#121518] border border-[#252A2E] p-3.5 rounded-xl">
-        <div className="text-xs text-slate-300 font-semibold tracking-wider mb-2.5 flex items-center gap-2">
-          <TrendingUp className="w-3.5 h-3.5 text-[#D6D9DC]" />
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-3.5 rounded-lg">
+        <div className="text-xs text-[#F0FFEA] font-semibold uppercase tracking-wider mb-2.5 flex items-center gap-2">
+          <TrendingUp className="w-3.5 h-3.5 text-[#FF5F40]" />
           <span>Closed-Loop Pipeline Stages (Hardware Slew Limit: ≤ 5.0°/s)</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-center text-xs">
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E]">
-            <div className="text-slate-400 font-medium text-[11px]">Camera Frame</div>
-            <div className="text-slate-200 font-semibold mt-1 num-mono">640 × 480</div>
-            <div className="text-[10px] text-slate-500">Mono / 30 FPS</div>
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">Camera Frame</div>
+            <div className="text-[#F0FFEA] font-bold mt-1 font-mono">640 × 480</div>
+            <div className="text-[10px] text-[#9CA195]">Mono / 30 FPS</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E]">
-            <div className="text-slate-400 font-medium text-[11px]">Detection</div>
-            <div className="text-emerald-400 font-semibold mt-1">
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">Detection</div>
+            <div className={`font-bold mt-1 ${detection?.beacon_detected ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
               {detection?.beacon_detected ? 'Acquired' : 'No Beacon'}
             </div>
-            <div className="text-[10px] text-slate-500 num-mono">SNR: {detection?.snr_db?.toFixed(1) ?? '--'} dB</div>
+            <div className="text-[10px] text-[#9CA195] font-mono">SNR: {detection?.snr_db?.toFixed(1) ?? '--'} dB</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E]">
-            <div className="text-slate-400 font-medium text-[11px]">Centroid</div>
-            <div className="text-[#D6D9DC] font-semibold mt-1 num-mono">
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">Centroid</div>
+            <div className="text-[#F0FFEA] font-bold mt-1 font-mono">
               {xm !== null && xm !== undefined ? `(${xm.toFixed(0)}, ${ym?.toFixed(0)})` : '--'}
             </div>
-            <div className="text-[10px] text-slate-500">Spatial Moments</div>
+            <div className="text-[10px] text-[#9CA195]">Spatial Moments</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#3A4048] bg-blue-500/5">
-            <div className="text-[#E8EAED] font-medium text-[11px]">Kalman Filter</div>
-            <div className="text-slate-200 font-semibold mt-1 num-mono">
+          <div className="p-2.5 rounded bg-[#262824] border border-[#FF5F40]/40">
+            <div className="text-[#FF5F40] font-bold text-[11px]">Kalman Filter</div>
+            <div className="text-[#F0FFEA] font-bold mt-1 font-mono">
               {xf !== null && xf !== undefined ? `(${xf.toFixed(0)}, ${yf?.toFixed(0)})` : '--'}
             </div>
-            <div className="text-[10px] text-[#D6D9DC]/80">4-State Kinematic</div>
+            <div className="text-[10px] text-[#9CA195]">4-State Kinematic</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E]">
-            <div className="text-slate-400 font-medium text-[11px]">Angular Error</div>
-            <div className="text-amber-400 font-semibold mt-1 num-mono">
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">Angular Error</div>
+            <div className="text-[#FF5F40] font-bold mt-1 font-mono">
               {tracking?.error_azimuth_deg !== null && tracking?.error_azimuth_deg !== undefined
                 ? `${tracking.error_azimuth_deg.toFixed(2)}°, ${tracking.error_elevation_deg?.toFixed(2)}°`
                 : '--'}
             </div>
-            <div className="text-[10px] text-slate-500 num-mono">Total: {errorPx.toFixed(1)} px</div>
+            <div className="text-[10px] text-[#9CA195] font-mono">Total: {errorPx.toFixed(1)} px</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-emerald-500/30 bg-emerald-500/5">
-            <div className="text-emerald-300 font-medium text-[11px]">2-Axis PID</div>
-            <div className="text-slate-200 font-semibold mt-1 num-mono">
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">2-Axis PID</div>
+            <div className="text-[#F0FFEA] font-bold mt-1 font-mono">
               {tracking?.pan_cmd_deg_s !== undefined ? `${tracking.pan_cmd_deg_s.toFixed(2)}°/s` : '--'}
             </div>
-            <div className="text-[10px] text-emerald-400/80">Anti-Windup Active</div>
+            <div className="text-[10px] text-[#9CA195]">Anti-Windup Active</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E]">
-            <div className="text-slate-400 font-medium text-[11px]">Slew Clamp</div>
-            <div className="text-emerald-400 font-semibold mt-1 num-mono">≤ 5.0°/s</div>
-            <div className="text-[10px] text-slate-500">Rate Limited</div>
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">Slew Clamp</div>
+            <div className="text-[#FF5F40] font-bold mt-1 font-mono">≤ 5.0°/s</div>
+            <div className="text-[10px] text-[#9CA195]">Rate Limited</div>
           </div>
-          <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E]">
-            <div className="text-slate-400 font-medium text-[11px]">Orientation</div>
-            <div className="text-[#D6D9DC] font-semibold mt-1 num-mono">
+          <div className="p-2.5 rounded bg-[#262824] border border-[#33362F]">
+            <div className="text-[#9CA195] font-medium text-[11px]">Orientation</div>
+            <div className="text-[#F0FFEA] font-bold mt-1 font-mono">
               {camera?.pan_deg.toFixed(1)}°, {camera?.tilt_deg.toFixed(1)}°
             </div>
-            <div className="text-[10px] text-slate-500">Pan / Tilt Angles</div>
+            <div className="text-[10px] text-[#9CA195]">Pan / Tilt Angles</div>
           </div>
         </div>
       </div>
@@ -301,105 +261,108 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
         {/* ========================================================================= */}
         {/* COLUMN 1: KALMAN FILTER & 3-POSITION DISPLAY                             */}
         {/* ========================================================================= */}
-        <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-            <h3 className="text-slate-200 font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
-              <Target className="w-4 h-4 text-[#D6D9DC]" />
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+            <h3 className="text-[#F0FFEA] font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
+              <Target className="w-4 h-4 text-[#FF5F40]" />
               Kalman Filter (X, Y, Vx, Vy)
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-[#1A1D20] text-slate-300 border border-[#22324e]">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#262824] text-[#9CA195] border border-[#33362F]">
               {config?.tracking.algorithm}
             </span>
           </div>
 
           {/* Algorithm Selector */}
           <div className="space-y-1.5">
-            <span className="text-slate-400 text-xs">Filter Mode:</span>
+            <span className="text-[#9CA195] text-xs">Filter Mode:</span>
             <div className="grid grid-cols-3 gap-1.5">
-              {(['None', 'Kalman Filter', 'Alpha-Beta'] as const).map((algo) => (
-                <button
-                  key={algo}
-                  onClick={() => handleSetFilter(algo)}
-                  className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition ${
-                    config?.tracking.algorithm === algo
-                      ? 'bg-[#1E2124] text-[#D6D9DC] border-[#3A4048]'
-                      : 'bg-[#121518] text-slate-400 border-[#252A2E] hover:text-slate-200'
-                  }`}
-                >
-                  {algo === 'Kalman Filter' ? 'Kalman (CV)' : algo}
-                </button>
-              ))}
+              {(['None', 'Kalman Filter', 'Alpha-Beta'] as const).map((algo) => {
+                const active = config?.tracking.algorithm === algo;
+                return (
+                  <button
+                    key={algo}
+                    onClick={() => handleSetFilter(algo)}
+                    className={`py-1.5 px-2 rounded text-xs font-mono transition border ${
+                      active
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] font-bold border-[#FF5F40]'
+                        : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
+                    }`}
+                  >
+                    {algo === 'Kalman Filter' ? 'Kalman' : algo}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Real-time 3-Position Display: Measured, Predicted, Filtered */}
-          <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-3 space-y-2.5">
-            <div className="text-xs font-medium text-slate-300 border-b border-[#252A2E] pb-1 flex items-center justify-between">
+          <div className="bg-[#262824] border border-[#33362F] rounded-lg p-3 space-y-2.5">
+            <div className="text-xs font-medium text-[#F0FFEA] border-b border-[#33362F] pb-1 flex items-center justify-between uppercase tracking-wider">
               <span>Position Comparison</span>
-              <span className="text-[10px] text-slate-500">Pixel Coords (FPA 640×480)</span>
+              <span className="text-[10px] text-[#9CA195]">Pixel Coords (640×480)</span>
             </div>
 
             {/* Measured Position */}
-            <div className="flex items-center justify-between bg-[#121518] p-2 rounded-lg border border-[#252A2E]">
+            <div className="flex items-center justify-between bg-[#1B1D1A] p-2 rounded border border-[#33362F]">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#252A2E] inline-block" />
-                <span className="text-slate-300">Measured Position:</span>
+                <span className="w-2 h-2 rounded-full bg-[#F0FFEA] inline-block" />
+                <span className="text-[#9CA195]">Measured:</span>
               </div>
-              <span className="text-[#D6D9DC] font-medium num-mono">
+              <span className="text-[#F0FFEA] font-mono font-medium">
                 {xm !== null && xm !== undefined ? `(${xm.toFixed(1)}, ${ym?.toFixed(1)}) px` : 'No measurement'}
               </span>
             </div>
 
             {/* Predicted Position */}
-            <div className="flex items-center justify-between bg-[#121518] p-2 rounded-lg border border-[#252A2E]">
+            <div className="flex items-center justify-between bg-[#1B1D1A] p-2 rounded border border-[#33362F]">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
-                <span className="text-slate-300">Predicted Position:</span>
+                <span className="w-2 h-2 rounded-full bg-[#9CA195] inline-block" />
+                <span className="text-[#9CA195]">Predicted:</span>
               </div>
-              <span className="text-purple-300 font-medium num-mono">
+              <span className="text-[#9CA195] font-mono font-medium">
                 {xp !== null && xp !== undefined ? `(${xp.toFixed(1)}, ${yp?.toFixed(1)}) px` : 'N/A'}
               </span>
             </div>
 
             {/* Filtered Position */}
-            <div className="flex items-center justify-between bg-[#121518] p-2 rounded-lg border border-[#252A2E]">
+            <div className="flex items-center justify-between bg-[#1B1D1A] p-2 rounded border border-[#33362F]">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                <span className="text-slate-300">Filtered Position:</span>
+                <span className="w-2 h-2 rounded-full bg-[#FF5F40] inline-block" />
+                <span className="text-[#F0FFEA] font-bold">Filtered:</span>
               </div>
-              <span className="text-amber-300 font-medium num-mono">
+              <span className="text-[#FF5F40] font-mono font-bold">
                 {xf !== null && xf !== undefined ? `(${xf.toFixed(1)}, ${yf?.toFixed(1)}) px` : 'N/A'}
               </span>
             </div>
 
             {/* Estimated Velocity */}
-            <div className="p-2.5 rounded-lg bg-[#121518] border border-[#252A2E] space-y-1">
+            <div className="p-2.5 rounded bg-[#1B1D1A] border border-[#33362F] space-y-1">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400">Target Velocity [Vx, Vy]:</span>
-                <span className="text-slate-100 font-medium num-mono">
+                <span className="text-[#9CA195]">Target Velocity [Vx, Vy]:</span>
+                <span className="text-[#F0FFEA] font-bold font-mono">
                   ({vx.toFixed(1)}, {vy.toFixed(1)}) px/s
                 </span>
               </div>
               <div className="flex justify-between items-center text-[11px]">
-                <span className="text-slate-500">Speed Magnitude |V|:</span>
-                <span className="text-[#D6D9DC] font-medium num-mono">{speed.toFixed(1)} px/s</span>
+                <span className="text-[#9CA195]">Speed Magnitude |V|:</span>
+                <span className="text-[#FF5F40] font-bold font-mono">{speed.toFixed(1)} px/s</span>
               </div>
             </div>
 
             {/* Coasting Status */}
             <div className="flex items-center justify-between text-xs pt-1">
-              <span className="text-slate-400">Coasting Status:</span>
-              <span className={`font-medium ${detection?.beacon_detected ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {detection?.beacon_detected ? 'Measured Update' : 'Coasting Prediction'}
+              <span className="text-[#9CA195]">Coasting Status:</span>
+              <span className={`font-bold ${detection?.beacon_detected ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
+                {detection?.beacon_detected ? '✓ Measured Update' : '● Coasting Prediction'}
               </span>
             </div>
           </div>
 
           {/* Hyperparameters */}
-          <div className="space-y-3 bg-[#121518] p-3 rounded-lg border border-[#252A2E] text-xs">
+          <div className="space-y-3 bg-[#262824] p-3 rounded border border-[#33362F] text-xs">
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Process Noise (Q):</span>
-              <span className="text-[#E8EAED] font-medium num-mono">{config?.tracking.process_noise_q ?? 0.05}</span>
+              <span className="text-[#9CA195]">Process Noise (Q):</span>
+              <span className="text-[#FF5F40] font-bold font-mono">{config?.tracking.process_noise_q ?? 0.05}</span>
             </div>
             <input
               type="range"
@@ -411,12 +374,12 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                 const v = parseFloat(e.target.value);
                 onUpdateConfig((p) => ({ ...p, tracking: { ...p.tracking, process_noise_q: v } }));
               }}
-              className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+              className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
             />
 
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Measurement Noise (R):</span>
-              <span className="text-[#E8EAED] font-medium num-mono">{config?.tracking.measurement_noise_r ?? 1.5}</span>
+              <span className="text-[#9CA195]">Measurement Noise (R):</span>
+              <span className="text-[#FF5F40] font-bold font-mono">{config?.tracking.measurement_noise_r ?? 1.5}</span>
             </div>
             <input
               type="range"
@@ -428,12 +391,12 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                 const v = parseFloat(e.target.value);
                 onUpdateConfig((p) => ({ ...p, tracking: { ...p.tracking, measurement_noise_r: v } }));
               }}
-              className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+              className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
             />
 
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Max Coasting Frames:</span>
-              <span className="text-emerald-400 font-medium num-mono">{config?.tracking.max_coast_frames ?? 30} frames</span>
+              <span className="text-[#9CA195]">Max Coasting Frames:</span>
+              <span className="text-[#F0FFEA] font-bold font-mono">{config?.tracking.max_coast_frames ?? 30} frames</span>
             </div>
             <input
               type="range"
@@ -445,7 +408,7 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                 const v = parseInt(e.target.value, 10);
                 onUpdateConfig((p) => ({ ...p, tracking: { ...p.tracking, max_coast_frames: v } }));
               }}
-              className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+              className="w-full h-1.5 bg-[#1B1D1A] rounded appearance-none cursor-pointer accent-[#FF5F40]"
             />
           </div>
         </div>
@@ -453,29 +416,29 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
         {/* ========================================================================= */}
         {/* COLUMN 2: 2-AXIS PID CONTROLLER & GIMBAL ACTUATION                       */}
         {/* ========================================================================= */}
-        <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-            <h3 className="text-slate-200 font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
-              <Settings2 className="w-4 h-4 text-[#D6D9DC]" />
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+            <h3 className="text-[#F0FFEA] font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
+              <Settings2 className="w-4 h-4 text-[#FF5F40]" />
               2-Axis PID Gimbal Controller
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#262824] text-[#FF5F40] border border-[#33362F]">
               Anti-Windup On
             </span>
           </div>
 
           {/* Pan PID Axis */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2.5">
             <div className="flex justify-between items-center">
-              <span className="text-[#E8EAED] font-medium uppercase text-xs">Pan Axis PID (Azimuth)</span>
-              <span className="text-[11px] text-slate-400">
-                Cmd: <strong className="text-emerald-400 num-mono">{tracking?.pan_cmd_deg_s?.toFixed(2) ?? '0.00'}°/s</strong>
+              <span className="text-[#F0FFEA] font-bold uppercase text-xs">Pan Axis PID (Azimuth)</span>
+              <span className="text-[11px] text-[#9CA195]">
+                Cmd: <strong className="text-[#FF5F40] font-mono">{tracking?.pan_cmd_deg_s?.toFixed(2) ?? '0.00'}°/s</strong>
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <span className="text-slate-400 text-[10px]">Kp (Pan)</span>
+                <span className="text-[#9CA195] text-[10px]">Kp (Pan)</span>
                 <input
                   type="number"
                   step="0.05"
@@ -484,11 +447,11 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                     const v = parseFloat(e.target.value);
                     handleUpdatePID({ kp_pan: v });
                   }}
-                  className="w-full bg-[#1A1D20] border border-[#22324e] rounded-lg p-1.5 text-slate-100 text-xs num-mono focus:outline-none focus:border-[#3A4048]"
+                  className="w-full bg-[#1B1D1A] border border-[#33362F] rounded p-1.5 text-[#F0FFEA] text-xs font-mono focus:outline-none focus:border-[#FF5F40]"
                 />
               </div>
               <div>
-                <span className="text-slate-400 text-[10px]">Ki (Pan)</span>
+                <span className="text-[#9CA195] text-[10px]">Ki (Pan)</span>
                 <input
                   type="number"
                   step="0.01"
@@ -497,11 +460,11 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                     const v = parseFloat(e.target.value);
                     handleUpdatePID({ ki_pan: v });
                   }}
-                  className="w-full bg-[#1A1D20] border border-[#22324e] rounded-lg p-1.5 text-slate-100 text-xs num-mono focus:outline-none focus:border-[#3A4048]"
+                  className="w-full bg-[#1B1D1A] border border-[#33362F] rounded p-1.5 text-[#F0FFEA] text-xs font-mono focus:outline-none focus:border-[#FF5F40]"
                 />
               </div>
               <div>
-                <span className="text-slate-400 text-[10px]">Kd (Pan)</span>
+                <span className="text-[#9CA195] text-[10px]">Kd (Pan)</span>
                 <input
                   type="number"
                   step="0.05"
@@ -510,40 +473,40 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                     const v = parseFloat(e.target.value);
                     handleUpdatePID({ kd_pan: v });
                   }}
-                  className="w-full bg-[#1A1D20] border border-[#22324e] rounded-lg p-1.5 text-slate-100 text-xs num-mono focus:outline-none focus:border-[#3A4048]"
+                  className="w-full bg-[#1B1D1A] border border-[#33362F] rounded p-1.5 text-[#F0FFEA] text-xs font-mono focus:outline-none focus:border-[#FF5F40]"
                 />
               </div>
             </div>
 
             {/* Live Pan PID Term Breakdown */}
-            <div className="grid grid-cols-3 gap-1.5 text-[10px] bg-[#121518] p-1.5 rounded-lg border border-[#252A2E]">
+            <div className="grid grid-cols-3 gap-1.5 text-[10px] bg-[#1B1D1A] p-1.5 rounded border border-[#33362F]">
               <div>
-                <span className="text-slate-500">P:</span>{' '}
-                <span className="text-slate-200 num-mono">{tracking?.pan_pid_p?.toFixed(2) ?? '0.00'}</span>
+                <span className="text-[#9CA195]">P:</span>{' '}
+                <span className="text-[#F0FFEA] font-mono">{tracking?.pan_pid_p?.toFixed(2) ?? '0.00'}</span>
               </div>
               <div>
-                <span className="text-slate-500">I:</span>{' '}
-                <span className="text-slate-200 num-mono">{tracking?.pan_pid_i?.toFixed(2) ?? '0.00'}</span>
+                <span className="text-[#9CA195]">I:</span>{' '}
+                <span className="text-[#F0FFEA] font-mono">{tracking?.pan_pid_i?.toFixed(2) ?? '0.00'}</span>
               </div>
               <div>
-                <span className="text-slate-500">D:</span>{' '}
-                <span className="text-slate-200 num-mono">{tracking?.pan_pid_d?.toFixed(2) ?? '0.00'}</span>
+                <span className="text-[#9CA195]">D:</span>{' '}
+                <span className="text-[#F0FFEA] font-mono">{tracking?.pan_pid_d?.toFixed(2) ?? '0.00'}</span>
               </div>
             </div>
           </div>
 
           {/* Tilt PID Axis */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2.5">
             <div className="flex justify-between items-center">
-              <span className="text-[#E8EAED] font-medium uppercase text-xs">Tilt Axis PID (Elevation)</span>
-              <span className="text-[11px] text-slate-400">
-                Cmd: <strong className="text-emerald-400 num-mono">{tracking?.tilt_cmd_deg_s?.toFixed(2) ?? '0.00'}°/s</strong>
+              <span className="text-[#F0FFEA] font-bold uppercase text-xs">Tilt Axis PID (Elevation)</span>
+              <span className="text-[11px] text-[#9CA195]">
+                Cmd: <strong className="text-[#FF5F40] font-mono">{tracking?.tilt_cmd_deg_s?.toFixed(2) ?? '0.00'}°/s</strong>
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <span className="text-slate-400 text-[10px]">Kp (Tilt)</span>
+                <span className="text-[#9CA195] text-[10px]">Kp (Tilt)</span>
                 <input
                   type="number"
                   step="0.05"
@@ -552,11 +515,11 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                     const v = parseFloat(e.target.value);
                     handleUpdatePID({ kp_tilt: v });
                   }}
-                  className="w-full bg-[#1A1D20] border border-[#22324e] rounded-lg p-1.5 text-slate-100 text-xs num-mono focus:outline-none focus:border-[#3A4048]"
+                  className="w-full bg-[#1B1D1A] border border-[#33362F] rounded p-1.5 text-[#F0FFEA] text-xs font-mono focus:outline-none focus:border-[#FF5F40]"
                 />
               </div>
               <div>
-                <span className="text-slate-400 text-[10px]">Ki (Tilt)</span>
+                <span className="text-[#9CA195] text-[10px]">Ki (Tilt)</span>
                 <input
                   type="number"
                   step="0.01"
@@ -565,11 +528,11 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                     const v = parseFloat(e.target.value);
                     handleUpdatePID({ ki_tilt: v });
                   }}
-                  className="w-full bg-[#1A1D20] border border-[#22324e] rounded-lg p-1.5 text-slate-100 text-xs num-mono focus:outline-none focus:border-[#3A4048]"
+                  className="w-full bg-[#1B1D1A] border border-[#33362F] rounded p-1.5 text-[#F0FFEA] text-xs font-mono focus:outline-none focus:border-[#FF5F40]"
                 />
               </div>
               <div>
-                <span className="text-slate-400 text-[10px]">Kd (Tilt)</span>
+                <span className="text-[#9CA195] text-[10px]">Kd (Tilt)</span>
                 <input
                   type="number"
                   step="0.05"
@@ -578,47 +541,47 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
                     const v = parseFloat(e.target.value);
                     handleUpdatePID({ kd_tilt: v });
                   }}
-                  className="w-full bg-[#1A1D20] border border-[#22324e] rounded-lg p-1.5 text-slate-100 text-xs num-mono focus:outline-none focus:border-[#3A4048]"
+                  className="w-full bg-[#1B1D1A] border border-[#33362F] rounded p-1.5 text-[#F0FFEA] text-xs font-mono focus:outline-none focus:border-[#FF5F40]"
                 />
               </div>
             </div>
 
             {/* Live Tilt PID Term Breakdown */}
-            <div className="grid grid-cols-3 gap-1.5 text-[10px] bg-[#121518] p-1.5 rounded-lg border border-[#252A2E]">
+            <div className="grid grid-cols-3 gap-1.5 text-[10px] bg-[#1B1D1A] p-1.5 rounded border border-[#33362F]">
               <div>
-                <span className="text-slate-500">P:</span>{' '}
-                <span className="text-slate-200 num-mono">{tracking?.tilt_pid_p?.toFixed(2) ?? '0.00'}</span>
+                <span className="text-[#9CA195]">P:</span>{' '}
+                <span className="text-[#F0FFEA] font-mono">{tracking?.tilt_pid_p?.toFixed(2) ?? '0.00'}</span>
               </div>
               <div>
-                <span className="text-slate-500">I:</span>{' '}
-                <span className="text-slate-200 num-mono">{tracking?.tilt_pid_i?.toFixed(2) ?? '0.00'}</span>
+                <span className="text-[#9CA195]">I:</span>{' '}
+                <span className="text-[#F0FFEA] font-mono">{tracking?.tilt_pid_i?.toFixed(2) ?? '0.00'}</span>
               </div>
               <div>
-                <span className="text-slate-500">D:</span>{' '}
-                <span className="text-slate-200 num-mono">{tracking?.tilt_pid_d?.toFixed(2) ?? '0.00'}</span>
+                <span className="text-[#9CA195]">D:</span>{' '}
+                <span className="text-[#F0FFEA] font-mono">{tracking?.tilt_pid_d?.toFixed(2) ?? '0.00'}</span>
               </div>
             </div>
           </div>
 
           {/* Actuator Limits and Hardware Constraints */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2 text-xs">
-            <div className="flex justify-between items-center text-slate-300 font-medium border-b border-[#252A2E] pb-1.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2 text-xs">
+            <div className="flex justify-between items-center text-[#F0FFEA] font-bold border-b border-[#33362F] pb-1.5">
               <span className="flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-emerald-400" /> Physical Slew Limit:
+                <Shield className="w-3.5 h-3.5 text-[#FF5F40]" /> Physical Slew Limit:
               </span>
-              <span className="text-emerald-400 font-semibold num-mono">±5.0°/s Max</span>
+              <span className="text-[#FF5F40] font-bold font-mono">±5.0°/s Max</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Current Pan Slew:</span>
-              <span className="text-slate-200 num-mono">{camera?.pan_rate_deg_s.toFixed(2)}°/s</span>
+              <span className="text-[#9CA195]">Current Pan Slew:</span>
+              <span className="text-[#F0FFEA] font-mono">{camera?.pan_rate_deg_s.toFixed(2)}°/s</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Current Tilt Slew:</span>
-              <span className="text-slate-200 num-mono">{camera?.tilt_rate_deg_s.toFixed(2)}°/s</span>
+              <span className="text-[#9CA195]">Current Tilt Slew:</span>
+              <span className="text-[#F0FFEA] font-mono">{camera?.tilt_rate_deg_s.toFixed(2)}°/s</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Anti-Windup Clamp:</span>
-              <span className="text-[#E8EAED] num-mono">±{config?.control.integral_windup_limit ?? 2.0}°/s</span>
+              <span className="text-[#9CA195]">Anti-Windup Clamp:</span>
+              <span className="text-[#F0FFEA] font-mono">±{config?.control.integral_windup_limit ?? 2.0}°/s</span>
             </div>
           </div>
         </div>
@@ -626,133 +589,136 @@ export const TrackingControlPage: React.FC<Props> = ({ config, telemetry, onUpda
         {/* ========================================================================= */}
         {/* COLUMN 3: SEARCH PATTERNS & LOCK/REACQUISITION REQUIREMENTS              */}
         {/* ========================================================================= */}
-        <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-2.5">
-            <h3 className="text-slate-200 font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
-              <Search className="w-4 h-4 text-purple-400" />
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
+            <h3 className="text-[#F0FFEA] font-semibold uppercase tracking-wider flex items-center gap-2 text-xs">
+              <Search className="w-4 h-4 text-[#FF5F40]" />
               Autonomous Search & Lock
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/30">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-[#262824] text-[#9CA195] border border-[#33362F]">
               {config?.tracking.search_pattern}
             </span>
           </div>
 
           {/* Search Pattern Controls */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2.5">
-            <div className="text-xs font-medium text-slate-300">Search Pattern Selection</div>
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2.5">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#F0FFEA]">Search Pattern Selection</div>
             <div className="grid grid-cols-2 gap-2">
-              {(['Raster Search', 'Sector Search', 'Spiral Search'] as const).map((pat) => (
-                <button
-                  key={pat}
-                  onClick={() => handleSearchAction('start', pat)}
-                  className={`p-2 rounded-lg text-xs font-medium border transition ${
-                    config?.tracking.search_pattern === pat
-                      ? 'bg-purple-500/15 text-purple-300 border-purple-500/40'
-                      : 'bg-[#1A1D20] text-slate-400 border-[#22324e] hover:text-slate-200'
-                  }`}
-                >
-                  {pat}
-                </button>
-              ))}
+              {(['Raster Search', 'Sector Search', 'Spiral Search'] as const).map((pat) => {
+                const active = config?.tracking.search_pattern === pat;
+                return (
+                  <button
+                    key={pat}
+                    onClick={() => handleSearchAction('start', pat)}
+                    className={`p-2 rounded text-xs font-mono transition border ${
+                      active
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] font-bold border-[#FF5F40]'
+                        : 'bg-[#1B1D1A] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
+                    }`}
+                  >
+                    {pat}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => handleSearchAction('start')}
-                className="flex-1 py-1.5 px-3 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 border border-purple-500/40 font-medium text-xs transition"
+                className="flex-1 py-1.5 px-3 rounded bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] font-bold text-xs transition uppercase tracking-wider shadow"
               >
                 Execute Search
               </button>
               <button
                 onClick={() => handleSearchAction('stop')}
-                className="py-1.5 px-3 rounded-lg bg-[#1A1D20] hover:bg-[#1e2b44] text-slate-300 border border-[#22324e] font-medium text-xs transition"
+                className="py-1.5 px-3 rounded bg-[#1B1D1A] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] font-medium text-xs transition"
               >
                 Halt
               </button>
               <button
                 onClick={() => handleSearchAction('reset')}
-                className="p-1.5 rounded-lg bg-[#1A1D20] hover:bg-[#1e2b44] text-slate-300 border border-[#22324e] transition"
+                className="p-1.5 rounded bg-[#1B1D1A] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] transition"
                 title="Reset Search Grid"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3.5 h-3.5 text-[#FF5F40]" />
               </button>
             </div>
           </div>
 
           {/* Lock Criteria Tuning */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2 text-xs">
-            <div className="flex justify-between items-center text-slate-300 font-medium border-b border-[#252A2E] pb-1.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2 text-xs">
+            <div className="flex justify-between items-center text-[#F0FFEA] font-semibold border-b border-[#33362F] pb-1.5 uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-[#D6D9DC]" /> Lock Verification Criteria:
+                <Lock className="w-3.5 h-3.5 text-[#FF5F40]" /> Lock Criteria:
               </span>
-              <span className={isLocked ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
-                {isLocked ? 'Locked' : 'Unlocked'}
+              <span className={isLocked ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195]'}>
+                {isLocked ? '✓ Locked' : '● Unlocked'}
               </span>
             </div>
 
             <div className="flex justify-between">
-              <span className="text-slate-400">Max Angular Error:</span>
-              <span className="text-slate-200 num-mono">≤ {config?.tracking.lock_angular_error_threshold_deg ?? 0.10}°</span>
+              <span className="text-[#9CA195]">Max Angular Error:</span>
+              <span className="text-[#F0FFEA] font-mono">≤ {config?.tracking.lock_angular_error_threshold_deg ?? 0.10}°</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Max Pixel Error:</span>
-              <span className="text-slate-200 num-mono">≤ {config?.tracking.lock_pixel_error_threshold_px ?? 10.0} px</span>
+              <span className="text-[#9CA195]">Max Pixel Error:</span>
+              <span className="text-[#F0FFEA] font-mono">≤ {config?.tracking.lock_pixel_error_threshold_px ?? 10.0} px</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Min Confidence:</span>
-              <span className="text-slate-200 num-mono">≥ {((config?.tracking.lock_confidence_threshold ?? 0.70) * 100).toFixed(0)}%</span>
+              <span className="text-[#9CA195]">Min Confidence:</span>
+              <span className="text-[#F0FFEA] font-mono">≥ {((config?.tracking.lock_confidence_threshold ?? 0.70) * 100).toFixed(0)}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Consecutive Locked:</span>
-              <span className="text-emerald-400 font-semibold num-mono">
+              <span className="text-[#9CA195]">Consecutive Locked:</span>
+              <span className="text-[#FF5F40] font-bold font-mono">
                 {tracking?.consecutive_locked_frames ?? 0} / {config?.tracking.lock_consecutive_frames ?? 5} frames
               </span>
             </div>
           </div>
 
           {/* Requirements Compliance Checklist */}
-          <div className="p-3 bg-[#121518] rounded-lg border border-[#252A2E] space-y-2 text-xs">
-            <div className="text-slate-300 font-medium uppercase tracking-wider border-b border-[#252A2E] pb-1.5">
+          <div className="p-3 bg-[#262824] rounded border border-[#33362F] space-y-2 text-xs">
+            <div className="text-[#F0FFEA] font-semibold uppercase tracking-wider border-b border-[#33362F] pb-1.5">
               Performance Compliance
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Acquisition Time (≤ 2.0s):</span>
-              <span className={`font-semibold num-mono flex items-center gap-1 ${acqPass ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className="text-[#9CA195]">Acquisition Time (≤ 2.0s):</span>
+              <span className={`font-bold font-mono flex items-center gap-1 ${acqPass ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
                 {acqTime !== null ? `${acqTime.toFixed(2)}s` : '--'}
-                {acqPass ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-rose-400" />}
+                {acqPass ? <CheckCircle className="w-3 h-3 text-[#FF5F40]" /> : <AlertTriangle className="w-3 h-3 text-[#9CA195]" />}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Reacquisition Time (≤ 1.0s):</span>
-              <span className={`font-semibold num-mono flex items-center gap-1 ${reacqPass ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className="text-[#9CA195]">Reacquisition Time (≤ 1.0s):</span>
+              <span className={`font-bold font-mono flex items-center gap-1 ${reacqPass ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
                 {reacqTime !== null ? `${reacqTime.toFixed(2)}s` : 'N/A'}
-                {reacqPass ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-rose-400" />}
+                {reacqPass ? <CheckCircle className="w-3 h-3 text-[#FF5F40]" /> : <AlertTriangle className="w-3 h-3 text-[#9CA195]" />}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Target Loss (&lt; 5.0%):</span>
-              <span className={`font-semibold num-mono flex items-center gap-1 ${lossPass ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className="text-[#9CA195]">Target Loss (&lt; 5.0%):</span>
+              <span className={`font-bold font-mono flex items-center gap-1 ${lossPass ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
                 {lossPercent.toFixed(1)}% ({tracking?.target_lost_count ?? 0} events)
-                {lossPass ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-rose-400" />}
+                {lossPass ? <CheckCircle className="w-3 h-3 text-[#FF5F40]" /> : <AlertTriangle className="w-3 h-3 text-[#9CA195]" />}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Tracking Error (≤ 10 px):</span>
-              <span className={`font-semibold num-mono flex items-center gap-1 ${errorPass ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span className="text-[#9CA195]">Tracking Error (≤ 10 px):</span>
+              <span className={`font-bold font-mono flex items-center gap-1 ${errorPass ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
                 {errorPx.toFixed(1)} px
-                {errorPass ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-amber-400" />}
+                {errorPass ? <CheckCircle className="w-3 h-3 text-[#FF5F40]" /> : <AlertTriangle className="w-3 h-3 text-[#9CA195]" />}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Gimbal Slew (≤ 5.0°/s):</span>
-              <span className={`font-semibold num-mono flex items-center gap-1 ${slewPass ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span className="text-[#9CA195]">Gimbal Slew (≤ 5.0°/s):</span>
+              <span className={`font-bold font-mono flex items-center gap-1 ${slewPass ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`}>
                 Max {Math.max(panSlew, tiltSlew).toFixed(1)}°/s
-                {slewPass ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <AlertTriangle className="w-3 h-3 text-rose-400" />}
+                {slewPass ? <CheckCircle className="w-3 h-3 text-[#FF5F40]" /> : <AlertTriangle className="w-3 h-3 text-[#9CA195]" />}
               </span>
             </div>
           </div>

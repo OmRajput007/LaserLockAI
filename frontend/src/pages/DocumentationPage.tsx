@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   Search,
@@ -16,7 +16,7 @@ export const DocumentationPage: React.FC = () => {
   const [userManual, setUserManual] = useState<UserManualResponse | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
+  const [, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,18 +62,18 @@ export const DocumentationPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs text-slate-200 pb-10">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA] pb-10">
       {/* Header bar */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-[#1E2124] border border-[#3A4048] flex items-center justify-center text-[#D6D9DC]">
-            <BookOpen className="w-4 h-4" />
+          <div className="w-8 h-8 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center text-[#FF5F40]">
+            <BookOpen className="w-4 h-4 text-[#FF5F40]" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
               Technical Documentation & Operator Manual
             </h2>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <p className="text-[#9CA195] text-xs mt-0.5">
               Comprehensive Engineering Specifications & Practical Operations Guide
             </p>
           </div>
@@ -81,19 +81,19 @@ export const DocumentationPage: React.FC = () => {
 
         {/* View Switcher & Print */}
         <div className="flex items-center gap-2.5">
-          <div className="flex bg-[#0D1012] p-1 rounded-md border border-[#252A2E]">
+          <div className="flex bg-[#000000] p-1 rounded border border-[#33362F]">
             <button
               onClick={() => {
                 setDocType('technical');
                 setSelectedSectionId(1);
               }}
-              className={`px-3 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded text-xs font-mono font-medium transition flex items-center gap-1.5 ${
                 docType === 'technical'
-                  ? 'bg-[#252A2E] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-bold shadow-sm'
+                  : 'text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
             >
-              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <FileText className="w-3.5 h-3.5" />
               Technical Report
             </button>
             <button
@@ -101,50 +101,50 @@ export const DocumentationPage: React.FC = () => {
                 setDocType('user_manual');
                 setSelectedSectionId(1);
               }}
-              className={`px-3 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded text-xs font-mono font-medium transition flex items-center gap-1.5 ${
                 docType === 'user_manual'
-                  ? 'bg-[#252A2E] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-bold shadow-sm'
+                  : 'text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
             >
-              <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
+              <HelpCircle className="w-3.5 h-3.5" />
               User Manual
             </button>
           </div>
 
           <button
             onClick={handlePrint}
-            className="px-3 py-1.5 bg-[#1A1D20] hover:bg-[#202c42] text-slate-300 hover:text-white border border-[#2D3237] rounded-md font-medium text-xs flex items-center gap-1.5 transition"
+            className="px-3 py-1.5 bg-[#262824] hover:bg-[#FF5F40]/20 text-[#F0FFEA] border border-[#33362F] rounded font-medium text-xs flex items-center gap-1.5 transition"
             title="Print documentation"
           >
-            <Printer className="w-3.5 h-3.5 text-slate-400" />
+            <Printer className="w-3.5 h-3.5 text-[#FF5F40]" />
             Print
           </button>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="bg-rose-950/40 border border-rose-800/60 text-rose-300 p-3.5 rounded-lg text-xs">
-          {errorMsg}
+        <div className="bg-[#262824] border border-[#FF5F40] text-[#FF5F40] p-3.5 rounded-lg text-xs">
+          ! {errorMsg}
         </div>
       )}
 
       {/* Main 2-Column Documentation Browser */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Search & Chapter List */}
-        <div className="lg:col-span-4 bg-[#121518] border border-[#252A2E] rounded-lg p-3.5 flex flex-col h-[750px]">
+        <div className="lg:col-span-4 bg-[#1B1D1A] border border-[#33362F] rounded-lg p-3.5 flex flex-col h-[750px]">
           <div className="relative mb-3">
             <input
               type="text"
               placeholder={`Search ${docType === 'technical' ? 'technical sections' : 'user chapters'}...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#0D1012] border border-[#252A2E] rounded-md pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#3A4048] transition"
+              className="w-full bg-[#262824] border border-[#33362F] rounded pl-9 pr-3 py-2 text-xs text-[#F0FFEA] placeholder-[#9CA195] focus:outline-none focus:border-[#FF5F40] transition"
             />
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-[#9CA195] absolute left-3 top-2.5" />
           </div>
 
-          <div className="text-[11px] text-slate-400 font-medium uppercase tracking-wider mb-2 px-1 flex justify-between">
+          <div className="text-[11px] text-[#9CA195] font-medium uppercase tracking-wider mb-2 px-1 flex justify-between">
             <span>Contents ({filteredSections.length})</span>
             <span>{docType === 'technical' ? 'Technical' : 'Manual'}</span>
           </div>
@@ -156,26 +156,26 @@ export const DocumentationPage: React.FC = () => {
                 <button
                   key={sec.id}
                   onClick={() => setSelectedSectionId(sec.id)}
-                  className={`w-full text-left p-2.5 rounded-md border transition flex items-start gap-2.5 ${
+                  className={`w-full text-left p-2.5 rounded border transition flex items-start gap-2.5 ${
                     isSelected
-                      ? 'bg-[#1E2124] border-[#3A4048] text-[#E8EAED]'
-                      : 'bg-[#111417] border-[#1a2336] text-slate-300 hover:bg-[#151c2c] hover:text-white'
+                      ? 'bg-[#FF5F40]/15 border-[#FF5F40]/40 text-[#F0FFEA]'
+                      : 'bg-[#262824]/60 border-[#33362F] text-[#9CA195] hover:bg-[#262824] hover:text-[#F0FFEA]'
                   }`}
                 >
                   <span
-                    className={`shrink-0 w-5 h-5 rounded flex items-center justify-center font-medium text-[10px] num-mono ${
-                      isSelected ? 'bg-[#252A2E] text-white' : 'bg-[#182236] text-slate-400'
+                    className={`shrink-0 w-5 h-5 rounded flex items-center justify-center font-bold text-[10px] ${
+                      isSelected ? 'bg-[#FF5F40] text-[#0A0A0A]' : 'bg-[#1B1D1A] text-[#9CA195]'
                     }`}
                   >
                     {sec.id}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-xs truncate leading-snug">{sec.title}</div>
-                    <div className="text-[11px] text-slate-500 truncate mt-0.5">{sec.summary}</div>
+                    <div className="font-semibold text-xs truncate leading-snug">{sec.title}</div>
+                    <div className="text-[11px] text-[#9CA195] truncate mt-0.5">{sec.summary}</div>
                   </div>
                   <ChevronRight
                     className={`w-3.5 h-3.5 shrink-0 mt-0.5 transition ${
-                      isSelected ? 'text-[#D6D9DC] translate-x-0.5' : 'text-slate-600'
+                      isSelected ? 'text-[#FF5F40] translate-x-0.5' : 'text-[#5E625A]'
                     }`}
                   />
                 </button>
@@ -183,7 +183,7 @@ export const DocumentationPage: React.FC = () => {
             })}
 
             {filteredSections.length === 0 && (
-              <div className="text-center py-10 text-slate-500 text-xs">
+              <div className="text-center py-10 text-[#9CA195] text-xs">
                 No sections matched "{searchQuery}"
               </div>
             )}
@@ -191,25 +191,25 @@ export const DocumentationPage: React.FC = () => {
         </div>
 
         {/* Right Column: Detailed Section Reader */}
-        <div className="lg:col-span-8 bg-[#121518] border border-[#252A2E] rounded-lg p-6 flex flex-col h-[750px] overflow-y-auto">
+        <div className="lg:col-span-8 bg-[#1B1D1A] border border-[#33362F] rounded-lg p-6 flex flex-col h-[750px] overflow-y-auto">
           {activeSection ? (
             <div className="space-y-5">
               {/* Header */}
-              <div className="border-b border-[#252A2E] pb-4">
+              <div className="border-b border-[#33362F] pb-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2 py-0.5 bg-[#1E2124] text-[#E8EAED] border border-[#3A4048] rounded text-[10px] font-medium">
+                  <span className="px-2 py-0.5 bg-[#262824] text-[#FF5F40] border border-[#33362F] rounded text-[10px] font-bold">
                     {activeSection.tag}
                   </span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-[#9CA195]">
                     {docType === 'technical' ? 'Section' : 'Chapter'} {activeSection.id} of {activeSections.length}
                   </span>
                 </div>
-                <h1 className="text-lg font-semibold text-slate-100 tracking-wide">{activeSection.title}</h1>
-                <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">{activeSection.summary}</p>
+                <h1 className="text-lg font-bold text-[#F0FFEA] tracking-wide uppercase">{activeSection.title}</h1>
+                <p className="text-[#9CA195] text-xs mt-1.5 leading-relaxed">{activeSection.summary}</p>
               </div>
 
               {/* Formatted Content */}
-              <div className="text-slate-200 text-xs leading-relaxed space-y-4">
+              <div className="text-[#F0FFEA] text-xs leading-relaxed space-y-4">
                 {activeSection.content.split('\n\n').map((paragraph, pIdx) => {
                   // Code block
                   if (paragraph.startsWith('```')) {
@@ -217,7 +217,7 @@ export const DocumentationPage: React.FC = () => {
                     return (
                       <pre
                         key={pIdx}
-                        className="bg-[#0D1012] border border-[#252A2E] p-3 rounded-md text-slate-300 font-mono text-[11px] overflow-x-auto"
+                        className="bg-[#000000] border border-[#33362F] p-3 rounded text-[#F0FFEA] font-mono text-[11px] overflow-x-auto"
                       >
                         <code>{lines}</code>
                       </pre>
@@ -227,7 +227,7 @@ export const DocumentationPage: React.FC = () => {
                   // Headers
                   if (paragraph.startsWith('### ')) {
                     return (
-                      <h4 key={pIdx} className="text-xs font-semibold text-slate-200 pt-2 border-b border-[#252A2E] pb-1">
+                      <h4 key={pIdx} className="text-xs font-bold text-[#F0FFEA] uppercase tracking-wider pt-2 border-b border-[#33362F] pb-1">
                         {paragraph.replace('### ', '')}
                       </h4>
                     );
@@ -235,7 +235,7 @@ export const DocumentationPage: React.FC = () => {
 
                   if (paragraph.startsWith('## ')) {
                     return (
-                      <h3 key={pIdx} className="text-sm font-semibold text-slate-100 pt-3 border-b border-[#252A2E] pb-1.5">
+                      <h3 key={pIdx} className="text-sm font-bold text-[#F0FFEA] uppercase tracking-wider pt-3 border-b border-[#33362F] pb-1.5">
                         {paragraph.replace('## ', '')}
                       </h3>
                     );
@@ -245,7 +245,7 @@ export const DocumentationPage: React.FC = () => {
                   if (paragraph.startsWith('- ') || paragraph.startsWith('* ')) {
                     const items = paragraph.split('\n');
                     return (
-                      <ul key={pIdx} className="list-disc list-inside space-y-1 text-slate-300 pl-2">
+                      <ul key={pIdx} className="list-disc list-inside space-y-1 text-[#F0FFEA] pl-2">
                         {items.map((it, iIdx) => (
                           <li key={iIdx}>{it.replace(/^[-*]\s*/, '')}</li>
                         ))}
@@ -254,7 +254,7 @@ export const DocumentationPage: React.FC = () => {
                   }
 
                   return (
-                    <p key={pIdx} className="text-slate-300 leading-relaxed text-xs">
+                    <p key={pIdx} className="text-[#F0FFEA] leading-relaxed text-xs">
                       {paragraph}
                     </p>
                   );
@@ -262,28 +262,28 @@ export const DocumentationPage: React.FC = () => {
               </div>
 
               {/* Footer navigation */}
-              <div className="border-t border-[#252A2E] pt-4 flex items-center justify-between mt-8 text-xs text-slate-400">
+              <div className="border-t border-[#33362F] pt-4 flex items-center justify-between mt-8 text-xs text-[#9CA195]">
                 <button
                   onClick={() => setSelectedSectionId((id) => Math.max(1, id - 1))}
                   disabled={activeSection.id <= 1}
-                  className="px-3 py-1.5 bg-[#1A1D20] hover:bg-[#202c42] text-slate-300 rounded-md disabled:opacity-30 border border-[#2D3237] transition"
+                  className="px-3 py-1.5 bg-[#262824] hover:bg-[#FF5F40]/20 text-[#F0FFEA] rounded disabled:opacity-30 border border-[#33362F] transition"
                 >
                   &larr; Previous {docType === 'technical' ? 'Section' : 'Chapter'}
                 </button>
-                <span className="num-mono text-[11px]">
+                <span className="font-mono text-[11px]">
                   {activeSection.id} / {activeSections.length}
                 </span>
                 <button
                   onClick={() => setSelectedSectionId((id) => Math.min(activeSections.length, id + 1))}
                   disabled={activeSection.id >= activeSections.length}
-                  className="px-3 py-1.5 bg-[#1A1D20] hover:bg-[#202c42] text-slate-300 rounded-md disabled:opacity-30 border border-[#2D3237] transition"
+                  className="px-3 py-1.5 bg-[#262824] hover:bg-[#FF5F40]/20 text-[#F0FFEA] rounded disabled:opacity-30 border border-[#33362F] transition"
                 >
                   Next {docType === 'technical' ? 'Section' : 'Chapter'} &rarr;
                 </button>
               </div>
             </div>
           ) : (
-            <div className="text-center py-20 text-slate-500">Select a section to view documentation</div>
+            <div className="text-center py-20 text-[#9CA195]">Select a section to view documentation</div>
           )}
         </div>
       </div>

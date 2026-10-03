@@ -334,35 +334,35 @@ export const App: React.FC = () => {
   if (isPopout3D) {
     return (
       <div
-        className="flex h-screen w-screen flex-col overflow-hidden bg-[#06080A] text-[#E8EAED] antialiased"
-        style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+        className="flex h-screen w-screen flex-col overflow-hidden bg-[#000000] text-[#F0FFEA] antialiased"
+        style={{ fontFamily: "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" }}
       >
         {/* Sleek minimal header for the standalone 3D tab */}
-        <header className="h-10 bg-[#0A0D10] border-b border-[#1F2429] px-4 flex items-center justify-between flex-shrink-0 select-none">
+        <header className="h-10 bg-[#1B1D1A] border-b border-[#33362F] px-4 flex items-center justify-between flex-shrink-0 select-none">
           <div className="flex items-center gap-2.5">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#4CAF7D] shadow-[0_0_8px_rgba(76,175,125,0.8)]' : 'bg-[#D6A84F] animate-pulse'}`} />
-            <span className="text-xs font-semibold tracking-wider text-white">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#FF5F40] shadow-[0_0_8px_rgba(255,95,64,0.8)]' : 'bg-[#9CA195] animate-pulse'}`} />
+            <span className="text-xs font-semibold tracking-wider text-[#F0FFEA] uppercase">
               LaserLockAI — 3D LEO Kinematics (Standalone Window)
             </span>
-            <span className="text-[11px] text-[#525A63] font-mono">
-              {isConnected ? `Live · ${telemetry?.fps.toFixed(0) || 30} FPS` : 'Connecting…'}
+            <span className="text-[11px] text-[#9CA195] font-mono">
+              {isConnected ? `LIVE · ${telemetry?.fps.toFixed(0) || 30} FPS` : 'CONNECTING…'}
             </span>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#525A63] num-mono border-r border-[#1F2429] pr-3 mr-1">
-              <span>t = <span className="text-[#8B949E]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
-              <span className="text-[#1E2023]">·</span>
-              <span>f = <span className="text-[#8B949E]">{telemetry?.frame_number ?? 0}</span></span>
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9CA195] num-mono border-r border-[#33362F] pr-3 mr-1">
+              <span>t = <span className="text-[#F0FFEA]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
+              <span className="text-[#33362F]">·</span>
+              <span>f = <span className="text-[#F0FFEA]">{telemetry?.frame_number ?? 0}</span></span>
             </div>
 
             {/* Run / Pause */}
             <button
               onClick={() => toggleSimulation(!telemetry?.is_running)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
                 telemetry?.is_running
-                  ? 'bg-[#D6A84F]/10 border-[#D6A84F]/30 text-[#D6A84F] hover:bg-[#D6A84F]/15'
-                  : 'bg-[#4CAF7D]/10 border-[#4CAF7D]/30 text-[#4CAF7D] hover:bg-[#4CAF7D]/15'
+                  ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40] hover:bg-[rgba(255,95,64,0.14)]'
+                  : 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] hover:bg-[#FF7459]'
               }`}
             >
               {telemetry?.is_running ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
@@ -372,7 +372,7 @@ export const App: React.FC = () => {
             {/* Reset */}
             <button
               onClick={resetSimulation}
-              className="p-1 rounded border border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E] transition cursor-pointer"
+              className="p-1 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
               title="Reset simulation"
             >
               <RotateCcw className="w-3 h-3" />
@@ -383,7 +383,7 @@ export const App: React.FC = () => {
               onClick={() => {
                 window.location.href = window.location.origin + window.location.pathname;
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-[#252A2E] bg-[#12161A] text-slate-300 hover:text-white hover:border-[#3A4048] transition cursor-pointer ml-1"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-[#33362F] bg-[#262824] text-[#F0FFEA] hover:border-[#FF5F40] hover:text-[#FF5F40] transition cursor-pointer ml-1"
               title="Open full Mission Control Dashboard in this tab"
             >
               <span>Main Dashboard</span>
@@ -392,7 +392,7 @@ export const App: React.FC = () => {
         </header>
 
         {/* Dedicated 100% Space 3D Virtual Scene */}
-        <main className="flex-1 w-full h-full p-2 overflow-hidden">
+        <main className="flex-1 w-full h-full p-2 overflow-hidden bg-[#000000]">
           <Scene3DViewport
             target={telemetry?.target ?? null}
             targets={telemetry?.targets ?? []}
@@ -407,29 +407,29 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#06080A] text-[#E8EAED] antialiased" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#000000] text-[#F0FFEA] antialiased" style={{ fontFamily: "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" }}>
 
       {/* ── Sidebar ── */}
       <aside
-        className={`${isSidebarCollapsed ? 'w-14' : 'w-56'} flex flex-col flex-shrink-0 bg-[#0A0D10] border-r border-[#1F2429] transition-all duration-200 ease-in-out select-none`}
+        className={`${isSidebarCollapsed ? 'w-14' : 'w-56'} flex flex-col flex-shrink-0 bg-[#1B1D1A] border-r border-[#33362F] transition-all duration-200 ease-in-out select-none`}
       >
         {/* Brand */}
-        <div className={`flex items-center border-b border-[#1F2429] ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
+        <div className={`flex items-center border-b border-[#33362F] ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-4 py-3'}`}>
           {!isSidebarCollapsed && (
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-6 h-6 rounded flex items-center justify-center bg-[#1E2023] border border-[#2A2D31] shrink-0">
-                <Crosshair className="w-3.5 h-3.5 text-[#8B949E]" />
+              <div className="w-6 h-6 rounded flex items-center justify-center bg-[#262824] border border-[#33362F] shrink-0">
+                <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-[11px] font-semibold text-[#E8EAED] tracking-wide truncate leading-none">LaserLockAI</h1>
-                <p className="text-[10px] text-[#525A63] truncate leading-none mt-0.5">Optical Tracking</p>
+                <h1 className="text-[11px] font-semibold text-[#F0FFEA] tracking-wide truncate leading-none uppercase">LaserLockAI</h1>
+                <p className="text-[10px] text-[#9CA195] truncate leading-none mt-0.5">Optical Tracking</p>
               </div>
             </div>
           )}
           <button
             type="button"
             onClick={toggleSidebar}
-            className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1F2429] transition cursor-pointer shrink-0"
+            className="p-1 rounded text-[#9CA195] hover:text-[#FF5F40] hover:bg-[#262824] transition cursor-pointer shrink-0"
             title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
           >
             {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
@@ -445,7 +445,7 @@ export const App: React.FC = () => {
                 const groupItems = NAV_ITEMS.filter(i => i.group === grp);
                 return (
                   <div key={grp}>
-                    {idx > 0 && <div className="h-px bg-[#1A1C1F] my-2 mx-1" />}
+                    {idx > 0 && <div className="h-px bg-[#33362F] my-2 mx-1" />}
                     {groupItems.map(item => {
                       const active = activeTab === item.id;
                       const Icon = item.icon;
@@ -458,8 +458,8 @@ export const App: React.FC = () => {
                           aria-label={item.label}
                           className={`w-full flex items-center justify-center p-2 rounded transition cursor-pointer ${
                             active
-                              ? 'bg-[#1E2023] text-[#E8EAED]'
-                              : 'text-[#525A63] hover:text-[#8B949E] hover:bg-[#141618]'
+                              ? 'bg-[rgba(255,95,64,0.14)] text-[#FF5F40] border-l-2 border-[#FF5F40]'
+                              : 'text-[#9CA195] hover:text-[#F0FFEA] hover:bg-[#262824]'
                           }`}
                         >
                           <Icon className="w-3.5 h-3.5" />
@@ -469,7 +469,7 @@ export const App: React.FC = () => {
                   </div>
                 );
               })}
-              <div className="h-px bg-[#1A1C1F] my-2 mx-1" />
+              <div className="h-px bg-[#33362F] my-2 mx-1" />
               <button
                 type="button"
                 onClick={() => setActiveTab('settings')}
@@ -477,8 +477,8 @@ export const App: React.FC = () => {
                 aria-label="Settings"
                 className={`w-full flex items-center justify-center p-2 rounded transition cursor-pointer ${
                   activeTab === 'settings'
-                    ? 'bg-[#1E2023] text-[#E8EAED]'
-                    : 'text-[#525A63] hover:text-[#8B949E] hover:bg-[#141618]'
+                    ? 'bg-[rgba(255,95,64,0.14)] text-[#FF5F40] border-l-2 border-[#FF5F40]'
+                    : 'text-[#9CA195] hover:text-[#F0FFEA] hover:bg-[#262824]'
                 }`}
               >
                 <Settings className="w-3.5 h-3.5" />
@@ -499,7 +499,7 @@ export const App: React.FC = () => {
                       onClick={() => toggleGroup(grp)}
                       aria-expanded={isExpanded}
                       className={`w-full flex items-center justify-between px-2 py-1 rounded text-left cursor-pointer transition ${
-                        hasActive ? 'text-[#8B949E]' : 'text-[#525A63] hover:text-[#6B7280]'
+                        hasActive ? 'text-[#FF5F40]' : 'text-[#9CA195] hover:text-[#F0FFEA]'
                       }`}
                     >
                       <span className="text-[10px] font-semibold tracking-widest uppercase">{grp}</span>
@@ -519,11 +519,11 @@ export const App: React.FC = () => {
                               onClick={() => { setActiveTab(item.id); setExpandedGroups(p => ({ ...p, [grp]: true })); }}
                               className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left cursor-pointer transition text-xs ${
                                 active
-                                  ? 'bg-[#1E2023] text-[#E8EAED] font-medium'
-                                  : 'text-[#6B7280] hover:text-[#8B949E] hover:bg-[#141618]'
+                                  ? 'bg-[rgba(255,95,64,0.14)] text-[#FF5F40] font-medium border-l-2 border-[#FF5F40]'
+                                  : 'text-[#9CA195] hover:text-[#F0FFEA] hover:bg-[#262824]'
                               }`}
                             >
-                              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-[#8B949E]' : 'text-[#525A63]'}`} />
+                              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`} />
                               <span className="truncate">{item.label}</span>
                             </button>
                           );
@@ -535,17 +535,17 @@ export const App: React.FC = () => {
               })}
 
               {/* Settings */}
-              <div className="h-px bg-[#1A1C1F]" />
+              <div className="h-px bg-[#33362F]" />
               <button
                 type="button"
                 onClick={() => setActiveTab('settings')}
                 className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left cursor-pointer transition text-xs ${
                   activeTab === 'settings'
-                    ? 'bg-[#1E2023] text-[#E8EAED] font-medium'
-                    : 'text-[#6B7280] hover:text-[#8B949E] hover:bg-[#141618]'
+                    ? 'bg-[rgba(255,95,64,0.14)] text-[#FF5F40] font-medium border-l-2 border-[#FF5F40]'
+                    : 'text-[#9CA195] hover:text-[#F0FFEA] hover:bg-[#262824]'
                 }`}
               >
-                <Settings className={`w-3.5 h-3.5 flex-shrink-0 ${activeTab === 'settings' ? 'text-[#8B949E]' : 'text-[#525A63]'}`} />
+                <Settings className={`w-3.5 h-3.5 flex-shrink-0 ${activeTab === 'settings' ? 'text-[#FF5F40]' : 'text-[#9CA195]'}`} />
                 <span className="truncate">Settings</span>
               </button>
             </div>
@@ -553,12 +553,12 @@ export const App: React.FC = () => {
         </nav>
 
         {/* Connection status */}
-        <div className={`border-t border-[#1F2429] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
+        <div className={`border-t border-[#33362F] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
           <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[#4CAF7D]' : 'bg-[#D6A84F] animate-pulse'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[#FF5F40] shadow-[0_0_6px_#FF5F40]' : 'bg-[#5E625A]'}`} />
             {!isSidebarCollapsed && (
-              <span className="text-[10px] text-[#525A63]">
-                {isConnected ? `Live · ${telemetry?.fps.toFixed(0) || 30} Hz` : 'Connecting…'}
+              <span className="text-[10px] text-[#9CA195] font-mono">
+                {isConnected ? `LIVE · ${telemetry?.fps.toFixed(0) || 30} HZ` : 'STANDBY'}
               </span>
             )}
           </div>
@@ -566,32 +566,35 @@ export const App: React.FC = () => {
       </aside>
 
       {/* ── Main ── */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#06080A]">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#000000]">
 
         {/* Header */}
-        <header className="h-11 bg-[#0A0D10] border-b border-[#1F2429] px-4 flex items-center justify-between flex-shrink-0">
-          {/* Left: page title */}
+        <header className="h-11 bg-[#1B1D1A] border-b border-[#33362F] px-4 flex items-center justify-between flex-shrink-0">
+          {/* Left: page title with thin vertical orange accent rule */}
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleSidebar}
-              className="p-1 rounded text-[#525A63] hover:text-[#8B949E] hover:bg-[#1F2429] transition cursor-pointer"
+              className="p-1 rounded text-[#9CA195] hover:text-[#FF5F40] hover:bg-[#262824] transition cursor-pointer"
               title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
             >
               {isSidebarCollapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
             </button>
-            <span className="text-[13px] font-medium text-[#E8EAED]">
-              {navItems.find(i => i.id === activeTab)?.label ?? 'Settings'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="w-0.5 h-3.5 bg-[#FF5F40] rounded-full inline-block" />
+              <span className="text-[13px] font-semibold text-[#F0FFEA] tracking-wide uppercase">
+                {navItems.find(i => i.id === activeTab)?.label ?? 'Settings'}
+              </span>
+            </div>
           </div>
 
           {/* Right: sim controls + status */}
           <div className="flex items-center gap-2 text-xs">
             {/* Sim clock — minimal */}
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#525A63] num-mono border-r border-[#1F2429] pr-3 mr-1">
-              <span>t = <span className="text-[#8B949E]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
-              <span className="text-[#1E2023]">·</span>
-              <span>f = <span className="text-[#8B949E]">{telemetry?.frame_number ?? 0}</span></span>
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9CA195] num-mono border-r border-[#33362F] pr-3 mr-1">
+              <span>t = <span className="text-[#F0FFEA]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
+              <span className="text-[#33362F]">·</span>
+              <span>f = <span className="text-[#F0FFEA]">{telemetry?.frame_number ?? 0}</span></span>
             </div>
 
             {/* Alarm */}
@@ -600,8 +603,8 @@ export const App: React.FC = () => {
               title={isAlarmMuted ? 'Unmute alarm' : isAlarmActive ? 'Beacon lost — click to mute' : 'Alarm armed'}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] border transition cursor-pointer ${
                 isAlarmActive && !isAlarmMuted
-                  ? 'bg-[#2A1515] border-[#D95C5C]/40 text-[#D95C5C]'
-                  : 'bg-transparent border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E]'
+                  ? 'bg-[rgba(255,95,64,0.2)] border-[#FF5F40] text-[#FF5F40]'
+                  : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
               }`}
             >
               {isAlarmMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
@@ -611,20 +614,20 @@ export const App: React.FC = () => {
             {/* Demo */}
             <button
               onClick={() => setIsDemoModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] border border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E] transition cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-[#33362F] bg-[#262824] text-[#F0FFEA] hover:text-[#FF5F40] hover:border-[#FF5F40] transition cursor-pointer"
               title="Run demo"
             >
-              <Zap className="w-3 h-3" />
+              <Zap className="w-3 h-3 text-[#FF5F40]" />
               <span>Demo</span>
             </button>
 
             {/* Run / Pause */}
             <button
               onClick={() => toggleSimulation(!telemetry?.is_running)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
                 telemetry?.is_running
-                  ? 'bg-[#D6A84F]/10 border-[#D6A84F]/30 text-[#D6A84F] hover:bg-[#D6A84F]/15'
-                  : 'bg-[#4CAF7D]/10 border-[#4CAF7D]/30 text-[#4CAF7D] hover:bg-[#4CAF7D]/15'
+                  ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40] hover:bg-[rgba(255,95,64,0.14)]'
+                  : 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] hover:bg-[#FF7459]'
               }`}
             >
               {telemetry?.is_running ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
@@ -634,7 +637,7 @@ export const App: React.FC = () => {
             {/* Reset */}
             <button
               onClick={resetSimulation}
-              className="p-1.5 rounded border border-[#1E2023] text-[#525A63] hover:text-[#8B949E] hover:border-[#252A2E] transition cursor-pointer"
+              className="p-1.5 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
               title="Reset simulation"
             >
               <RotateCcw className="w-3 h-3" />
@@ -643,7 +646,7 @@ export const App: React.FC = () => {
         </header>
 
         {/* Page body */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 bg-[#000000]">
           {activeTab === 'mission_control' && (
             <MissionControlPage
               telemetry={telemetry}
@@ -709,19 +712,19 @@ export const App: React.FC = () => {
         </div>
 
         {/* Status bar — single row, minimal */}
-        <div className="h-6 bg-[#0A0D10] border-t border-[#1F2429] px-4 flex items-center justify-between text-[10px] text-[#525A63] flex-shrink-0 num-mono">
+        <div className="h-6 bg-[#1B1D1A] border-t border-[#33362F] px-4 flex items-center justify-between text-[10px] text-[#9CA195] flex-shrink-0 num-mono">
           <div className="flex items-center gap-4">
-            <span>World <span className="text-[#6B7280]">2000³ m</span></span>
-            <span>Sensor <span className="text-[#6B7280]">640×480 · 4°×3°</span></span>
-            <span>Spot <span className="text-[#6B7280]">{config?.target.shape ?? 'Square'} 10×10 px</span></span>
-            <span>Slew <span className="text-[#6B7280]">≤ 5.0°/s</span></span>
+            <span>World <span className="text-[#F0FFEA]">2000³ m</span></span>
+            <span>Sensor <span className="text-[#F0FFEA]">640×480 · 4°×3°</span></span>
+            <span>Spot <span className="text-[#F0FFEA]">{config?.target.shape ?? 'Square'} 10×10 px</span></span>
+            <span>Slew <span className="text-[#F0FFEA]">≤ 5.0°/s</span></span>
           </div>
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF7D]" />
-              <span className="text-[#4CAF7D]">Spec OK</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40]" />
+              <span className="text-[#F0FFEA]">✓ Spec OK</span>
             </span>
-            <span>LaserLockAI</span>
+            <span className="text-[#5E625A]">LaserLockAI</span>
           </div>
         </div>
       </main>

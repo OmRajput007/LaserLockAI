@@ -61,7 +61,7 @@ export function getEarthCanvas(): HTMLCanvasElement {
   // Subtle ocean bathymetry / current swirls
   ctx.save();
   ctx.globalAlpha = 0.07;
-  ctx.fillStyle = '#38bdf8';
+  ctx.fillStyle = '#1B1D1A';
   for (let i = 0; i < 40; i++) {
     ctx.beginPath();
     const cx = (i * 53) % width;
@@ -407,7 +407,7 @@ export function getEarthCanvas(): HTMLCanvasElement {
   // 8. FAINT CARTOGRAPHIC GRATICULE (Equator, Prime Meridian, Tropics)
   // Very low opacity so Earth features remain rich and vibrant while preserving mission-control coordinate grid
   ctx.save();
-  ctx.strokeStyle = '#38bdf8';
+  ctx.strokeStyle = '#9CA195';
   ctx.lineWidth = 1;
   ctx.globalAlpha = 0.12;
 

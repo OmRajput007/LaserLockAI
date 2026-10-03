@@ -301,33 +301,33 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   }
 
   return (
-    <div className="flex flex-col bg-[#0A0D10] border border-[#1F2429] rounded-lg overflow-hidden shadow-2xl">
+    <div className="flex flex-col bg-[#1B1D1A] border border-[#33362F] rounded-lg overflow-hidden shadow-2xl">
       {/* Telemetry band */}
-      <div className="flex flex-col px-3.5 py-2.5 bg-[#0A0D10]/95 border-b border-[#1F2429] text-xs font-mono gap-2.5">
+      <div className="flex flex-col px-3.5 py-2.5 bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono gap-2.5">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 text-cyan-400">
-            <Video className="w-4 h-4 text-cyan-400" />
-            <span className="font-semibold tracking-wider text-xs text-white">FPA CAMERA VIEWPORT [640 × 480]</span>
+          <div className="flex items-center gap-2 text-[#FF5F40]">
+            <Video className="w-4 h-4 text-[#FF5F40]" />
+            <span className="font-semibold tracking-wider text-xs text-[#F0FFEA]">FPA CAMERA VIEWPORT [640 × 480]</span>
           </div>
 
           {/* View Mode Selector: OpenCV Annotated and OpenCV Raw Feed only */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setViewMode('opencv_annotated')}
-              className={`px-3 py-1 rounded text-xs font-medium transition ${
+              className={`px-3 py-1 rounded text-xs font-mono transition border ${
                 viewMode === 'opencv_annotated'
-                  ? 'bg-[#181D22] text-white border border-[#2D3237] shadow-sm'
-                  : 'bg-[#12161A] text-slate-400 border border-[#1F2429] hover:text-white'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
               }`}
             >
               OpenCV Annotated
             </button>
             <button
               onClick={() => setViewMode('opencv_raw')}
-              className={`px-3 py-1 rounded text-xs font-medium transition ${
+              className={`px-3 py-1 rounded text-xs font-mono transition border ${
                 viewMode === 'opencv_raw'
-                  ? 'bg-[#181D22] text-white border border-[#2D3237] shadow-sm'
-                  : 'bg-[#12161A] text-slate-400 border border-[#1F2429] hover:text-white'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
               }`}
             >
               OpenCV Raw Feed
@@ -336,48 +336,48 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               onClick={() => {
                 window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
               }}
-              className="px-2.5 py-1 rounded text-xs font-semibold transition flex items-center gap-1.5 bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/80 hover:border-cyan-400 shadow-sm cursor-pointer ml-1"
+              className="px-2.5 py-1 rounded text-xs font-mono font-semibold transition flex items-center gap-1.5 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] cursor-pointer ml-1"
               title="Jump 3D Orbit Camera to face Satellite in front (Shortcut: S or F)"
             >
-              <Crosshair className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
               <span>Jump to Sat</span>
-              <kbd className="px-1 py-0.2 bg-black/40 text-[9px] rounded text-slate-300 font-mono">S</kbd>
+              <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
             </button>
           </div>
         </div>
 
-        {/* 4 Status Box Chips in a grid matching the reference image */}
+        {/* 4 Status Box Chips in a grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
           {/* Auto LOS */}
           <button
             onClick={handleToggleAutoLOS}
             title="Automatically slew the camera boresight to align with Line of Sight"
-            className="flex flex-col items-center justify-center p-2 rounded bg-[#12161A] hover:bg-[#181D22] border border-[#1F2429] hover:border-[#2D3237] transition text-center"
+            className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40] transition text-center"
           >
-            <span className="text-[10px] text-slate-400 font-medium">Auto LOS:</span>
-            <span className={autoLOS ? 'text-cyan-400 font-bold' : 'text-slate-300 font-semibold'}>
+            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">Auto LOS:</span>
+            <span className={autoLOS ? 'text-[#FF5F40] font-bold' : 'text-[#F0FFEA] font-semibold'}>
               {autoLOS ? 'ON' : 'OFF'}
             </span>
           </button>
 
           {/* FOV */}
-          <div className="flex flex-col items-center justify-center p-2 rounded bg-[#12161A] border border-[#1F2429] text-center">
-            <span className="text-[10px] text-slate-400 font-medium">FOV:</span>
-            <span className="text-slate-200 font-semibold">
+          <div className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] border border-[#33362F] text-center">
+            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">FOV:</span>
+            <span className="text-[#F0FFEA] font-semibold">
               {camera?.fov_horizontal_deg ? `${camera.fov_horizontal_deg.toFixed(1)}° × ${camera.fov_vertical_deg.toFixed(1)}°` : '4.0° × 3.0°'}
             </span>
           </div>
 
           {/* Target */}
-          <div className="flex flex-col items-center justify-center p-2 rounded bg-[#12161A] border border-[#1F2429] text-center">
-            <span className="text-[10px] text-slate-400 font-medium">Target:</span>
-            <span className="font-semibold text-[11px] text-emerald-400">
+          <div className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] border border-[#33362F] text-center">
+            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">Target:</span>
+            <span className="font-semibold text-[11px] text-[#FF5F40]">
               {(() => {
                 if (isEffectiveOccluded) {
                   return isChannelOccluded ? 'OCCLUDED' : 'OCCLUDED';
                 }
                 if (isLocked) {
-                  return 'VISIBLE IN FOV (LOCKED)';
+                  return '✓ LOCKED IN FOV';
                 }
                 if (isBeaconVisibleInFov) {
                   return `VISIBLE IN FOV (${tracking?.state || 'TRACKING'})`;
@@ -394,10 +394,10 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               alarmAudio.toggleMute();
             }}
             title={isAlarmMuted ? 'Alarm Muted (Click to Unmute)' : 'Alarm Armed (Click to Mute)'}
-            className="flex flex-col items-center justify-center p-2 rounded bg-[#12161A] hover:bg-[#181D22] border border-[#1F2429] hover:border-[#2D3237] transition text-center"
+            className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40] transition text-center"
           >
-            <span className="text-[10px] text-slate-400 font-medium">Alarm:</span>
-            <span className={isAlarmMuted ? 'text-slate-300 font-semibold' : isAlarmActive ? 'text-rose-400 font-bold animate-pulse' : 'text-cyan-400 font-semibold'}>
+            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">Alarm:</span>
+            <span className={isAlarmMuted ? 'text-[#5E625A] font-semibold' : isAlarmActive ? 'text-[#FF5F40] font-bold animate-pulse' : 'text-[#F0FFEA] font-semibold'}>
               {isAlarmMuted ? 'Muted' : isAlarmActive ? 'Beeping' : 'Armed'}
             </span>
           </button>
@@ -405,9 +405,9 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       </div>
 
       {/* Main FPA Screen (Live OpenCV Camera Feed) */}
-      <div className="relative p-2 flex flex-col items-center justify-center bg-black">
-        <div className="relative w-full max-w-[640px] aspect-[4/3] rounded border border-[#1F2429] overflow-hidden bg-black shadow-2xl flex items-center justify-center">
-          <div className="relative w-full h-full bg-black flex items-center justify-center z-10">
+      <div className="relative p-2 flex flex-col items-center justify-center bg-[#000000]">
+        <div className="relative w-full max-w-[640px] aspect-[4/3] rounded border border-[#33362F] overflow-hidden bg-[#000000] shadow-2xl flex items-center justify-center">
+          <div className="relative w-full h-full bg-[#000000] flex items-center justify-center z-10">
             <img
               src={`/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${streamTick}`}
               alt="Live OpenCV Camera Feed"
@@ -418,33 +418,33 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
 
             {/* Standby / Offline HUD Overlay if stream is connecting or unavailable */}
             {hasStreamError && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 text-slate-400 font-mono text-xs gap-3 p-4 select-none z-10 text-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#000000]/95 text-[#9CA195] font-mono text-xs gap-3 p-4 select-none z-10 text-center">
                 <div className="relative flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
-                  <Video className="w-5 h-5 text-cyan-400 absolute" />
+                  <div className="w-12 h-12 rounded-full border-2 border-[#FF5F40]/20 border-t-[#FF5F40] animate-spin" />
+                  <Video className="w-5 h-5 text-[#FF5F40] absolute" />
                 </div>
                 <div>
-                  <div className="text-cyan-400 font-bold tracking-wider text-[11px] mb-1">
+                  <div className="text-[#FF5F40] font-bold tracking-wider text-[11px] mb-1">
                     CONNECTING TO FPA CAMERA STREAM...
                   </div>
-                  <div className="text-[10px] text-slate-500 max-w-[300px]">
+                  <div className="text-[10px] text-[#5E625A] max-w-[300px]">
                     Waiting for backend server on port 8000.
                   </div>
                 </div>
                 <button
                   onClick={handleManualRetry}
-                  className="px-3 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-700 text-cyan-300 rounded font-semibold text-[11px] flex items-center gap-1.5 transition shadow cursor-pointer"
+                  className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] border border-[#FF5F40] text-[#FF5F40] rounded font-semibold text-[11px] flex items-center gap-1.5 transition shadow cursor-pointer font-mono"
                 >
                   <RefreshCw className="w-3 h-3" /> Retry Stream
                 </button>
               </div>
             )}
 
-            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 border border-slate-700 text-cyan-400 text-[10px] font-mono rounded pointer-events-none">
+            <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-[#000000]/80 border border-[#33362F] text-[#FF5F40] text-[10px] font-mono rounded pointer-events-none">
               OPENCV LIVE STREAM ({viewMode === 'opencv_annotated' ? 'ANNOTATED' : 'RAW'})
             </div>
 
-            {/* Optical Beacon Spot Overlay: rendered whenever beacon is visible/locked in FOV and not drawn by backend CV */}
+            {/* Optical Beacon Spot Overlay */}
             {!isEffectiveOccluded && (hasOrbitalSpot || isPovLocked || isBeaconVisibleInFov) && !(isCvDetected && !hasOrbitalSpot) && (
               <div
                 className="absolute pointer-events-none select-none z-20"
@@ -455,12 +455,12 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
                 }}
               >
                 {/* Radial Gaussian glow / optical bloom */}
-                <div className="absolute -inset-4 rounded-full bg-cyan-400/30 blur-md animate-pulse" />
-                <div className="absolute -inset-2 rounded-full bg-white/50 blur-sm" />
+                <div className="absolute -inset-4 rounded-full bg-[#FF5F40]/30 blur-md animate-pulse" />
+                <div className="absolute -inset-2 rounded-full bg-[#F0FFEA]/40 blur-sm" />
 
                 {/* Core Optical Beacon Spot (10x10 px) */}
                 <div
-                  className={`relative w-2.5 h-2.5 bg-white shadow-[0_0_10px_#38bdf8,0_0_20px_#38bdf8] ${
+                  className={`relative w-2.5 h-2.5 bg-[#F0FFEA] shadow-[0_0_10px_#FF5F40,0_0_20px_#FF5F40] ${
                     target?.shape === 'Circle'
                       ? 'rounded-full'
                       : target?.shape === 'Gaussian'
@@ -488,7 +488,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
                           y1="0"
                           x2={`${320 - spotU}`}
                           y2={`${240 - spotV}`}
-                          stroke="#10b981"
+                          stroke="#FF5F40"
                           strokeWidth="1"
                           strokeDasharray="2,2"
                           opacity="0.75"
@@ -497,21 +497,21 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
                     )}
 
                     {/* Tactical Target Tracking Box (28x28 px) */}
-                    <div className="absolute -top-3.5 -left-3.5 w-7 h-7 border border-emerald-400/90 rounded-[2px] pointer-events-none">
-                      <div className="absolute -top-0.5 -left-0.5 w-1.5 h-1.5 border-t-2 border-l-2 border-emerald-300" />
-                      <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 border-t-2 border-r-2 border-emerald-300" />
-                      <div className="absolute -bottom-0.5 -left-0.5 w-1.5 h-1.5 border-b-2 border-l-2 border-emerald-300" />
-                      <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 border-b-2 border-r-2 border-emerald-300" />
+                    <div className="absolute -top-3.5 -left-3.5 w-7 h-7 border border-[#FF5F40]/90 rounded-[2px] pointer-events-none">
+                      <div className="absolute -top-0.5 -left-0.5 w-1.5 h-1.5 border-t-2 border-l-2 border-[#FF5F40]" />
+                      <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 border-t-2 border-r-2 border-[#FF5F40]" />
+                      <div className="absolute -bottom-0.5 -left-0.5 w-1.5 h-1.5 border-b-2 border-l-2 border-[#FF5F40]" />
+                      <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 border-b-2 border-r-2 border-[#FF5F40]" />
                     </div>
 
                     {/* Tactical Label Tag */}
-                    <div className="absolute left-4 -top-3 whitespace-nowrap px-1.5 py-0.5 bg-black/85 border border-emerald-500/80 rounded text-[9px] font-mono text-emerald-300 font-bold tracking-wider shadow-lg flex flex-col gap-0.5">
-                      <span className="flex items-center gap-1 text-emerald-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                    <div className="absolute left-4 -top-3 whitespace-nowrap px-1.5 py-0.5 bg-[#000000]/90 border border-[#FF5F40] rounded text-[9px] font-mono text-[#FF5F40] font-bold tracking-wider shadow-lg flex flex-col gap-0.5">
+                      <span className="flex items-center gap-1 text-[#FF5F40]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40] animate-ping inline-block" />
                         BEACON #{target?.target_id ?? 1} [{spotU.toFixed(1)}, {spotV.toFixed(1)}]
                       </span>
-                      <span className="text-[8px] text-cyan-300 font-semibold">
-                        {isLocked ? 'LOCKED IN FOV' : 'TRACKING'} | ERR: {Math.hypot(spotU - 320, spotV - 240).toFixed(1)} px
+                      <span className="text-[8px] text-[#F0FFEA] font-semibold">
+                        {isLocked ? '✓ LOCKED IN FOV' : 'TRACKING'} | ERR: {Math.hypot(spotU - 320, spotV - 240).toFixed(1)} px
                       </span>
                     </div>
                   </>
@@ -519,23 +519,23 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               </div>
             )}
 
-            {/* Annotated HUD Status Box override when locked via Satellite POV but backend CV hasn't caught up */}
+            {/* Annotated HUD Status Box override */}
             {viewMode === 'opencv_annotated' && !isEffectiveOccluded && isPovLocked && !isCvDetected && (
-              <div className="absolute top-2.5 left-2.5 z-20 px-2.5 py-1.5 bg-black/85 border border-emerald-500/70 rounded font-mono text-[9.5px] space-y-0.5 shadow-xl pointer-events-none select-none backdrop-blur-sm">
-                <div className="text-emerald-400 font-bold tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+              <div className="absolute top-2.5 left-2.5 z-20 px-2.5 py-1.5 bg-[#000000]/90 border border-[#FF5F40] rounded font-mono text-[9.5px] space-y-0.5 shadow-xl pointer-events-none select-none backdrop-blur-sm">
+                <div className="text-[#FF5F40] font-bold tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F40] animate-ping inline-block" />
                   STATUS: BEACON DETECTED [LOCKED]
                 </div>
-                <div className="text-slate-200">
-                  Centroid (Bx, By): <span className="text-emerald-300 font-semibold">({spotU.toFixed(1)}, {spotV.toFixed(1)}) px</span>
+                <div className="text-[#F0FFEA]">
+                  Centroid (Bx, By): <span className="text-[#FF5F40] font-semibold">({spotU.toFixed(1)}, {spotV.toFixed(1)}) px</span>
                 </div>
-                <div className="text-cyan-300 font-semibold">
+                <div className="text-[#F0FFEA] font-semibold">
                   Pixel Err: Ex={(spotU - 320).toFixed(1)} Ey={(240 - spotV).toFixed(1)} | Total: {Math.hypot(spotU - 320, spotV - 240).toFixed(1)} px
                 </div>
-                <div className="text-cyan-200">
+                <div className="text-[#9CA195]">
                   Angular: θx={((spotU - 320) / 160).toFixed(2)}°  θy={((240 - spotV) / 160).toFixed(2)}°
                 </div>
-                <div className="text-slate-400 text-[8.5px]">
+                <div className="text-[#9CA195] text-[8.5px]">
                   Conf: 1.00 | SNR: 28.5dB | LATENCY: 3.2ms | PAT: LOCKED
                 </div>
               </div>
@@ -544,9 +544,9 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
 
           {/* Tactical Overlay: Occlusion Alert Banner */}
           {isEffectiveOccluded && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-rose-950/90 border border-rose-500 rounded text-[10px] font-mono text-rose-200 font-bold tracking-wider flex items-center gap-2 backdrop-blur-sm shadow-xl shadow-rose-950/80 pointer-events-none select-none animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-rose-500 inline-block animate-ping" />
-              <span>{isChannelOccluded ? 'OPTICAL CHANNEL OCCLUDED (CLOUD / OBSTACLE)' : 'GROUND BEACON OCCLUDED BY EARTH LIMB'}</span>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-[#1B1D1A]/95 border border-[#FF5F40] rounded text-[10px] font-mono text-[#FF5F40] font-bold tracking-wider flex items-center gap-2 backdrop-blur-sm shadow-xl pointer-events-none select-none animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-[#FF5F40] inline-block animate-ping" />
+              <span>{isChannelOccluded ? '! OPTICAL CHANNEL OCCLUDED (CLOUD / OBSTACLE)' : '! GROUND BEACON OCCLUDED BY EARTH LIMB'}</span>
             </div>
           )}
 
@@ -555,39 +555,39 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
             <div
               onClick={() => alarmAudio.unlock()}
               title="Click anywhere to unlock audio if muted/blocked by browser"
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-rose-950/95 border border-rose-500 rounded text-[10px] font-mono text-rose-200 font-bold tracking-wider animate-pulse flex items-center gap-2 backdrop-blur-sm shadow-xl shadow-rose-950/80 cursor-pointer select-none"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 bg-[#1B1D1A]/95 border border-[#FF5F40] rounded text-[10px] font-mono text-[#FF5F40] font-bold tracking-wider animate-pulse flex items-center gap-2 backdrop-blur-sm shadow-xl cursor-pointer select-none"
             >
-              <span>Beacon out of sight</span>
+              <span>! BEACON OUT OF SIGHT</span>
             </div>
           )}
         </div>
       </div>
 
       {/* Telemetry Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3 bg-[#0A0D10]/95 border-t border-[#1F2429] font-mono text-[10px] text-slate-300">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3 bg-[#1B1D1A] border-t border-[#33362F] font-mono text-[10px] text-[#9CA195]">
         {/* Real-time Boresight & Detection Telemetry */}
-        <div className="bg-[#06080B] border border-[#1F2429] p-2.5 rounded space-y-1">
-          <div className="text-slate-200 font-bold border-b border-[#1F2429] pb-1 flex justify-between gap-4">
+        <div className="bg-[#262824] border border-[#33362F] p-2.5 rounded space-y-1">
+          <div className="text-[#F0FFEA] font-bold border-b border-[#33362F] pb-1 flex justify-between gap-4 uppercase tracking-wider">
             <span>BORESIGHT ALIGNMENT</span>
-            <span className={isLocked ? 'text-emerald-400 font-semibold' : isEffectiveOccluded ? 'text-rose-400 font-semibold' : 'text-emerald-400 font-semibold'}>
+            <span className={isLocked ? 'text-[#FF5F40] font-semibold' : isEffectiveOccluded ? 'text-[#FF5F40] font-semibold' : 'text-[#FF5F40] font-semibold'}>
               {(isEffectiveOccluded ? (tracking?.state || 'LINK_BLOCKED') : isLocked ? 'LOCKED' : (tracking?.state || tracking?.mode || 'TRACKING')).toUpperCase()}
             </span>
           </div>
-          <div>Boresight Center: <span className="text-slate-300 font-mono">(320.0, 240.0) px</span></div>
+          <div>Boresight Center: <span className="text-[#F0FFEA] font-mono">(320.0, 240.0) px</span></div>
           <div>
             CV Detected Centroid:{' '}
             {isEffectiveOccluded ? (
-              <span className="text-rose-400 font-semibold">NO BEACON (LINK BLOCKED)</span>
+              <span className="text-[#FF5F40] font-semibold">NO BEACON (LINK BLOCKED)</span>
             ) : detection?.beacon_detected && detection.detected_centroid_x !== null ? (
-              <span className="text-slate-200 font-mono">
+              <span className="text-[#F0FFEA] font-mono">
                 ({detection.detected_centroid_x.toFixed(1)}, {detection.detected_centroid_y?.toFixed(1)}) px
               </span>
             ) : isPovLocked ? (
-              <span className="text-slate-200 font-mono">
+              <span className="text-[#F0FFEA] font-mono">
                 ({spotU.toFixed(1)}, {spotV.toFixed(1)}) px
               </span>
             ) : (
-              <span className="text-rose-400 font-semibold">NO BEACON DETECTED</span>
+              <span className="text-[#FF5F40] font-semibold">NO BEACON DETECTED</span>
             )}
           </div>
           <div>
@@ -595,11 +595,11 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
             {isEffectiveOccluded ? (
               'N/A (LINK BLOCKED)'
             ) : detection?.pixel_error_x !== null && detection?.pixel_error_x !== undefined ? (
-              <span className="text-slate-200 font-mono">
+              <span className="text-[#F0FFEA] font-mono">
                 ({detection.pixel_error_x.toFixed(1)}, {detection.pixel_error_y?.toFixed(1)}) px
               </span>
             ) : isPovLocked ? (
-              <span className="text-slate-200 font-mono">
+              <span className="text-[#F0FFEA] font-mono">
                 ({(spotU - 320).toFixed(1)}, {(240 - spotV).toFixed(1)}) px
               </span>
             ) : '--'}
@@ -607,21 +607,21 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           <div>
             Total Error:{' '}
             {detection?.total_pixel_error !== null && detection?.total_pixel_error !== undefined ? (
-              <span className="text-slate-200 font-mono">{detection.total_pixel_error.toFixed(1)} px</span>
+              <span className="text-[#FF5F40] font-mono font-semibold">{detection.total_pixel_error.toFixed(1)} px</span>
             ) : isPovLocked ? (
-              <span className="text-slate-200 font-mono">{Math.hypot(spotU - 320, spotV - 240).toFixed(1)} px</span>
+              <span className="text-[#FF5F40] font-mono font-semibold">{Math.hypot(spotU - 320, spotV - 240).toFixed(1)} px</span>
             ) : '--'}
           </div>
           {tracking && (
-            <div className="border-t border-[#1F2429] pt-1 mt-1 space-y-0.5 text-[9.5px]">
+            <div className="border-t border-[#33362F] pt-1 mt-1 space-y-0.5 text-[9.5px]">
               <div>
-                <span className="text-slate-400 font-semibold">Kalman Filtered:</span>{' '}
+                <span className="text-[#9CA195] font-semibold">Kalman Filtered:</span>{' '}
                 {!isEffectiveOccluded && tracking.filtered_x !== null && tracking.filtered_x !== undefined ? (
-                  <span className="text-slate-200 font-mono">({tracking.filtered_x.toFixed(1)}, {tracking.filtered_y?.toFixed(1)}) px</span>
+                  <span className="text-[#F0FFEA] font-mono">({tracking.filtered_x.toFixed(1)}, {tracking.filtered_y?.toFixed(1)}) px</span>
                 ) : isPovLocked ? (
-                  <span className="text-slate-200 font-mono">({spotU.toFixed(1)}, {spotV.toFixed(1)}) px</span>
+                  <span className="text-[#F0FFEA] font-mono">({spotU.toFixed(1)}, {spotV.toFixed(1)}) px</span>
                 ) : (
-                  <span className="text-slate-500">N/A</span>
+                  <span className="text-[#5E625A]">N/A</span>
                 )}
               </div>
             </div>
@@ -629,15 +629,15 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         </div>
 
         {/* Gimbal Angles */}
-        <div className="bg-[#06080B] border border-[#1F2429] p-2.5 rounded space-y-1">
-          <div className="text-slate-200 font-bold border-b border-[#1F2429] pb-1">GIMBAL KINEMATICS</div>
-          <div>Pan Angle: <span className="text-slate-200 font-mono">{camera?.pan_deg.toFixed(2)}°</span></div>
-          <div>Tilt Angle: <span className="text-slate-200 font-mono">{camera?.tilt_deg.toFixed(2)}°</span></div>
-          <div>Pan Slew: <span className="text-slate-400 font-mono">{camera?.pan_rate_deg_s.toFixed(1)}°/s (Cap: {(5.0 * (camera?.adaptive_speed_factor || 1.0)).toFixed(1)}°/s)</span></div>
-          <div>Tilt Slew: <span className="text-slate-400 font-mono">{camera?.tilt_rate_deg_s.toFixed(1)}°/s (Cap: {(5.0 * (camera?.adaptive_speed_factor || 1.0)).toFixed(1)}°/s)</span></div>
-          <div>Angular Resolution: <span className="text-slate-200 font-mono">160.0 px/deg</span></div>
+        <div className="bg-[#262824] border border-[#33362F] p-2.5 rounded space-y-1">
+          <div className="text-[#F0FFEA] font-bold border-b border-[#33362F] pb-1 uppercase tracking-wider">GIMBAL KINEMATICS</div>
+          <div>Pan Angle: <span className="text-[#FF5F40] font-mono">{camera?.pan_deg.toFixed(2)}°</span></div>
+          <div>Tilt Angle: <span className="text-[#FF5F40] font-mono">{camera?.tilt_deg.toFixed(2)}°</span></div>
+          <div>Pan Slew: <span className="text-[#F0FFEA] font-mono">{camera?.pan_rate_deg_s.toFixed(1)}°/s (Cap: {(5.0 * (camera?.adaptive_speed_factor || 1.0)).toFixed(1)}°/s)</span></div>
+          <div>Tilt Slew: <span className="text-[#F0FFEA] font-mono">{camera?.tilt_rate_deg_s.toFixed(1)}°/s (Cap: {(5.0 * (camera?.adaptive_speed_factor || 1.0)).toFixed(1)}°/s)</span></div>
+          <div>Angular Resolution: <span className="text-[#F0FFEA] font-mono">160.0 px/deg</span></div>
           {camera?.adaptive_speed_factor && camera.adaptive_speed_factor > 1.0 && (
-            <div className="pt-1 mt-1 border-t border-[#1F2429] text-amber-400 animate-pulse font-bold">
+            <div className="pt-1 mt-1 border-t border-[#33362F] text-[#FF5F40] animate-pulse font-bold">
               ⚡ ADAPTIVE PURSUIT: {camera.adaptive_speed_factor.toFixed(2)}x
             </div>
           )}
@@ -645,13 +645,13 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       </div>
 
       {/* Interactive Gimbal Pan/Tilt Controls & Angle Sliders */}
-      <div className="p-3 bg-[#0A0D10]/95 border-t border-[#1F2429] font-mono text-xs space-y-2.5">
+      <div className="p-3 bg-[#1B1D1A] border-t border-[#33362F] font-mono text-xs space-y-2.5">
         {/* Sliders for Pan & Tilt Angle */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#06080B] p-2.5 rounded border border-[#1F2429]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#262824] p-2.5 rounded border border-[#33362F]">
           <div>
             <div className="flex justify-between text-[11px] mb-1">
-              <span className="text-slate-400">Commanded Pan Angle (Azimuth):</span>
-              <span className="text-cyan-300 font-bold">{camera?.target_pan_deg?.toFixed(1) ?? camera?.pan_deg.toFixed(1)}° (Lim: ±180°)</span>
+              <span className="text-[#9CA195]">Commanded Pan Angle (Azimuth):</span>
+              <span className="text-[#FF5F40] font-bold">{camera?.target_pan_deg?.toFixed(1) ?? camera?.pan_deg.toFixed(1)}° (Lim: ±180°)</span>
             </div>
             <input
               type="range"
@@ -663,14 +663,14 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
                 const p = parseFloat(e.target.value);
                 onGimbalAngles?.(p, camera?.target_tilt_deg ?? camera?.tilt_deg ?? 0);
               }}
-              className="w-full accent-cyan-500 cursor-pointer"
+              className="w-full accent-[#FF5F40] cursor-pointer"
             />
           </div>
 
           <div>
             <div className="flex justify-between text-[11px] mb-1">
-              <span className="text-slate-400">Commanded Tilt Angle (Elevation):</span>
-              <span className="text-cyan-300 font-bold">{camera?.target_tilt_deg?.toFixed(1) ?? camera?.tilt_deg.toFixed(1)}° (Lim: ±85°)</span>
+              <span className="text-[#9CA195]">Commanded Tilt Angle (Elevation):</span>
+              <span className="text-[#FF5F40] font-bold">{camera?.target_tilt_deg?.toFixed(1) ?? camera?.tilt_deg.toFixed(1)}° (Lim: ±85°)</span>
             </div>
             <input
               type="range"
@@ -682,15 +682,15 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
                 const t = parseFloat(e.target.value);
                 onGimbalAngles?.(camera?.target_pan_deg ?? camera?.pan_deg ?? 0, t);
               }}
-              className="w-full accent-cyan-500 cursor-pointer"
+              className="w-full accent-[#FF5F40] cursor-pointer"
             />
           </div>
         </div>
 
         {/* Nudge buttons (Respecting max 5°/s slew speed) */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
-            <Crosshair className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex items-center gap-1.5 text-[#9CA195] text-[11px]">
+            <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
             <span>Manual Slew Nudges (Clamped to 5.0°/s):</span>
           </div>
 
@@ -699,50 +699,50 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               onPointerDown={() => startNudge(-2.5, 0)}
               onPointerUp={stopNudge}
               onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1 transition text-[11px] select-none"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
               title="Pan Left (-2.5°/s)"
             >
-              <ArrowLeft className="w-3 h-3" /> Pan Left
+              <ArrowLeft className="w-3 h-3 text-[#FF5F40]" /> Pan Left
             </button>
             <button
               onPointerDown={() => startNudge(0, 2.5)}
               onPointerUp={stopNudge}
               onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1 transition text-[11px] select-none"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
               title="Tilt Up (+2.5°/s)"
             >
-              <ArrowUp className="w-3 h-3" /> Tilt Up
+              <ArrowUp className="w-3 h-3 text-[#FF5F40]" /> Tilt Up
             </button>
             <button
               onPointerDown={() => startNudge(0, -2.5)}
               onPointerUp={stopNudge}
               onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1 transition text-[11px] select-none"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
               title="Tilt Down (-2.5°/s)"
             >
-              <ArrowDown className="w-3 h-3" /> Tilt Down
+              <ArrowDown className="w-3 h-3 text-[#FF5F40]" /> Tilt Down
             </button>
             <button
               onPointerDown={() => startNudge(2.5, 0)}
               onPointerUp={stopNudge}
               onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-slate-200 rounded border border-[#252A2E] hover:border-[#3A4048] flex items-center gap-1 transition text-[11px] select-none"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
               title="Pan Right (+2.5°/s)"
             >
-              <ArrowRight className="w-3 h-3" /> Pan Right
+              <ArrowRight className="w-3 h-3 text-[#FF5F40]" /> Pan Right
             </button>
             <button
               onClick={() => {
                 onGimbalNudge?.(0, 0);
                 onGimbalAngles?.(camera?.pan_deg ?? 0, camera?.tilt_deg ?? 0);
               }}
-              className="px-2.5 py-1 bg-rose-950/80 hover:bg-rose-900 text-rose-300 rounded border border-rose-800 font-bold transition text-[11px]"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] rounded border border-[#FF5F40] font-bold transition text-[11px]"
             >
               Halt Slew
             </button>
             <button
               onClick={() => onGimbalAngles?.(0, 0)}
-              className="px-2.5 py-1 bg-[#12161A] hover:bg-[#181D22] text-cyan-300 rounded border border-[#252A2E] hover:border-[#3A4048] font-bold transition text-[11px]"
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] font-bold transition text-[11px]"
               title="Center Camera to (0, 0)"
             >
               Center (0,0)

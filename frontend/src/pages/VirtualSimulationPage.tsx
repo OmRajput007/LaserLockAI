@@ -96,76 +96,78 @@ export const VirtualSimulationPage: React.FC<Props> = ({
   const optionalTrajectories = ['Spiral', 'Sinusoidal', 'Waypoint', 'User-defined'] as const;
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs text-slate-200">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
       {/* Header & View Mode Switcher */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-[#1E2124] border border-[#3A4048] flex items-center justify-center text-[#D6D9DC]">
+          <div className="w-8 h-8 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center text-[#FF5F40]">
             <Compass className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">
+            <h2 className="text-sm font-semibold text-[#F0FFEA] uppercase tracking-wide">
               Virtual Environment & 3D Kinematics
             </h2>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <p className="text-[#9CA195] text-xs mt-0.5">
               {activeViewTab === 'orbital'
-                ? '3D Orbital Scenario (Earth-Scale Physics & Three.js Double Precision)'
-                : 'Mathematical Trajectory Synthesis & 3D Frustum Geometry (Local UAV-Scale)'}
+                ? '3D Orbital Scenario (Earth-Scale Physics & Double Precision)'
+                : 'Mathematical Trajectory Synthesis & 3D Frustum Geometry'}
             </p>
           </div>
         </div>
 
         {/* View Mode Toggle */}
         <div className="flex items-center gap-2">
-          <div className="flex bg-[#0D1012] p-1 rounded-md border border-[#252A2E]">
+          <div className="flex bg-[#262824] p-1 rounded border border-[#33362F]">
             <button
               onClick={() => setActiveViewTab('2d')}
-              className={`px-3 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
                 activeViewTab === '2d'
-                  ? 'bg-[#252A2E] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'border-transparent text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
             >
-              <Layers className="w-3.5 h-3.5 text-slate-400" /> 2D World Grid
+              <Layers className="w-3.5 h-3.5" /> 2D World Grid
             </button>
             <button
               onClick={() => setActiveViewTab('3d')}
-              className={`px-3 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
                 activeViewTab === '3d'
-                  ? 'bg-[#252A2E] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'border-transparent text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
             >
-              <Box className="w-3.5 h-3.5 text-slate-400" /> 3D Scene View
+              <Box className="w-3.5 h-3.5" /> 3D Scene View
             </button>
             <button
               onClick={() => setActiveViewTab('orbital')}
-              className={`px-3 py-1 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
                 activeViewTab === 'orbital'
-                  ? 'bg-[#252A2E] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'border-transparent text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
             >
-              <Globe className="w-3.5 h-3.5 text-slate-400" /> Orbital View
+              <Globe className="w-3.5 h-3.5" /> Orbital View
             </button>
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">
             <button
               onClick={() => onToggleSim(!isRunning)}
-              className={`px-3.5 py-1.5 rounded-md font-medium text-xs transition flex items-center gap-1.5 ${
-                isRunning ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              className={`px-3.5 py-1.5 rounded font-mono text-xs transition flex items-center gap-1.5 ${
+                isRunning
+                  ? 'bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F]'
+                  : 'bg-[#FF5F40] hover:bg-[#FF7459] active:bg-[#E5492B] text-[#0A0A0A] font-semibold'
               }`}
             >
               {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-              {isRunning ? 'Pause' : 'Start'}
+              {isRunning ? 'PAUSE' : 'START'}
             </button>
             <button
               onClick={() => {
                 onResetSim();
                 if (activeViewTab === 'orbital') handleResetOrbital();
               }}
-              className="p-1.5 bg-[#1A1D20] hover:bg-[#202c42] text-slate-300 rounded-md border border-[#2D3237] transition"
+              className="p-1.5 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] transition"
               title="Reset Simulation"
             >
               <RotateCcw className="w-4 h-4" />
@@ -179,12 +181,12 @@ export const VirtualSimulationPage: React.FC<Props> = ({
                 }
                 window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
               }}
-              className="px-3 py-1.5 rounded-md font-semibold text-xs transition flex items-center gap-1.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-600/80 hover:border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer"
+              className="px-3 py-1.5 rounded font-mono font-semibold text-xs transition flex items-center gap-1.5 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] cursor-pointer"
               title="Jump 3D Camera Directly in Front of Satellite (Shortcut: S or F)"
             >
-              <Crosshair className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-              <span>Jump to Sat</span>
-              <kbd className="px-1 py-0.2 bg-black/50 text-[9px] rounded text-slate-300 font-mono">S</kbd>
+              <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
+              <span>JUMP TO SAT</span>
+              <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
             </button>
           </div>
         </div>
@@ -202,19 +204,19 @@ export const VirtualSimulationPage: React.FC<Props> = ({
         />
       ) : (
         /* Trajectory & Beacon Shape Controls */
-        <div className="bg-[#121518] border border-[#252A2E] p-3 rounded-lg flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-[#1B1D1A] border border-[#33362F] p-3 rounded-lg flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-wrap">
             {/* Mandatory Patterns */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-slate-400 font-medium text-xs">Mandatory:</span>
+              <span className="text-[#9CA195] font-medium text-xs uppercase tracking-wider">Mandatory:</span>
               {mandatoryTrajectories.map((m) => (
                 <button
                   key={m}
                   onClick={() => onSelectMotion(m)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium border transition ${
+                  className={`px-2.5 py-1 rounded text-xs font-mono transition border ${
                     config?.motion.trajectory_type === m
-                      ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048]'
-                      : 'bg-[#1A1D20] text-slate-300 border-[#2D3237] hover:bg-[#202b40]'
+                      ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
+                      : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
                   }`}
                 >
                   {m}
@@ -224,15 +226,15 @@ export const VirtualSimulationPage: React.FC<Props> = ({
 
             {/* Extended Patterns */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-slate-400 font-medium text-xs">Extended:</span>
+              <span className="text-[#9CA195] font-medium text-xs uppercase tracking-wider">Extended:</span>
               {optionalTrajectories.map((o) => (
                 <button
                   key={o}
                   onClick={() => onSelectMotion(o)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium border transition ${
+                  className={`px-2.5 py-1 rounded text-xs font-mono transition border ${
                     config?.motion.trajectory_type === o
-                      ? 'bg-[#1E2124] text-[#E8EAED] border-[#3A4048]'
-                      : 'bg-[#1A1D20] text-slate-400 border-[#2D3237] hover:bg-[#202b40]'
+                      ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
+                      : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
                   }`}
                 >
                   {o}
@@ -242,21 +244,21 @@ export const VirtualSimulationPage: React.FC<Props> = ({
           </div>
 
           {/* Beacon Shape Dropdown */}
-          <div className="bg-[#121518] border border-[#252A2E] p-2.5 rounded-lg flex flex-col justify-between min-w-[140px]">
-            <span className="text-xs text-slate-300 font-medium">Beacon Shape</span>
+          <div className="bg-[#262824] border border-[#33362F] p-2.5 rounded flex flex-col justify-between min-w-[140px]">
+            <span className="text-xs text-[#9CA195] font-medium uppercase tracking-wider">Beacon Shape</span>
             <div className="relative my-1">
               <select
                 value={config?.target.shape ?? 'Gaussian'}
                 onChange={(e) => onSelectShape(e.target.value as 'Square' | 'Circle' | 'Gaussian')}
-                className="w-full bg-[#1A1D20] border border-[#2D3237] hover:border-[#3A4048] text-slate-200 text-xs px-2.5 py-1.5 rounded font-medium appearance-none pr-7 cursor-pointer focus:outline-none focus:border-[#4A5058] transition"
+                className="w-full bg-[#1B1D1A] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] text-xs px-2.5 py-1.5 rounded font-mono appearance-none pr-7 cursor-pointer focus:outline-none focus:border-[#FF5F40] transition"
               >
-                <option value="Gaussian" className="bg-[#1A1D20] text-slate-200">Gaussian</option>
-                <option value="Square" className="bg-[#1A1D20] text-slate-200">Square</option>
-                <option value="Circle" className="bg-[#1A1D20] text-slate-200">Circle</option>
+                <option value="Gaussian" className="bg-[#1B1D1A] text-[#F0FFEA]">Gaussian</option>
+                <option value="Square" className="bg-[#1B1D1A] text-[#F0FFEA]">Square</option>
+                <option value="Circle" className="bg-[#1B1D1A] text-[#F0FFEA]">Circle</option>
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#9CA195] absolute right-2 top-2 pointer-events-none" />
             </div>
-            <span className="text-[11px] text-slate-400 num-mono">
+            <span className="text-[11px] text-[#9CA195] font-mono">
               Profile: {config?.target.size_pixels ?? 10}×{config?.target.size_pixels ?? 10} px
             </span>
           </div>
@@ -266,7 +268,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
       {/* Main Viewport & Telemetry Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main Viewport Canvas (Col Span 2) */}
-        <div className="lg:col-span-2 h-[600px] rounded-lg overflow-hidden border border-[#252A2E] bg-[#0D1012]">
+        <div className="lg:col-span-2 h-[600px] rounded-lg overflow-hidden border border-[#33362F] bg-[#000000]">
           {activeViewTab === 'orbital' ? (
             <OrbitalScene3DViewport
               orbitalTelemetry={telemetry?.orbital ?? null}
@@ -301,78 +303,78 @@ export const VirtualSimulationPage: React.FC<Props> = ({
           ) : (
             <>
               {/* Target 3D Kinematics State */}
-              <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-4 space-y-2.5">
-                <h3 className="text-xs font-semibold text-slate-200 border-b border-[#252A2E] pb-2">
+              <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 space-y-2.5">
+                <h3 className="text-xs font-semibold text-[#F0FFEA] uppercase tracking-wider border-b border-[#33362F] pb-2">
                   Target Kinematics State
                 </h3>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Position X (Azimuth):</span>
-                  <span className="text-slate-100 font-medium">{target?.world_x.toFixed(2)} m</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Position X (Azimuth):</span>
+                  <span className="text-[#F0FFEA] font-medium">{target?.world_x.toFixed(2)} m</span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Position Y (Elevation):</span>
-                  <span className="text-slate-100 font-medium">{target?.world_y.toFixed(2)} m</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Position Y (Elevation):</span>
+                  <span className="text-[#F0FFEA] font-medium">{target?.world_y.toFixed(2)} m</span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Position Z (Optical Depth):</span>
-                  <span className="text-slate-100 font-medium">{target?.world_z.toFixed(2)} m</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Position Z (Optical Depth):</span>
+                  <span className="text-[#F0FFEA] font-medium">{target?.world_z.toFixed(2)} m</span>
                 </div>
-                <div className="flex justify-between border-t border-[#252A2E] pt-2 num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Velocity Vector [Vx, Vy, Vz]:</span>
-                  <span className="text-[#E8EAED] font-medium">
+                <div className="flex justify-between border-t border-[#33362F] pt-2 font-mono text-xs">
+                  <span className="text-[#9CA195]">Velocity Vector [Vx, Vy, Vz]:</span>
+                  <span className="text-[#F0FFEA] font-medium">
                     [{target?.velocity_x.toFixed(1)}, {target?.velocity_y.toFixed(1)}, {target?.velocity_z.toFixed(1)}] m/s
                   </span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Acceleration [Ax, Ay, Az]:</span>
-                  <span className="text-amber-300 font-medium">
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Acceleration [Ax, Ay, Az]:</span>
+                  <span className="text-[#FF5F40] font-medium">
                     [{target?.acceleration_x.toFixed(1)}, {target?.acceleration_y.toFixed(1)}, {target?.acceleration_z.toFixed(1)}] m/s²
                   </span>
                 </div>
-                <div className="flex justify-between items-center border-t border-[#252A2E] pt-2 text-xs">
-                  <span className="text-slate-400">Sensor Visibility:</span>
+                <div className="flex justify-between items-center border-t border-[#33362F] pt-2 text-xs">
+                  <span className="text-[#9CA195]">Sensor Visibility:</span>
                   <div className="flex items-center gap-1.5 font-medium">
-                    <span className={`w-2 h-2 rounded-full ${target?.is_in_fov ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                    <span className={target?.is_in_fov ? 'text-emerald-400' : 'text-rose-400'}>
-                      {target?.is_in_fov ? 'Inside FOV' : 'Clipped (Outside Cone)'}
+                    <span className={`w-2 h-2 rounded-full ${target?.is_in_fov ? 'bg-[#FF5F40]' : 'border border-[#FF5F40]'}`} />
+                    <span className={target?.is_in_fov ? 'text-[#FF5F40]' : 'text-[#F0FFEA]'}>
+                      {target?.is_in_fov ? '✓ INSIDE FOV' : '✕ CLIPPED (OUTSIDE CONE)'}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Virtual Camera & Frustum */}
-              <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-4 space-y-2.5">
-                <h3 className="text-xs font-semibold text-slate-200 border-b border-[#252A2E] pb-2">
+              <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 space-y-2.5">
+                <h3 className="text-xs font-semibold text-[#F0FFEA] uppercase tracking-wider border-b border-[#33362F] pb-2">
                   Camera Orientation & Limits
                 </h3>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Camera Origin:</span>
-                  <span className="text-slate-300">({telemetry?.camera.position_x.toFixed(0)}, {telemetry?.camera.position_y.toFixed(0)}, {telemetry?.camera.position_z.toFixed(0)})</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Camera Origin:</span>
+                  <span className="text-[#F0FFEA]">({telemetry?.camera.position_x.toFixed(0)}, {telemetry?.camera.position_y.toFixed(0)}, {telemetry?.camera.position_z.toFixed(0)})</span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Pan Angle:</span>
-                  <span className="text-slate-100 font-medium">{telemetry?.camera.pan_deg.toFixed(2)}° (±180°)</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Pan Angle:</span>
+                  <span className="text-[#FF5F40] font-medium">{telemetry?.camera.pan_deg.toFixed(2)}° (±180°)</span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Tilt Angle:</span>
-                  <span className="text-slate-100 font-medium">{telemetry?.camera.tilt_deg.toFixed(2)}° (±85°)</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Tilt Angle:</span>
+                  <span className="text-[#FF5F40] font-medium">{telemetry?.camera.tilt_deg.toFixed(2)}° (±85°)</span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Max Slew Speed:</span>
-                  <span className="text-emerald-400 font-medium">5.0°/s (Clamped)</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Max Slew Speed:</span>
+                  <span className="text-[#FF5F40] font-medium">5.0°/s (Clamped)</span>
                 </div>
-                <div className="flex justify-between num-mono text-xs">
-                  <span className="text-slate-400 font-sans">Angular Resolution:</span>
-                  <span className="text-slate-300">160 px/° (640 × 480)</span>
+                <div className="flex justify-between font-mono text-xs">
+                  <span className="text-[#9CA195]">Angular Resolution:</span>
+                  <span className="text-[#F0FFEA]">160 px/° (640 × 480)</span>
                 </div>
               </div>
 
               {/* 3D Coordinate Architecture note */}
-              <div className="bg-[#121518] border border-[#252A2E] rounded-lg p-3.5 space-y-1.5 text-xs text-slate-400">
-                <div className="text-slate-300 font-medium">
+              <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-3.5 space-y-1.5 text-xs text-[#9CA195]">
+                <div className="text-[#F0FFEA] font-medium uppercase tracking-wider">
                   Continuous Coordinate Space
                 </div>
-                <p className="leading-relaxed text-[11px] text-slate-400">
+                <p className="leading-relaxed text-[11px] text-[#9CA195]">
                   Target trajectories are evaluated analytically using continuous physical equations. The camera pin-hole model projects ray vectors onto the 640 × 480 focal plane.
                 </p>
               </div>

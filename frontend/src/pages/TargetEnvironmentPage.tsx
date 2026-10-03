@@ -1,25 +1,21 @@
-﻿import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { api } from '../services/api';
 import {
   Target,
   Move,
   Sun,
-  Radio,
-  Sliders,
-  Maximize2,
-  Minimize2,
-  RefreshCw,
   Crosshair,
   Sparkles,
-  Zap,
   Play,
+  Pause,
   RotateCcw,
   Compass,
   PenTool,
   CheckCircle,
   Trash2,
   XCircle,
+  Maximize2,
 } from 'lucide-react';
 
 interface Props {
@@ -72,11 +68,11 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
     const scale = w / 2000; // Map 2000x2000 space to canvas width/height
 
     // Background
-    ctx.fillStyle = '#060911';
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
 
     // Draw coordinate grid (every 250 pixels in world space)
-    ctx.strokeStyle = '#141e33';
+    ctx.strokeStyle = '#262824';
     ctx.lineWidth = 1;
     for (let x = 0; x <= 2000; x += 250) {
       ctx.beginPath();
@@ -92,7 +88,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
     }
 
     // Origin / Center crosshair (1000, 1000)
-    ctx.strokeStyle = '#223254';
+    ctx.strokeStyle = '#33362F';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(1000 * scale, 0);
@@ -102,7 +98,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
     ctx.stroke();
 
     // Center label
-    ctx.fillStyle = '#475569';
+    ctx.fillStyle = '#9CA195';
     ctx.font = '9px monospace';
     ctx.fillText('WORLD CENTER (1000, 1000)', 1005 * scale, 995 * scale);
 
@@ -117,14 +113,14 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
       const fovY = (camY * scale) - fovH / 2;
 
       // Draw FOV boundary box
-      ctx.strokeStyle = '#06b6d4';
+      ctx.strokeStyle = '#FF5F40';
       ctx.lineWidth = 1.5;
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.07)';
+      ctx.fillStyle = 'rgba(255, 95, 64, 0.08)';
       ctx.fillRect(fovX, fovY, fovW, fovH);
       ctx.strokeRect(fovX, fovY, fovW, fovH);
 
       // Camera center crosshair
-      ctx.strokeStyle = '#38bdf8';
+      ctx.strokeStyle = '#FF5F40';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(camX * scale - 8, camY * scale);
@@ -133,7 +129,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
       ctx.lineTo(camX * scale, camY * scale + 8);
       ctx.stroke();
 
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = '#FF5F40';
       ctx.font = '9px monospace';
       ctx.fillText(`CAM BORESIGHT (${Math.round(camX)}, ${Math.round(camY)})`, fovX + 4, fovY + 12);
     }
@@ -146,7 +142,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
 
       // Historical trajectory trail
       if (target.trajectory_trail && target.trajectory_trail.length > 1) {
-        ctx.strokeStyle = target.is_in_fov ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+        ctx.strokeStyle = target.is_in_fov ? 'rgba(255, 95, 64, 0.6)' : 'rgba(156, 161, 149, 0.4)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let i = 0; i < target.trajectory_trail.length; i++) {
@@ -162,7 +158,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
       // Pulsing outer halo
       ctx.beginPath();
       ctx.arc(tx, ty, r * 3, 0, Math.PI * 2);
-      ctx.fillStyle = target.is_in_fov ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+      ctx.fillStyle = target.is_in_fov ? 'rgba(255, 95, 64, 0.2)' : 'rgba(94, 98, 90, 0.2)';
       ctx.fill();
 
       // Beacon body
@@ -172,14 +168,14 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
       } else {
         ctx.arc(tx, ty, r, 0, Math.PI * 2);
       }
-      ctx.fillStyle = target.is_in_fov ? '#10b981' : '#ef4444';
-      ctx.shadowColor = target.is_in_fov ? '#10b981' : '#ef4444';
+      ctx.fillStyle = target.is_in_fov ? '#FF5F40' : '#9CA195';
+      ctx.shadowColor = target.is_in_fov ? '#FF5F40' : '#9CA195';
       ctx.shadowBlur = 10;
       ctx.fill();
       ctx.shadowBlur = 0;
 
       // Target coordinate label
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#F0FFEA';
       ctx.font = '10px monospace';
       ctx.fillText(
         `TARGET: (${Math.round(target.world_x)}, ${Math.round(target.world_y)}) [${target.is_in_fov ? 'IN FOV' : 'LOST'}]`,
@@ -189,7 +185,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
 
       // Velocity vector
       if (target.velocity_x !== undefined && target.velocity_y !== undefined) {
-        ctx.strokeStyle = '#facc15';
+        ctx.strokeStyle = '#F0FFEA';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(tx, ty);
@@ -197,12 +193,13 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
         ctx.stroke();
       }
     }
+
     // Custom path preview overlay
     if (drawMode && customWaypoints.length > 0) {
       const pts = customWaypoints.map(([wx, wy]) => [wx * scale, wy * scale]);
 
       // Drawn segments
-      ctx.strokeStyle = '#f59e0b';
+      ctx.strokeStyle = '#FF5F40';
       ctx.lineWidth = 2;
       ctx.setLineDash([]);
       ctx.beginPath();
@@ -213,7 +210,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
 
       // Closing segment (dashed)
       if (customWaypoints.length > 1) {
-        ctx.strokeStyle = '#f59e0b';
+        ctx.strokeStyle = '#FF5F40';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
@@ -227,13 +224,13 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
       pts.forEach(([px, py], i) => {
         ctx.beginPath();
         ctx.arc(px, py, i === 0 ? 6 : 4, 0, Math.PI * 2);
-        ctx.fillStyle = i === 0 ? '#10b981' : '#f59e0b';
+        ctx.fillStyle = i === 0 ? '#FF5F40' : '#262824';
         ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#FF5F40';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
         // Index label
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#F0FFEA';
         ctx.font = 'bold 9px monospace';
         ctx.fillText(String(i + 1), px + 6, py - 4);
       });
@@ -289,7 +286,6 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
   };
 
   const handleDisplaceOutsideFov = async () => {
-    // Put target near edge away from center to test reacquisition
     try {
       await api.setTargetPosition(1500, 400);
     } catch (err) {
@@ -298,18 +294,18 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-xs">
+    <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
       {/* Header bar */}
-      <div className="bg-[#121518] border border-[#252A2E] p-4 rounded-xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-4 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-[#3A4048]/20 flex items-center justify-center">
-            <Target className="w-5 h-5 text-[#D6D9DC]" />
+          <div className="w-9 h-9 rounded bg-[#262824] border border-[#33362F] flex items-center justify-center">
+            <Target className="w-5 h-5 text-[#FF5F40]" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
               Target & Optical Environment
             </h2>
-            <p className="text-slate-400 text-[11px]">
+            <p className="text-[#9CA195] text-[11px]">
               2000×2000 Virtual Coordinate Space • Kinematic Trajectories • Optical Spot Characteristics
             </p>
           </div>
@@ -319,19 +315,20 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onToggleSim(!isRunning)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1.5 border uppercase tracking-wider ${
               isRunning
-                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-                : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] shadow'
+                : 'bg-[#262824] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]/50'
             }`}
           >
-            <Play className="w-3.5 h-3.5" /> {isRunning ? 'Pause Sim' : 'Run Sim'}
+            {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+            {isRunning ? 'Pause Sim' : 'Run Sim'}
           </button>
           <button
             onClick={onResetSim}
-            className="px-3 py-1.5 bg-[#1A1D20] hover:bg-[#1e2b44] text-slate-300 rounded-lg border border-[#22324e] flex items-center gap-1.5 transition text-xs font-medium"
+            className="px-3 py-1.5 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] rounded border border-[#33362F] flex items-center gap-1.5 transition text-xs font-medium"
           >
-            <RotateCcw className="w-3.5 h-3.5" /> Reset
+            <RotateCcw className="w-3.5 h-3.5 text-[#FF5F40]" /> Reset
           </button>
         </div>
       </div>
@@ -339,17 +336,17 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
       {/* Main Grid: Radar Canvas on Left, Controls on Right */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         {/* Left Column: 2000x2000 Interactive Arena Canvas (7 cols) */}
-        <div className="xl:col-span-7 bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between border-b border-[#252A2E] pb-3">
-            <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs">
-              <Compass className="w-4 h-4 text-[#D6D9DC]" />
+        <div className="xl:col-span-7 bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-3">
+            <div className="flex items-center gap-2 text-[#F0FFEA] font-semibold text-xs uppercase tracking-wider">
+              <Compass className="w-4 h-4 text-[#FF5F40]" />
               <span>Virtual Screen Space (2000 × 2000)</span>
             </div>
-            <span className="text-[11px] text-slate-400">Click canvas to reposition beacon</span>
+            <span className="text-[11px] text-[#9CA195]">Click canvas to reposition beacon</span>
           </div>
 
           {/* Canvas Viewport */}
-          <div className="relative w-full aspect-square bg-[#080d16] rounded-lg border border-[#252A2E] overflow-hidden flex items-center justify-center cursor-crosshair">
+          <div className="relative w-full aspect-square bg-[#000000] rounded border border-[#33362F] overflow-hidden flex items-center justify-center cursor-crosshair">
             <canvas
               ref={canvasRef}
               width={700}
@@ -358,72 +355,72 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
               className="w-full h-full object-contain"
             />
             {drawMode && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#1A1D20]/90 border border-amber-500/40 text-amber-300 text-[11px] font-sans px-3 py-1 rounded-full shadow-md pointer-events-none">
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#1B1D1A]/95 border border-[#FF5F40] text-[#FF5F40] text-[11px] font-mono px-3 py-1 rounded shadow-md pointer-events-none font-bold">
                 Draw Mode: Click to add waypoints ({customWaypoints.length} placed)
               </div>
             )}
           </div>
 
           {/* Draw Mode Controls */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#252A2E]">
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#33362F]">
             {!drawMode ? (
               <button
                 onClick={() => { setDrawMode(true); setCustomWaypoints([]); }}
-                className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs flex items-center gap-1.5 font-medium transition"
+                className="px-2.5 py-1.5 rounded bg-[#262824] hover:bg-[#FF5F40]/15 text-[#FF5F40] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs flex items-center gap-1.5 font-bold transition uppercase tracking-wider"
               >
-                <PenTool className="w-3.5 h-3.5" /> Draw Custom Path
+                <PenTool className="w-3.5 h-3.5 text-[#FF5F40]" /> Draw Custom Path
               </button>
             ) : (
               <>
                 <button
                   onClick={handleActivateCustomPath}
                   disabled={customWaypoints.length < 2 || submitting}
-                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs flex items-center gap-1.5 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1.5 rounded bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] border border-[#FF5F40] text-xs flex items-center gap-1.5 font-bold transition disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-wider"
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
                   {submitting ? 'Activating…' : `Activate Loop Path (${customWaypoints.length} pts)`}
                 </button>
                 <button
                   onClick={handleClearPath}
-                  className="px-2.5 py-1.5 rounded-lg bg-[#1A1D20] hover:bg-[#1e2b44] text-slate-300 border border-[#22324e] text-xs flex items-center gap-1.5 transition"
+                  className="px-2.5 py-1.5 rounded bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] text-xs flex items-center gap-1.5 transition"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Clear
                 </button>
                 <button
                   onClick={() => { setDrawMode(false); setCustomWaypoints([]); }}
-                  className="px-2.5 py-1.5 rounded-lg bg-[#1A1D20] hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-[#22324e] text-xs flex items-center gap-1.5 transition"
+                  className="px-2.5 py-1.5 rounded bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] text-xs flex items-center gap-1.5 transition"
                 >
                   <XCircle className="w-3.5 h-3.5" /> Cancel
                 </button>
-                <span className="text-[11px] text-slate-400 ml-1">Minimum 2 points; loop auto-closes</span>
+                <span className="text-[11px] text-[#9CA195] ml-1">Minimum 2 points; loop auto-closes</span>
               </>
             )}
           </div>
 
           {/* Quick Reposition Action Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#252A2E]">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#33362F]">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCenterTarget}
-                className="px-2.5 py-1.5 rounded-lg bg-[#1A1D20] hover:bg-[#1e2b44] text-slate-200 border border-[#22324e] text-xs flex items-center gap-1.5 font-medium transition"
+                className="px-2.5 py-1.5 rounded bg-[#262824] hover:bg-[#FF5F40]/20 text-[#F0FFEA] border border-[#33362F] text-xs flex items-center gap-1.5 font-medium transition"
               >
-                <Crosshair className="w-3.5 h-3.5 text-[#D6D9DC]" /> Center Target (1000, 1000)
+                <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" /> Center Target (1000, 1000)
               </button>
               <button
                 onClick={handleDisplaceOutsideFov}
-                className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs flex items-center gap-1.5 font-medium transition"
+                className="px-2.5 py-1.5 rounded bg-[#262824] hover:bg-[#FF5F40]/15 text-[#FF5F40] border border-[#33362F] text-xs flex items-center gap-1.5 font-medium transition"
               >
-                <Maximize2 className="w-3.5 h-3.5 text-rose-400" /> Displace Outside FOV
+                <Maximize2 className="w-3.5 h-3.5 text-[#FF5F40]" /> Displace Outside FOV
               </button>
             </div>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-[#9CA195]">
               Status:{' '}
               <span
-                className={`font-semibold ${
-                  target?.is_in_fov ? 'text-emerald-400' : 'text-rose-400'
+                className={`font-bold ${
+                  target?.is_in_fov ? 'text-[#FF5F40]' : 'text-[#9CA195]'
                 }`}
               >
-                {target?.is_in_fov ? 'In Field of View' : 'Outside Field of View'}
+                {target?.is_in_fov ? '✓ In Field of View' : '✕ Outside Field of View'}
               </span>
             </div>
           </div>
@@ -432,27 +429,27 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
         {/* Right Column: Controls & Parameters (5 cols) */}
         <div className="xl:col-span-5 flex flex-col gap-4">
           {/* Target Spot Geometry Card */}
-          <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs border-b border-[#252A2E] pb-2">
-              <Sun className="w-4 h-4 text-amber-400" />
+          <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-[#F0FFEA] font-semibold text-xs border-b border-[#33362F] pb-2 uppercase tracking-wider">
+              <Sun className="w-4 h-4 text-[#FF5F40]" />
               <span>Optical Beacon Spot Profile</span>
             </div>
 
             {/* Shape selection */}
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1.5">Beacon Geometry Shape</label>
+              <label className="text-[11px] text-[#9CA195] block mb-1.5">Beacon Geometry Shape</label>
               <div className="grid grid-cols-3 gap-2">
                 {(['Square', 'Circle', 'Gaussian'] as const).map((shape) => (
                   <button
                     key={shape}
                     onClick={() => onSelectShape(shape)}
-                    className={`py-1.5 px-2 rounded-lg text-xs border flex items-center justify-center gap-1.5 transition ${
+                    className={`py-1.5 px-2 rounded text-xs border flex items-center justify-center gap-1.5 transition font-mono ${
                       currentShape === shape
-                        ? 'bg-[#1E2124] text-[#D6D9DC] border-[#3A4048] font-medium'
-                        : 'bg-[#1A1D20] text-slate-400 border-[#22324e] hover:text-slate-200'
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold'
+                        : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                     }`}
                   >
-                    <Sparkles className="w-3 h-3 text-[#D6D9DC]" /> {shape}
+                    <Sparkles className="w-3 h-3" /> {shape}
                   </button>
                 ))}
               </div>
@@ -460,9 +457,9 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
 
             {/* Size Slider */}
             <div>
-              <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+              <div className="flex justify-between text-[11px] text-[#9CA195] mb-1">
                 <span>Spot Size</span>
-                <span className="text-slate-200 font-medium num-mono">{currentSize} px (Req: 10×10 default)</span>
+                <span className="text-[#F0FFEA] font-bold font-mono">{currentSize} px (Req: 10×10 default)</span>
               </div>
               <input
                 type="range"
@@ -477,15 +474,15 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                     target: { ...prev.target, size_pixels: val },
                   }));
                 }}
-                className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-1.5 bg-[#262824] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* Optical Intensity Slider */}
             <div>
-              <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+              <div className="flex justify-between text-[11px] text-[#9CA195] mb-1">
                 <span>Peak Optical Irradiance / Intensity</span>
-                <span className="text-slate-200 font-medium num-mono">{currentIntensity} / 255</span>
+                <span className="text-[#F0FFEA] font-bold font-mono">{currentIntensity} / 255</span>
               </div>
               <input
                 type="range"
@@ -500,22 +497,22 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                     target: { ...prev.target, intensity: val },
                   }));
                 }}
-                className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-amber-500"
+                className="w-full h-1.5 bg-[#262824] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* Optical Wavelength Standard */}
-            <div className="pt-2 border-t border-[#252A2E] flex items-center justify-between text-[11px]">
-              <span className="text-slate-400">Laser Optical Wavelength</span>
-              <span className="px-2 py-0.5 rounded bg-blue-500/10 text-[#D6D9DC] border border-[#3A4048]/20 font-mono">
+            <div className="pt-2 border-t border-[#33362F] flex items-center justify-between text-[11px]">
+              <span className="text-[#9CA195]">Laser Optical Wavelength</span>
+              <span className="px-2 py-0.5 rounded bg-[#262824] text-[#F0FFEA] border border-[#33362F] font-mono">
                 850 nm / 1550 nm Telecom
               </span>
             </div>
 
             {/* Modulation / Flicker Controls */}
-            <div className="pt-2 border-t border-[#252A2E] flex flex-col gap-2">
+            <div className="pt-2 border-t border-[#33362F] flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-slate-300 text-xs font-medium">Beacon Flicker Modulation</span>
+                <span className="text-[#F0FFEA] text-xs font-medium">Beacon Flicker Modulation</span>
                 <input
                   type="checkbox"
                   checked={flickerEnabled}
@@ -526,15 +523,15 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                       target: { ...prev.target, flicker_enabled: checked },
                     }));
                   }}
-                  className="rounded bg-[#1a2336] border-[#22324e] text-[#D6D9DC] focus:ring-0 cursor-pointer"
+                  className="rounded bg-[#262824] border-[#33362F] text-[#FF5F40] focus:ring-0 cursor-pointer accent-[#FF5F40]"
                 />
               </div>
 
               {flickerEnabled && (
                 <div>
-                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <div className="flex justify-between text-[11px] text-[#9CA195] mb-1">
                     <span>Modulation Frequency</span>
-                    <span className="text-slate-200 font-medium num-mono">{flickerFreq} Hz</span>
+                    <span className="text-[#FF5F40] font-bold font-mono">{flickerFreq} Hz</span>
                   </div>
                   <input
                     type="range"
@@ -549,7 +546,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                         target: { ...prev.target, flicker_frequency_hz: val },
                       }));
                     }}
-                    className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+                    className="w-full h-1.5 bg-[#262824] rounded appearance-none cursor-pointer accent-[#FF5F40]"
                   />
                 </div>
               )}
@@ -557,9 +554,9 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
           </div>
 
           {/* Kinematic Trajectory & Motion Card */}
-          <div className="bg-[#121518] border border-[#252A2E] rounded-xl p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs border-b border-[#252A2E] pb-2">
-              <Move className="w-4 h-4 text-[#D6D9DC]" />
+          <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-[#F0FFEA] font-semibold text-xs border-b border-[#33362F] pb-2 uppercase tracking-wider">
+              <Move className="w-4 h-4 text-[#FF5F40]" />
               <span>Kinematic Trajectory Pattern</span>
             </div>
 
@@ -573,37 +570,40 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                 { id: 'Spiral', label: 'Spiral' },
                 { id: 'Sinusoidal', label: 'Sinusoidal' },
                 { id: 'Custom Path', label: 'Custom Path' },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id === 'Custom Path') {
-                      setDrawMode(true);
-                      setCustomWaypoints([]);
-                    } else {
-                      onSelectMotion(item.id);
-                      setDrawMode(false);
-                    }
-                  }}
-                  className={`py-1.5 px-2.5 rounded-lg text-xs border text-left flex items-center justify-between transition ${
-                    (item.id === 'Custom Path' && drawMode) || ((currentMotion as string) === item.id && item.id !== 'Custom Path')
-                      ? 'bg-[#1E2124] text-[#D6D9DC] border-[#3A4048] font-medium'
-                      : 'bg-[#1A1D20] text-slate-400 border-[#22324e] hover:text-slate-200'
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {((item.id === 'Custom Path' && drawMode) || ((currentMotion as string) === item.id && item.id !== 'Custom Path')) && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#252A2E]" />
-                  )}
-                </button>
-              ))}
+              ].map((item) => {
+                const isSelected = (item.id === 'Custom Path' && drawMode) || ((currentMotion as string) === item.id && item.id !== 'Custom Path');
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (item.id === 'Custom Path') {
+                        setDrawMode(true);
+                        setCustomWaypoints([]);
+                      } else {
+                        onSelectMotion(item.id);
+                        setDrawMode(false);
+                      }
+                    }}
+                    className={`py-1.5 px-2.5 rounded text-xs border text-left flex items-center justify-between transition font-mono ${
+                      isSelected
+                        ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold'
+                        : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {isSelected && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0A0A0A]" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Motion Speed Slider */}
             <div className="mt-1">
-              <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+              <div className="flex justify-between text-[11px] text-[#9CA195] mb-1">
                 <span>Target Velocity</span>
-                <span className="text-slate-200 font-medium num-mono">{currentSpeed} px/sec</span>
+                <span className="text-[#FF5F40] font-bold font-mono">{currentSpeed} px/sec</span>
               </div>
               <input
                 type="range"
@@ -618,33 +618,33 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                     motion: { ...prev.motion, speed_pixels_per_s: val },
                   }));
                 }}
-                className="w-full h-1.5 bg-[#1a2336] rounded-lg appearance-none cursor-pointer accent-slate-500"
+                className="w-full h-1.5 bg-[#262824] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
             </div>
 
             {/* Live Kinematic Telemetry */}
-            <div className="mt-2 p-3 rounded-lg bg-[#121518] border border-[#252A2E] grid grid-cols-2 gap-2 text-xs">
+            <div className="mt-2 p-3 rounded bg-[#262824]/60 border border-[#33362F] grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="text-slate-400 text-[11px] block">Position (X, Y)</span>
-                <div className="text-slate-100 font-medium num-mono">
+                <span className="text-[#9CA195] text-[11px] block">Position (X, Y)</span>
+                <div className="text-[#F0FFEA] font-bold font-mono">
                   {target ? `${Math.round(target.world_x)}, ${Math.round(target.world_y)}` : 'N/A'}
                 </div>
               </div>
               <div>
-                <span className="text-slate-400 text-[11px] block">Velocity (Vx, Vy)</span>
-                <div className="text-[#D6D9DC] font-medium num-mono">
+                <span className="text-[#9CA195] text-[11px] block">Velocity (Vx, Vy)</span>
+                <div className="text-[#FF5F40] font-bold font-mono">
                   {target && target.velocity_x !== undefined
                     ? `${Math.round(target.velocity_x)}, ${Math.round(target.velocity_y)} px/s`
                     : 'N/A'}
                 </div>
               </div>
               <div>
-                <span className="text-slate-400 text-[11px] block">Screen Arena</span>
-                <div className="text-slate-300 font-medium num-mono">2000 × 2000 px</div>
+                <span className="text-[#9CA195] text-[11px] block">Screen Arena</span>
+                <div className="text-[#F0FFEA] font-mono">2000 × 2000 px</div>
               </div>
               <div>
-                <span className="text-slate-400 text-[11px] block">Camera FoV Size</span>
-                <div className="text-slate-300 font-medium num-mono">640 × 480 px (4°×3°)</div>
+                <span className="text-[#9CA195] text-[11px] block">Camera FoV Size</span>
+                <div className="text-[#F0FFEA] font-mono">640 × 480 px (4°×3°)</div>
               </div>
             </div>
           </div>

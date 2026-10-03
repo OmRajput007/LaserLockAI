@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OrbitalScenarioConfig } from '../types';
 import {
   Satellite,
@@ -258,12 +258,12 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex flex-col gap-3 font-mono text-xs select-none">
+    <div className="flex flex-col gap-3 font-mono text-xs select-none text-[#F0FFEA]">
       {/* 1. Predefined Scenarios Strip */}
-      <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex flex-wrap items-center justify-between gap-3 shadow-md">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-3 rounded-lg flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-cyan-400" />
-          <span className="text-slate-300 font-bold uppercase tracking-wider text-[11px]">
+          <Layers className="w-4 h-4 text-[#FF5F40]" />
+          <span className="text-[#9CA195] font-bold uppercase tracking-wider text-[11px]">
             Orbital Scenarios:
           </span>
         </div>
@@ -273,10 +273,10 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
             <button
               key={p}
               onClick={() => handleSelectScenarioPreset(p)}
-              className={`px-3 py-1.5 rounded text-[11px] font-bold border transition ${
+              className={`px-3 py-1.5 rounded text-[11px] font-mono border transition ${
                 activePreset === p
-                  ? 'bg-cyan-950 text-cyan-300 border-cyan-500 shadow-sm'
-                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
               }`}
             >
               {p}
@@ -285,9 +285,9 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
         </div>
 
         {/* Time Control Bar */}
-        <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+        <div className="flex items-center gap-2 bg-[#262824] border border-[#33362F] px-2.5 py-1 rounded">
+          <div className="flex items-center gap-1.5 text-[#9CA195] text-[11px]">
+            <Clock className="w-3.5 h-3.5 text-[#FF5F40]" />
             <span>Time-Warp:</span>
           </div>
 
@@ -304,12 +304,12 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
                       ? 'Time-warp locked to 1x during active tracking: at 60x a 0.82 deg/s beacon appears at ~49 deg/s, beyond any realistic gimbal.'
                       : `Set time-warp to ${w}x for preview`
                   }
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition ${
                     timeWarp === w
-                      ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm'
+                      ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40]'
                       : isDisabled
-                      ? 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      ? 'bg-[#1B1D1A] text-[#5E625A] border-[#33362F] cursor-not-allowed'
+                      : 'bg-[#1B1D1A] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA]'
                   }`}
                 >
                   {w}x
@@ -320,7 +320,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
 
           {isRunning && (
             <span
-              className="text-[10px] text-amber-400 underline decoration-dotted cursor-help ml-1"
+              className="text-[10px] text-[#FF5F40] underline decoration-dotted cursor-help ml-1 font-mono"
               title="Time-warp locked to 1x during active tracking: at 60x a 0.82 deg/s beacon appears at ~49 deg/s, beyond any realistic gimbal."
             >
               Locked (1x)
@@ -331,16 +331,16 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
 
       {/* Maneuver Note Banner */}
       {showManeuverNotice && (
-        <div className="bg-blue-950/40 border border-blue-800/60 p-2.5 rounded-lg flex items-start justify-between gap-3 text-[11px]">
+        <div className="bg-[#1B1D1A] border border-[#33362F] p-2.5 rounded-lg flex items-start justify-between gap-3 text-[11px]">
           <div className="flex items-start gap-2">
-            <Info className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
-            <p className="text-slate-300 leading-snug">
-              <strong className="text-cyan-300">Physics Maneuver Note:</strong> Orbit switching re-initializes the scenario parameters; it is not a live maneuver. A real LEO-550 → GEO transfer requires ~3.8 km/s Δv and ~5.3 h. This simulation re-initializes directly to the selected orbit.
+            <Info className="w-4 h-4 text-[#FF5F40] flex-shrink-0 mt-0.5" />
+            <p className="text-[#9CA195] leading-snug">
+              <strong className="text-[#F0FFEA]">Physics Maneuver Note:</strong> Orbit switching re-initializes the scenario parameters; it is not a live maneuver. A real LEO-550 → GEO transfer requires ~3.8 km/s Δv and ~5.3 h. This simulation re-initializes directly to the selected orbit.
             </p>
           </div>
           <button
             onClick={() => setShowManeuverNotice(false)}
-            className="text-slate-500 hover:text-slate-300 text-xs px-1"
+            className="text-[#9CA195] hover:text-[#F0FFEA] text-xs px-1"
           >
             ✕
           </button>
@@ -349,10 +349,10 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
 
       {/* Validation Warning Alert (20-150 km Altitude Gap) */}
       {(isCamSatGapError || isBeaconSatGapError) && (
-        <div className="bg-rose-950/60 border border-rose-600 p-3 rounded-lg flex items-start gap-2.5 text-rose-200 text-[11px] shadow-lg animate-pulse">
-          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+        <div className="bg-[#1B1D1A] border border-[#FF5F40] p-3 rounded-lg flex items-start gap-2.5 text-[#FF5F40] text-[11px] shadow-lg animate-pulse">
+          <AlertTriangle className="w-4 h-4 text-[#FF5F40] flex-shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold text-rose-300 block mb-0.5">UNSTABLE ALTITUDE GAP DETECTED (20 - 150 KM):</span>
+            <span className="font-bold text-[#FF5F40] block mb-0.5">! UNSTABLE ALTITUDE GAP DETECTED (20 - 150 KM):</span>
             Altitudes between 20 km and 150 km are physically unstable: too high for aerodynamic UAV flight (max 20 km ceiling) and too low for satellite orbits without immediate atmospheric drag decay (min stable orbit is 150 km). Entry is rejected.
           </div>
         </div>
@@ -361,27 +361,27 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
       {/* 2. Platform Parameter Grids */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Camera Platform Card */}
-        <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3 space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <div className="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider">
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-3 space-y-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2">
+            <div className="flex items-center gap-2 text-[#FF5F40] font-bold uppercase tracking-wider">
               {cameraType === 'SATELLITE' ? <Satellite className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
               <span>Camera Platform</span>
             </div>
 
             {/* Platform Type Selector */}
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded border border-slate-800">
+            <div className="flex items-center gap-1 bg-[#262824] p-0.5 rounded border border-[#33362F]">
               <button
                 onClick={() => setCameraType('SATELLITE')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
-                  cameraType === 'SATELLITE' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                  cameraType === 'SATELLITE' ? 'bg-[#FF5F40] text-[#0A0A0A]' : 'text-[#9CA195] hover:text-[#F0FFEA]'
                 }`}
               >
                 Satellite
               </button>
               <button
                 onClick={() => setCameraType('UAV')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
-                  cameraType === 'UAV' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                  cameraType === 'UAV' ? 'bg-[#FF5F40] text-[#0A0A0A]' : 'text-[#9CA195] hover:text-[#F0FFEA]'
                 }`}
               >
                 UAV
@@ -392,11 +392,11 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
           {cameraType === 'SATELLITE' ? (
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Orbit Preset:</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Orbit Preset:</label>
                 <select
                   value={camSatPreset}
                   onChange={(e) => handleCamSatPresetChange(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 >
                   <option value="LEO-300">LEO 300 km</option>
                   <option value="LEO-550">LEO 550 km (Nominal)</option>
@@ -409,7 +409,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Altitude (km):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Altitude (km):</label>
                 <input
                   type="number"
                   value={camSatAlt}
@@ -417,72 +417,72 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
                     setCamSatAlt(parseFloat(e.target.value) || 0);
                     setCamSatPreset('Custom');
                   }}
-                  className={`w-full bg-slate-950 border rounded px-2 py-1 text-white text-xs ${
-                    isCamSatGapError ? 'border-rose-500 bg-rose-950/30' : 'border-slate-700'
+                  className={`w-full bg-[#262824] border rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none ${
+                    isCamSatGapError ? 'border-[#FF5F40] bg-[#FF5F40]/10 text-[#FF5F40]' : 'border-[#33362F] focus:border-[#FF5F40]'
                   }`}
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Inclination (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Inclination (°):</label>
                 <input
                   type="number"
                   value={camSatInc}
                   onChange={(e) => setCamSatInc(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Phase Angle (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Phase Angle (°):</label>
                 <input
                   type="number"
                   value={camSatPhase}
                   onChange={(e) => setCamSatPhase(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Ground Lat (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Ground Lat (°):</label>
                 <input
                   type="number"
                   value={camUavLat}
                   onChange={(e) => setCamUavLat(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Ground Lon (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Ground Lon (°):</label>
                 <input
                   type="number"
                   value={camUavLon}
                   onChange={(e) => setCamUavLon(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Altitude (0-20 km):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Altitude (0-20 km):</label>
                 <input
                   type="number"
                   min="0"
                   max="20"
                   value={camUavAlt}
                   onChange={(e) => setCamUavAlt(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Pattern:</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Pattern:</label>
                 <select
                   value={camUavPattern}
                   onChange={(e) => setCamUavPattern(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 >
                   <option value="Circular">Circular</option>
                   <option value="Straight Line">Straight Line</option>
@@ -492,12 +492,12 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
 
               {camUavPattern === 'Circular' && (
                 <div className="col-span-2">
-                  <label className="text-slate-400 text-[10px] block mb-1">Circular Radius (km):</label>
+                  <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Circular Radius (km):</label>
                   <input
                     type="number"
                     value={camUavRadius}
                     onChange={(e) => setCamUavRadius(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                    className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                   />
                 </div>
               )}
@@ -506,27 +506,27 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
         </div>
 
         {/* Beacon Platform Card */}
-        <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3 space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <div className="flex items-center gap-2 text-emerald-400 font-bold uppercase tracking-wider">
-              {beaconType === 'SATELLITE' ? <Satellite className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
+        <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-3 space-y-3">
+          <div className="flex items-center justify-between border-b border-[#33362F] pb-2">
+            <div className="flex items-center gap-2 text-[#F0FFEA] font-bold uppercase tracking-wider">
+              {beaconType === 'SATELLITE' ? <Satellite className="w-4 h-4 text-[#FF5F40]" /> : <Plane className="w-4 h-4 text-[#FF5F40]" />}
               <span>Beacon Platform</span>
             </div>
 
             {/* Platform Type Selector */}
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded border border-slate-800">
+            <div className="flex items-center gap-1 bg-[#262824] p-0.5 rounded border border-[#33362F]">
               <button
                 onClick={() => setBeaconType('SATELLITE')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
-                  beaconType === 'SATELLITE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                  beaconType === 'SATELLITE' ? 'bg-[#FF5F40] text-[#0A0A0A]' : 'text-[#9CA195] hover:text-[#F0FFEA]'
                 }`}
               >
                 Satellite
               </button>
               <button
                 onClick={() => setBeaconType('UAV')}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
-                  beaconType === 'UAV' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                  beaconType === 'UAV' ? 'bg-[#FF5F40] text-[#0A0A0A]' : 'text-[#9CA195] hover:text-[#F0FFEA]'
                 }`}
               >
                 UAV
@@ -537,11 +537,11 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
           {beaconType === 'SATELLITE' ? (
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Orbit Preset:</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Orbit Preset:</label>
                 <select
                   value={beaconSatPreset}
                   onChange={(e) => handleBeaconSatPresetChange(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 >
                   <option value="LEO-300">LEO 300 km</option>
                   <option value="LEO-550">LEO 550 km (Nominal)</option>
@@ -554,7 +554,7 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Altitude (km):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Altitude (km):</label>
                 <input
                   type="number"
                   value={beaconSatAlt}
@@ -562,72 +562,72 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
                     setBeaconSatAlt(parseFloat(e.target.value) || 0);
                     setBeaconSatPreset('Custom');
                   }}
-                  className={`w-full bg-slate-950 border rounded px-2 py-1 text-white text-xs ${
-                    isBeaconSatGapError ? 'border-rose-500 bg-rose-950/30' : 'border-slate-700'
+                  className={`w-full bg-[#262824] border rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none ${
+                    isBeaconSatGapError ? 'border-[#FF5F40] bg-[#FF5F40]/10 text-[#FF5F40]' : 'border-[#33362F] focus:border-[#FF5F40]'
                   }`}
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Inclination (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Inclination (°):</label>
                 <input
                   type="number"
                   value={beaconSatInc}
                   onChange={(e) => setBeaconSatInc(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Phase Angle (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Phase Angle (°):</label>
                 <input
                   type="number"
                   value={beaconSatPhase}
                   onChange={(e) => setBeaconSatPhase(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Ground Lat (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Ground Lat (°):</label>
                 <input
                   type="number"
                   value={beaconUavLat}
                   onChange={(e) => setBeaconUavLat(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Ground Lon (°):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Ground Lon (°):</label>
                 <input
                   type="number"
                   value={beaconUavLon}
                   onChange={(e) => setBeaconUavLon(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Altitude (0-20 km):</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Altitude (0-20 km):</label>
                 <input
                   type="number"
                   min="0"
                   max="20"
                   value={beaconUavAlt}
                   onChange={(e) => setBeaconUavAlt(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 text-[10px] block mb-1">Pattern:</label>
+                <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Pattern:</label>
                 <select
                   value={beaconUavPattern}
                   onChange={(e) => setBeaconUavPattern(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                  className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                 >
                   <option value="Circular">Circular</option>
                   <option value="Straight Line">Straight Line</option>
@@ -637,12 +637,12 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
 
               {beaconUavPattern === 'Circular' && (
                 <div className="col-span-2">
-                  <label className="text-slate-400 text-[10px] block mb-1">Circular Radius (km):</label>
+                  <label className="text-[#9CA195] text-[10px] block mb-1 uppercase tracking-wider">Circular Radius (km):</label>
                   <input
                     type="number"
                     value={beaconUavRadius}
                     onChange={(e) => setBeaconUavRadius(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+                    className="w-full bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
                   />
                 </div>
               )}
@@ -652,47 +652,47 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
       </div>
 
       {/* 3. Optical Terminal & Gimbal Limits Strip */}
-      <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[#1B1D1A] border border-[#33362F] p-3 rounded-lg flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-wrap">
           {/* Atmosphere Margin */}
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-[11px] font-bold">Atmosphere Margin:</span>
+            <span className="text-[#9CA195] text-[11px] font-bold uppercase tracking-wider">Atmosphere Margin:</span>
             <input
               type="number"
               min="0"
               max="500"
               value={atmosphereMargin}
               onChange={(e) => setAtmosphereMargin(parseFloat(e.target.value) || 100.0)}
-              className="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white text-xs"
+              className="w-20 bg-[#262824] border border-[#33362F] focus:border-[#FF5F40] rounded px-2 py-1 text-[#F0FFEA] text-xs font-mono outline-none"
             />
-            <span className="text-slate-500 text-[10px]">km (default 100 km)</span>
+            <span className="text-[#5E625A] text-[10px]">km (default 100 km)</span>
           </div>
 
           {/* Gimbal Pan Limit */}
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-[11px] font-bold">Pan Limits:</span>
-            <span className="text-cyan-300 font-bold">±180°</span>
+            <span className="text-[#9CA195] text-[11px] font-bold uppercase tracking-wider">Pan Limits:</span>
+            <span className="text-[#FF5F40] font-bold font-mono">±180°</span>
           </div>
 
           {/* Gimbal Tilt Limit Presets */}
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-[11px] font-bold">Tilt Limits:</span>
+            <span className="text-[#9CA195] text-[11px] font-bold uppercase tracking-wider">Tilt Limits:</span>
             <button
               onClick={() => handleTiltPresetChange('optical')}
-              className={`px-2 py-1 rounded text-[10px] font-semibold border transition ${
+              className={`px-2 py-1 rounded text-[10px] font-mono border transition ${
                 tiltPreset === 'optical'
-                  ? 'bg-cyan-950 text-cyan-300 border-cyan-500'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
               }`}
             >
               Optical Terminal (±30°)
             </button>
             <button
               onClick={() => handleTiltPresetChange('general')}
-              className={`px-2 py-1 rounded text-[10px] font-semibold border transition ${
+              className={`px-2 py-1 rounded text-[10px] font-mono border transition ${
                 tiltPreset === 'general'
-                  ? 'bg-cyan-950 text-cyan-300 border-cyan-500'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
               }`}
             >
               General Camera (±85°)
@@ -704,21 +704,21 @@ export const OrbitalControlsPanel: React.FC<Props> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onReset}
-            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition font-bold text-xs"
+            className="px-3 py-1.5 rounded bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40] transition font-mono font-bold text-xs"
           >
-            Reset Orbit
+            RESET ORBIT
           </button>
           <button
             disabled={hasValidationError}
             onClick={handleManualApply}
-            className={`px-4 py-1.5 rounded font-bold transition text-xs flex items-center gap-1.5 ${
+            className={`px-4 py-1.5 rounded font-mono font-bold transition text-xs flex items-center gap-1.5 ${
               hasValidationError
-                ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-cyan-600 to-slate-600 hover:from-cyan-500 hover:to-slate-500 text-white shadow-md'
+                ? 'bg-[#262824] text-[#5E625A] border border-[#33362F] cursor-not-allowed'
+                : 'bg-[#FF5F40] hover:bg-[#FF7459] active:bg-[#E5492B] text-[#0A0A0A] shadow-md cursor-pointer'
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Apply Scenario
+            APPLY SCENARIO
           </button>
         </div>
       </div>
