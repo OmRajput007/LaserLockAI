@@ -185,7 +185,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               title="Jump 3D Camera Directly in Front of Satellite (Shortcut: S or F)"
             >
               <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
-              <span>JUMP TO SAT</span>
+              <span>LOCATE SAT</span>
               <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
             </button>
           </div>

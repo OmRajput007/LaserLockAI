@@ -7,6 +7,7 @@ import { TelemetryChart } from '../charts/TelemetryChart';
 import { api } from '../services/api';
 import { useSceneSettings } from '../hooks/useSceneSettings';
 import BeaconSpeedControl from '../components/BeaconSpeedControl';
+import { satellitePovSync } from '../simulation/satellitePovSync';
 import {
   Play,
   Pause,
@@ -28,6 +29,7 @@ interface Props {
   onGimbalNudge: (pan_rate: number, tilt_rate: number) => void;
   onGimbalAngles: (target_pan: number, target_tilt: number) => void;
   onSelectShape: (shape: 'Square' | 'Circle' | 'Gaussian') => void;
+  onUpdateConfig?: (updater: (prev: SystemConfig) => SystemConfig) => void;
 }
 
 export const MissionControlPage: React.FC<Props> = ({
@@ -39,6 +41,7 @@ export const MissionControlPage: React.FC<Props> = ({
   onGimbalNudge,
   onGimbalAngles,
   onSelectShape,
+  onUpdateConfig,
 }) => {
   const { settings, bindSetting, set } = useSceneSettings();
   const [viewMode, setViewMode] = [settings.missionViewMode || '3d', bindSetting('missionViewMode')];
@@ -48,17 +51,53 @@ export const MissionControlPage: React.FC<Props> = ({
   );
   const [speedApplied, setSpeedApplied] = useState(false);
 
+  // Sync with global satellitePovSync (Target & Environment page, 3D viewport, etc.)
+  useEffect(() => {
+    const unsub = satellitePovSync.subscribe((data) => {
+      if (data.beaconSpeedKmh !== undefined && data.beaconSpeedKmh !== localSpeed) {
+        setLocalSpeed(data.beaconSpeedKmh);
+      }
+    });
+    return unsub;
+  }, [localSpeed]);
+
+  // Sync with sceneSettings
+  useEffect(() => {
+    if (settings.beaconSpeedKmh !== undefined && settings.beaconSpeedKmh !== localSpeed) {
+      setLocalSpeed(settings.beaconSpeedKmh);
+    }
+  }, [settings.beaconSpeedKmh, localSpeed]);
+
+  // Sync with config if changed externally
+  useEffect(() => {
+    const cfgSpeed = config?.motion?.speed_kmh ?? config?.motion?.speed_pixels_per_s;
+    if (cfgSpeed !== undefined && cfgSpeed !== localSpeed) {
+      setLocalSpeed(cfgSpeed);
+    }
+  }, [config?.motion?.speed_kmh, config?.motion?.speed_pixels_per_s]);
+
   const applySpeed = useCallback(async (spd: number) => {
     try {
       setLocalSpeed(spd);
       set({ beaconSpeedKmh: spd });
+      satellitePovSync.update({ beaconSpeedKmh: spd });
       await api.setBeaconSpeed(spd);
+      if (onUpdateConfig) {
+        onUpdateConfig((prev) => ({
+          ...prev,
+          motion: {
+            ...prev.motion,
+            speed_pixels_per_s: spd,
+            speed_kmh: spd,
+          },
+        }));
+      }
       setSpeedApplied(true);
       setTimeout(() => setSpeedApplied(false), 800);
     } catch (e) {
       console.error('Failed to set beacon speed:', e);
     }
-  }, [set]);
+  }, [set, onUpdateConfig]);
 
   const isRunning = telemetry?.is_running ?? false;
   const isLocked = telemetry?.tracking.is_locked ?? false;

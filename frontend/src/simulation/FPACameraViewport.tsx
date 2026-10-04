@@ -499,10 +499,10 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
             }}
             className="px-2.5 py-1.5 rounded text-xs font-mono font-semibold transition flex items-center justify-center gap-1.5 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] cursor-pointer"
-            title="Jump 3D Orbit Camera to face Satellite in front (Shortcut: S or F)"
+            title="Locate Satellite in 3D view (Shortcut: S or F)"
           >
             <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
-            <span>Jump to Sat</span>
+            <span>Locate sat</span>
             <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
           </button>
         </div>

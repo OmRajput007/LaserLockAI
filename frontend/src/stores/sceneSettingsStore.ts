@@ -137,3 +137,25 @@ export function subscribeSceneSettings(listener: Listener): () => void {
     listeners.delete(listener);
   };
 }
+
+// Cross-tab / cross-window real-time synchronization
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue) as Partial<SceneSettings>;
+        cachedSettings = { ...sceneSettingsDefaults, ...parsed };
+        listeners.forEach((listener) => {
+          try {
+            listener(cachedSettings!);
+          } catch (err) {
+            console.error('Error in sceneSettings storage listener:', err);
+          }
+        });
+      } catch (err) {
+        console.warn('Failed to parse storage update for sceneSettings:', err);
+      }
+    }
+  });
+}
+

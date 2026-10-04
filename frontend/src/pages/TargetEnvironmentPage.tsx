@@ -1,6 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { api } from '../services/api';
+import { satellitePovSync } from '../simulation/satellitePovSync';
+import { useSceneSettings } from '../hooks/useSceneSettings';
 import {
   Target,
   Move,
@@ -16,6 +18,7 @@ import {
   Trash2,
   XCircle,
   Maximize2,
+  Gauge,
 } from 'lucide-react';
 
 interface Props {
@@ -50,11 +53,82 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
 
   const currentShape = config?.target.shape || 'Circle';
   const currentMotion = config?.motion.trajectory_type || 'Circular';
-  const currentSpeed = config?.motion.speed_pixels_per_s ?? 60;
   const currentSize = config?.target.size_pixels ?? 10;
   const currentIntensity = config?.target.intensity ?? 255;
   const flickerEnabled = config?.target.flicker_enabled ?? false;
   const flickerFreq = config?.target.flicker_frequency_hz ?? 10.0;
+
+  // Bidirectional real-time speed synchronization with Mission Control and 3D simulation
+  const { settings: sceneSettings, set: setSceneSettings } = useSceneSettings();
+  const [localSpeed, setLocalSpeed] = useState<number>(() => {
+    const pov = satellitePovSync.getData();
+    return pov.beaconSpeedKmh ?? config?.motion?.speed_kmh ?? config?.motion?.speed_pixels_per_s ?? 150;
+  });
+  const [speedApplied, setSpeedApplied] = useState(false);
+
+  // Sync with global satellitePovSync (Mission Control, 3D viewport, etc.)
+  useEffect(() => {
+    const unsub = satellitePovSync.subscribe((data) => {
+      if (data.beaconSpeedKmh !== undefined && data.beaconSpeedKmh !== localSpeed) {
+        setLocalSpeed(data.beaconSpeedKmh);
+      }
+    });
+    return unsub;
+  }, [localSpeed]);
+
+  // Sync with persistent sceneSettings
+  useEffect(() => {
+    if (sceneSettings.beaconSpeedKmh !== undefined && sceneSettings.beaconSpeedKmh !== localSpeed) {
+      setLocalSpeed(sceneSettings.beaconSpeedKmh);
+    }
+  }, [sceneSettings.beaconSpeedKmh, localSpeed]);
+
+  // Sync with config if changed externally
+  useEffect(() => {
+    const cfgSpeed = config?.motion?.speed_kmh ?? config?.motion?.speed_pixels_per_s;
+    if (cfgSpeed !== undefined && cfgSpeed !== localSpeed) {
+      setLocalSpeed(cfgSpeed);
+    }
+  }, [config?.motion?.speed_kmh, config?.motion?.speed_pixels_per_s]);
+
+  // Commit changes to backend simulation engine and parent config
+  const handleSpeedCommit = useCallback(
+    async (speed: number) => {
+      setLocalSpeed(speed);
+      setSpeedApplied(true);
+      setTimeout(() => setSpeedApplied(false), 800);
+
+      // Instantaneous broadcast to Mission Control & Three.js simulation engine
+      satellitePovSync.update({ beaconSpeedKmh: speed });
+      setSceneSettings({ beaconSpeedKmh: speed });
+
+      try {
+        await api.setBeaconSpeed(speed);
+      } catch (err) {
+        console.error('Failed to set beacon speed via API:', err);
+      }
+
+      onUpdateConfig((prev) => ({
+        ...prev,
+        motion: {
+          ...prev.motion,
+          speed_pixels_per_s: speed,
+          speed_kmh: speed,
+        },
+      }));
+    },
+    [onUpdateConfig, setSceneSettings]
+  );
+
+  const handleSliderLiveChange = useCallback(
+    (speed: number) => {
+      setLocalSpeed(speed);
+      // Instantaneous real-time synchronization while sliding
+      satellitePovSync.update({ beaconSpeedKmh: speed });
+      setSceneSettings({ beaconSpeedKmh: speed });
+    },
+    [setSceneSettings]
+  );
 
   // Render the interactive 2000x2000 environment radar
   useEffect(() => {
@@ -263,7 +337,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
     if (customWaypoints.length < 2) return;
     setSubmitting(true);
     try {
-      await api.setCustomPath(customWaypoints, currentSpeed || 60);
+      await api.setCustomPath(customWaypoints, localSpeed || 150);
       onSelectMotion('Custom Path');
       setDrawMode(false);
     } catch (err) {
@@ -599,27 +673,78 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
               })}
             </div>
 
-            {/* Motion Speed Slider */}
-            <div className="mt-1">
-              <div className="flex justify-between text-[11px] text-[#9CA195] mb-1">
-                <span>Target Velocity</span>
-                <span className="text-[#FF5F40] font-bold font-mono">{currentSpeed} px/sec</span>
+            {/* Motion Speed Slider & Both Units */}
+            <div className="mt-1 space-y-2">
+              <div className="flex justify-between items-center text-[11px] text-[#9CA195]">
+                <div className="flex items-center gap-1.5 uppercase tracking-wider font-semibold text-[#F0FFEA]">
+                  <Gauge className="w-3.5 h-3.5 text-[#FF5F40]" />
+                  <span>Target Velocity</span>
+                </div>
+                <span
+                  className={`text-xs font-mono px-2 py-0.5 rounded transition border ${
+                    speedApplied
+                      ? 'bg-[#FF5F40]/15 text-[#FF5F40] border-[#FF5F40]'
+                      : 'bg-[#262824] text-[#F0FFEA] border-[#33362F]'
+                  }`}
+                >
+                  {speedApplied ? (
+                    '✓ APPLIED'
+                  ) : (
+                    <span>
+                      <strong className="text-[#FF5F40] font-bold">{localSpeed}</strong> px/sec
+                      <span className="text-[#9CA195] mx-1">·</span>
+                      <strong className="text-[#FF5F40] font-bold">{localSpeed}</strong> km/h
+                    </span>
+                  )}
+                </span>
               </div>
+
+              {/* Quick Presets matching Mission Control */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[#9CA195] text-[10px] uppercase tracking-wider">Presets:</span>
+                {[
+                  { label: 'Static', val: 0, tag: 'Static (0 km/h · 0 px/s)' },
+                  { label: 'Loiter', val: 150, tag: 'Loiter (150 km/h · 150 px/s)' },
+                  { label: 'Cruise', val: 600, tag: 'Cruise (600 km/h · 600 px/s)' },
+                  { label: 'Max', val: 1200, tag: 'Max (1200 km/h · 1200 px/s)' },
+                ].map((p) => {
+                  const isActive = localSpeed === p.val;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => handleSpeedCommit(p.val)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition border ${
+                        isActive
+                          ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-bold'
+                          : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
+                      }`}
+                    >
+                      {p.tag}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Range Slider 0-1200 with Live Real-time Sync */}
               <input
                 type="range"
                 min="0"
-                max="250"
-                step="5"
-                value={currentSpeed}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  onUpdateConfig((prev) => ({
-                    ...prev,
-                    motion: { ...prev.motion, speed_pixels_per_s: val },
-                  }));
-                }}
+                max="1200"
+                step="10"
+                value={localSpeed}
+                onChange={(e) => handleSliderLiveChange(parseInt(e.target.value, 10))}
+                onMouseUp={(e) => handleSpeedCommit(parseInt((e.target as HTMLInputElement).value, 10))}
+                onTouchEnd={(e) => handleSpeedCommit(parseInt((e.target as HTMLInputElement).value, 10))}
                 className="w-full h-1.5 bg-[#262824] rounded appearance-none cursor-pointer accent-[#FF5F40]"
               />
+
+              {/* Range boundary tick labels with dual units */}
+              <div className="flex justify-between text-[10px] text-[#9CA195] font-mono">
+                <span>0 px/s · 0 km/h (Static)</span>
+                <span>600 px/s · 600 km/h (Cruise)</span>
+                <span>1200 px/s · 1200 km/h (Max)</span>
+              </div>
             </div>
 
             {/* Live Kinematic Telemetry */}
@@ -634,7 +759,7 @@ export const TargetEnvironmentPage: React.FC<Props> = ({
                 <span className="text-[#9CA195] text-[11px] block">Velocity (Vx, Vy)</span>
                 <div className="text-[#FF5F40] font-bold font-mono">
                   {target && target.velocity_x !== undefined
-                    ? `${Math.round(target.velocity_x)}, ${Math.round(target.velocity_y)} px/s`
+                    ? `${Math.round(target.velocity_x)}, ${Math.round(target.velocity_y)} px/s · km/h`
                     : 'N/A'}
                 </div>
               </div>

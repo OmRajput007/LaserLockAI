@@ -5,7 +5,6 @@ import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { satellitePovSync, computeBeaconOmegaReal, EARTH_CIRCUMFERENCE_KM } from './satellitePovSync';
 import { formatBeaconRevolutionTime } from '../components/BeaconSpeedControl';
 import { alarmAudio } from '../services/alarmAudio';
-import HandoverPanel from './HandoverPanel';
 import { getOrCreateEarthTexture, createAtmosphereRimMesh, createRealisticEarthAssembly, RealisticEarthAssembly } from './earthTexture';
 import { createRealSatelliteModel, updateScreenSpaceSatelliteScale } from './satelliteModel';
 import {
@@ -1215,10 +1214,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const [beaconAnomalyDeg, setBeaconAnomalyDeg] = useState<number>(120.0);
   const [beaconInc, setBeaconInc] = [_ss.beaconInc, _bindS('beaconInc')];
   const [beaconRaan, setBeaconRaan] = [_ss.beaconRaan, _bindS('beaconRaan')];
-
-  // Handover state (populated from satellitePovSync or sim telemetry)
-  const [handoverData, setHandoverData] = useState<any>(null);
-  const handoverRef = useRef<any>(null);
 
   // Phase offset for backup satellite (degrees along-track)
   const backupPhaseOffsetDeg = 20.0;
@@ -2591,7 +2586,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
     // Initial footprint geometry for LEO-550 default (theta ~ 14.96 deg)
     const initFpSatDir = new THREE.Vector3(1, 0, 0);
-    const initFpMinEl = handoverData?.min_elevation_deg ?? 10.0;
+    const initFpMinEl = 10.0;
     const initFpMinElRad = THREE.MathUtils.degToRad(initFpMinEl);
     const initFpAltKm = 550.0;
     const initFpRKm = EARTH_RADIUS_KM + initFpAltKm;
@@ -3501,8 +3496,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         const satDir = currentSatPos.clone().normalize();
         const beaconDir = tgtPosRef.current.clone().normalize();
 
-        // Minimum elevation angle (reusing existing setting from handover / default 10.0°)
-        const minEl = handoverRef.current?.min_elevation_deg ?? handoverData?.min_elevation_deg ?? 10.0;
+        // Minimum elevation angle (default 10.0°)
+        const minEl = 10.0;
         const minElRad = THREE.MathUtils.degToRad(minEl);
 
         // Physical altitude and orbital radius in km
@@ -3784,14 +3779,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           backupLosLineRef.current.computeLineDistances();
         }
         const bkMat = backupLosLineRef.current.material as THREE.LineDashedMaterial;
-        const ho = handoverRef.current;
         if (bkMat) {
-          if (ho && ho.state === 'TRANSFERRING') {
-            bkMat.color.setHex(0xf59e0b); // amber — transfer in progress
-            bkMat.opacity = 0.85;
-            bkMat.dashSize = 8;
-            bkMat.gapSize = 0;
-          } else if (bkOccluded) {
+          if (bkOccluded) {
             bkMat.color.setHex(0xef4444);
             bkMat.opacity = 0.35;
           } else {
@@ -3942,9 +3931,8 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         }
       }
 
-      // 3) Backup satellite: 15.4px during active handover, otherwise base 11.0px
-      const isBackupActive = handoverRef.current && handoverRef.current.state !== 'IDLE';
-      const backupTargetPx = isBackupActive ? ACTIVE_MARKER_PX : BASE_MARKER_PX;
+      // 3) Backup satellite: base 11.0px
+      const backupTargetPx = BASE_MARKER_PX;
       updateScreenSpaceMarkerScale(
         backupSpriteRef.current,
         perspCamera,
@@ -4089,34 +4077,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     setFocusMode('earth');
     orbitStateRef.current = { theta: 0.75, phi: 0.45, radius: 340.0 };
   };
-
-  // Poll handover metrics from backend every 2 seconds to keep the HandoverPanel fresh
-  useEffect(() => {
-    const pollHandover = async () => {
-      try {
-        const resp = await fetch('/api/orbital/handover/metrics');
-        if (resp.ok) {
-          const data = await resp.json();
-          if (!data.error) {
-            // Build a HandoverData compatible object from metrics + last orbital telemetry
-            const orbResp = await fetch('/api/simulation/telemetry');
-            if (orbResp.ok) {
-              const tel = await orbResp.json();
-              const ho = tel?.handover ?? tel?.orbital?.handover ?? null;
-              if (ho) {
-                handoverRef.current = ho;
-                setHandoverData(ho);
-              }
-            }
-          }
-        }
-      } catch (_) { /* silent */ }
-    };
-
-    const id = setInterval(pollHandover, 2000);
-    pollHandover(); // immediate first poll
-    return () => clearInterval(id);
-  }, []);
 
   // Synchronize atmosphere shells & reference rings visibility with toggle state (Task 3)
   useEffect(() => {
@@ -4882,7 +4842,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 <div className="border-t border-[#33362F] pt-1.5 space-y-1 text-[10px]">
                   <div className="flex justify-between items-center text-[#9CA195]">
                     <span>Beacon Ground Speed:</span>
-                    <span className="text-[#FF5F40] font-bold">{beaconSpeedKmh} km/h</span>
+                    <span className="text-[#FF5F40] font-bold">{beaconSpeedKmh} km/h · {beaconSpeedKmh} px/s</span>
                   </div>
                   <input
                     type="range"
@@ -4955,17 +4915,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             )}
           </div>
         )}
-
-        {/* Handover Status Panel — absolute overlay, bottom-right */}
-        <div style={{
-          position: 'absolute',
-          bottom: 12,
-          right: 12,
-          zIndex: 20,
-          pointerEvents: 'none',
-        }}>
-          <HandoverPanel handover={handoverData} backupAcquireSteps={3} />
-        </div>
 
         {/* Interactive Orbit Tuner Drawer / Popover */}
         {showOrbitTuner && (
@@ -5150,7 +5099,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             <div className="grid grid-cols-2 gap-1 text-[9px] font-mono">
               <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
                 <div className="text-[#9CA195] text-[8px]">Min Elevation (ε)</div>
-                <div className="text-[#F0FFEA] font-bold">{(handoverData?.min_elevation_deg ?? 10.0).toFixed(1)}°</div>
+                <div className="text-[#F0FFEA] font-bold">10.0°</div>
               </div>
               <div className="bg-[#262824] border border-[#33362F] p-1 rounded">
                 <div className="text-[#9CA195] text-[8px]">Angular Radius (θ)</div>
@@ -5495,7 +5444,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             <div className="space-y-1.5 pt-1 border-t border-[#33362F]">
               <div className="flex items-center justify-between text-[#9CA195] text-[10px]">
                 <span>Beacon Velocity:</span>
-                <span className="font-mono text-[#FF5F40] font-bold">{beaconSpeedKmh} km/h</span>
+                <span className="font-mono text-[#FF5F40] font-bold">{beaconSpeedKmh} km/h · {beaconSpeedKmh} px/s</span>
               </div>
 
               <input
@@ -5916,7 +5865,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             )}
             {showFootprint && (
               <div className="pt-1 border-t border-[#33362F] text-[10px]">
-                Ground Footprint ({`El ≥ ${(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°`}):{' '}
+                Ground Footprint (El ≥ 10°):{' '}
                 <span className={isBeaconInFootprint ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-bold'}>
                   {isBeaconInFootprint
                     ? `✓ BEACON IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)`
@@ -6030,11 +5979,11 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
                 <div className="text-[10px] font-bold text-[#F0FFEA] pt-1 border-t border-[#33362F]">GROUND FOOTPRINT</div>
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-0.5 bg-[#FF5F40] inline-block"></span>
-                  <span className="text-[#FF5F40] font-medium">In Coverage (El ≥ {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
+                  <span className="text-[#FF5F40] font-medium">In Coverage (El ≥ 10°)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-0.5 bg-[#5E625A] inline-block"></span>
-                  <span className="text-[#9CA195] font-medium">Outside Mask (El &lt; {(handoverData?.min_elevation_deg ?? 10.0).toFixed(0)}°)</span>
+                  <span className="text-[#9CA195] font-medium">Outside Mask (El &lt; 10°)</span>
                 </div>
               </>
             )}

@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitalTelemetry } from '../types';
 import { Globe, RefreshCw, Crosshair, Eye, Compass, ShieldAlert, CheckCircle, AlertTriangle, Satellite, Radio } from 'lucide-react';
-import HandoverPanel from './HandoverPanel';
 import { satellitePovSync } from './satellitePovSync';
 import { getRealisticEarthTextures } from './earthTexture';
 import { createRealSatelliteModel } from './satelliteModel';
@@ -941,13 +940,6 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
           <span>100 KM ATMOSPHERE RIM</span>
         </div>
       </div>
-
-      {/* Handover Status Panel HUD Overlay */}
-      {orbitalTelemetry?.handover && (
-        <div className="absolute bottom-3 right-3 z-20 pointer-events-auto">
-          <HandoverPanel handover={orbitalTelemetry.handover} />
-        </div>
-      )}
 
       {/* Floating Quick Locate Buttons (Unrestricted global access) */}
       <div className="absolute bottom-3 right-4 z-20 pointer-events-auto flex items-center gap-2">

@@ -663,6 +663,7 @@ export const App: React.FC = () => {
               onGimbalNudge={sendGimbalControl}
               onGimbalAngles={sendGimbalTargetAngles}
               onSelectShape={handleSelectShape}
+              onUpdateConfig={handleUpdateConfig}
             />
           </div>
           {activeTab === 'virtual_simulation' && (

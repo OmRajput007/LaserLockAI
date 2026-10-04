@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Gauge, Clock } from 'lucide-react';
 import { satellitePovSync } from '../simulation/satellitePovSync';
 
+import { saveSceneSettings } from '../stores/sceneSettingsStore';
+
 export interface BeaconSpeedControlProps {
   currentSpeed?: number;
   onSpeedChange?: (speedKmh: number) => void;
@@ -11,10 +13,10 @@ export interface BeaconSpeedControlProps {
 }
 
 export const BEACON_SPEED_PRESETS = [
-  { label: 'Static', value: 0, tag: 'Static (0 km/h)' },
-  { label: 'Loiter', value: 150, tag: 'Loiter (150 km/h)' },
-  { label: 'Cruise', value: 600, tag: 'Cruise (600 km/h)' },
-  { label: 'Max', value: 1200, tag: 'Max (1200 km/h)' },
+  { label: 'Static', value: 0, tag: 'Static (0 km/h · 0 px/s)' },
+  { label: 'Loiter', value: 150, tag: 'Loiter (150 km/h · 150 px/s)' },
+  { label: 'Cruise', value: 600, tag: 'Cruise (600 km/h · 600 px/s)' },
+  { label: 'Max', value: 1200, tag: 'Max (1200 km/h · 1200 px/s)' },
 ];
 
 /**
@@ -41,7 +43,9 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
 
   // Sync with prop when parent updates
   useEffect(() => {
-    setLocalSpeed(currentSpeed);
+    if (currentSpeed !== undefined && currentSpeed !== localSpeed) {
+      setLocalSpeed(currentSpeed);
+    }
   }, [currentSpeed]);
 
   // Sync with global satellitePovSync
@@ -60,8 +64,9 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
       setInternalApplied(true);
       setTimeout(() => setInternalApplied(false), 800);
 
-      // Broadcast to Three.js simulation engine
+      // Broadcast to Three.js simulation engine & persistent scene store
       satellitePovSync.update({ beaconSpeedKmh: speed });
+      saveSceneSettings({ beaconSpeedKmh: speed });
 
       // Notify parent callback if provided
       if (onSpeedChange) {
@@ -71,11 +76,18 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
     [onSpeedChange]
   );
 
+  const handleSliderLiveChange = useCallback((speed: number) => {
+    setLocalSpeed(speed);
+    // Instantaneous real-time synchronization while sliding
+    satellitePovSync.update({ beaconSpeedKmh: speed });
+    saveSceneSettings({ beaconSpeedKmh: speed });
+  }, []);
+
   const isAppliedState = speedApplied || internalApplied;
 
   return (
     <div className={`bg-[#1B1D1A] border border-[#33362F] rounded-lg p-3.5 text-xs text-[#F0FFEA] ${className}`}>
-      {/* Header with Title and Real-time Badge */}
+      {/* Header with Title and Real-time Badge showing BOTH km/h and px/s */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2 text-[#F0FFEA] font-medium uppercase tracking-wider">
           <Gauge className="w-4 h-4 text-[#FF5F40]" />
@@ -89,12 +101,16 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
                 : 'bg-[#262824] text-[#F0FFEA] border-[#33362F]'
             }`}
           >
-            {isAppliedState ? '✓ APPLIED' : `${localSpeed} KM/H`}
+            {isAppliedState ? '✓ APPLIED' : (
+              <span>
+                {localSpeed} KM/H <span className="text-[#9CA195]">·</span> {localSpeed} PX/S
+              </span>
+            )}
           </span>
         </div>
       </div>
 
-      {/* Speed Presets */}
+      {/* Speed Presets with dual units */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span className="text-[#9CA195] text-xs uppercase tracking-wider">Presets:</span>
         {BEACON_SPEED_PRESETS.map(({ label, value, tag }) => {
@@ -102,6 +118,7 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
           return (
             <button
               key={label}
+              type="button"
               onClick={() => handleSpeedCommit(value)}
               className={`px-2.5 py-1 rounded text-xs font-mono transition border ${
                 isActive
@@ -115,13 +132,15 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
         })}
       </div>
 
-      {/* Live Slider Control */}
+      {/* Live Slider Control with dual units */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-[#9CA195]">
           <span className="text-[#9CA195] uppercase tracking-wider">Live Adjustment</span>
           <span className="font-mono text-[#F0FFEA]">
             <strong className="text-[#FF5F40] font-semibold">{localSpeed}</strong> km/h
-            <span className="text-[#9CA195] ml-1.5">(0 – 1200 km/h)</span>
+            <span className="text-[#9CA195] mx-1">·</span>
+            <strong className="text-[#FF5F40] font-semibold">{localSpeed}</strong> px/s
+            <span className="text-[#9CA195] ml-1.5">(0 – 1200 km/h · px/s)</span>
           </span>
         </div>
 
@@ -131,20 +150,17 @@ export const BeaconSpeedControl: React.FC<BeaconSpeedControlProps> = ({
           max={1200}
           step={10}
           value={localSpeed}
-          onChange={(e) => {
-            const val = Number(e.target.value);
-            setLocalSpeed(val);
-          }}
+          onChange={(e) => handleSliderLiveChange(Number(e.target.value))}
           onMouseUp={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
           onTouchEnd={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
           className="w-full accent-[#FF5F40] cursor-pointer h-1.5 bg-[#262824] rounded appearance-none"
         />
 
-        {/* Range boundary tick labels */}
+        {/* Range boundary tick labels with dual units */}
         <div className="flex justify-between text-[11px] text-[#9CA195] font-mono">
-          <span>0 km/h (Static)</span>
-          <span>600 km/h (Cruise)</span>
-          <span>1200 km/h (Max)</span>
+          <span>0 km/h · 0 px/s (Static)</span>
+          <span>600 km/h · 600 px/s (Cruise)</span>
+          <span>1200 km/h · 1200 px/s (Max)</span>
         </div>
       </div>
 

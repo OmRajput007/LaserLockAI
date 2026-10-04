@@ -427,36 +427,59 @@ class OpenCVBeaconDetector(BaseDetector):
         cv2.circle(annotated, (cx_img, cy_img), 20, (0, 180, 255), 1)
 
         # 2. Draw Candidates & Primary Detection (Only when link is not blocked)
+        is_pri_clutter = False
         if not is_blocked and det and det.beacon_detected and det.detected_centroid_x is not None and det.detected_centroid_y is not None:
             bx = int(round(det.detected_centroid_x))
             by = int(round(det.detected_centroid_y))
+
+            # Determine if the primary candidate is a genuine beacon or clutter
+            pri_cand = det.candidates[0] if det.candidates else None
+            pri_id = pri_cand.candidate_id if pri_cand else 1
+            is_pri_clutter = bool(
+                (pri_cand and pri_cand.classification == "False Bright Object (Clutter)")
+                or (getattr(det, "target_classification", None) == "False Bright Object (Clutter)")
+                or pri_id > 1  # Genuine beacon has ID 1; false bright objects/glints are IDs > 1
+            )
 
             # Draw secondary candidates if any
             if len(det.candidates) > 1:
                 for cand in det.candidates[1:]:
                     cbx, cby, cbw, cbh = cand.bbox
-                    cv2.rectangle(annotated, (cbx, cby), (cbx + cbw, cby + cbh), (0, 255, 255), 1)
+                    is_cand_clutter = bool(
+                        cand.classification == "False Bright Object (Clutter)"
+                        or cand.candidate_id > 1
+                    )
+                    cand_label = f"CLUTTER #{cand.candidate_id}" if is_cand_clutter else f"#{cand.candidate_id}"
+                    cand_color = (0, 165, 255) if is_cand_clutter else (0, 255, 255)
+                    cv2.rectangle(annotated, (cbx, cby), (cbx + cbw, cby + cbh), cand_color, 1)
                     cv2.putText(
                         annotated,
-                        f"#{cand.candidate_id}",
-                        (cbx, cby - 3),
+                        cand_label,
+                        (cbx, max(10, cby - 3)),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.35,
-                        (0, 255, 255),
+                        cand_color,
                         1,
                     )
 
-            # Primary Beacon Bounding Box (Bright Green, 2px)
+            # Primary Beacon / Clutter Bounding Box
             if det.bbox:
                 px, py, pw, ph = det.bbox
-                cv2.rectangle(annotated, (px, py), (px + pw, py + ph), (0, 255, 0), 2)
+                if is_pri_clutter:
+                    box_color = (0, 165, 255)  # Amber for Clutter / Solar Glint
+                    label_text = f"CLUTTER #{pri_id}"
+                else:
+                    box_color = (0, 255, 0)    # Bright Green for verified genuine beacon
+                    label_text = f"BEACON #{pri_id}"
+
+                cv2.rectangle(annotated, (px, py), (px + pw, py + ph), box_color, 2)
                 cv2.putText(
                     annotated,
-                    f"BEACON #{det.candidates[0].candidate_id if det.candidates else 1}",
+                    label_text,
                     (px, max(12, py - 4)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.4,
-                    (0, 255, 0),
+                    box_color,
                     1,
                 )
 
@@ -495,7 +518,10 @@ class OpenCVBeaconDetector(BaseDetector):
             err_ang_str = "Angular: N/A (LINK BLOCKED)"
             perf_str = f"PAT State: {pat_state or 'LINK_BLOCKED'} | CV: {det.processing_time_ms if det else 0.0:.1f}ms"
         elif det and det.beacon_detected and det.detected_centroid_x is not None:
-            if is_locked:
+            if is_pri_clutter:
+                status_text = "STATUS: CLUTTER DETECTED [REJECTED]" if (getattr(det, 'rejected_clutter_count', 0) > 0) else f"STATUS: CLUTTER DETECTED [{pat_state or 'TRACKING'}]"
+                status_color = (0, 165, 255)
+            elif is_locked:
                 status_text = "STATUS: BEACON DETECTED [LOCKED]"
                 status_color = (0, 255, 120)
             elif pat_state:
