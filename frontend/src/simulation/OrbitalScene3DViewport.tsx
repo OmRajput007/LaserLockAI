@@ -242,9 +242,9 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     cameraRef.current = camera;
 
     // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     rendererRef.current = renderer;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
@@ -452,8 +452,21 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
 
     // Render loop
     let animId: number;
+    let lastRenderMs = 0;
+    const TARGET_FPS = 60;
+    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+
     const animate = () => {
       animId = requestAnimationFrame(animate);
+
+      // Skip rendering if browser tab or window is minimized/hidden
+      if (document.hidden) return;
+
+      // 60 FPS Target Throttling
+      const nowMs = performance.now();
+      const elapsed = nowMs - lastRenderMs;
+      if (elapsed < FRAME_INTERVAL_MS - 1.0) return;
+      lastRenderMs = nowMs - (elapsed % FRAME_INTERVAL_MS);
 
       // Rotate Earth slowly for a subtle living feel
       if (earthGlobeRef.current) {
@@ -482,8 +495,16 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     };
     window.addEventListener('resize', onResize);
 
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        lastRenderMs = performance.now();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);

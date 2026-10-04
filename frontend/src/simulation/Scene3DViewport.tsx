@@ -479,6 +479,35 @@ export const getFlatMarkerTexture = (): THREE.CanvasTexture => {
 };
 
 const _tempMarkerWorldPos = new THREE.Vector3();
+const _scratchVecA = new THREE.Vector3();
+const _scratchVecB = new THREE.Vector3();
+const _scratchVecC = new THREE.Vector3();
+const _scratchVecD = new THREE.Vector3();
+
+interface PersistentScene3DState {
+  satelliteAnomaly?: number;
+  satelliteMeanAnomaly?: number;
+  satelliteTrueAnomaly?: number;
+  satelliteRadius?: number;
+  satelliteAltKm?: number;
+  satelliteSpeedKmS?: number;
+  beaconAnomaly?: number;
+  earthRotationY?: number;
+  pathLegIndex?: number;
+  pathLegProgress?: number;
+  pathCurrentLocalPos?: { x: number; y: number; z: number };
+  pathStatusText?: string;
+  pathOverallProgressPct?: number;
+  pathCurrentLegDisplay?: string;
+  cameraTheta?: number;
+  cameraPhi?: number;
+  cameraRadius?: number;
+  peerAnomalies?: Record<string, number>;
+}
+
+// Module-level persistent state cache that preserves element positions across tab switches & remounts
+const persistentSceneState: PersistentScene3DState = {};
+
 export const updateScreenSpaceMarkerScale = (
   sprite: THREE.Sprite | null,
   camera: THREE.PerspectiveCamera | null,
@@ -1197,7 +1226,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const beaconMotionRef = useRef({
     isRevolving: true,
     speedKmh: 150,
-    anomaly: THREE.MathUtils.degToRad(120.0),
+    anomaly: persistentSceneState.beaconAnomaly ?? THREE.MathUtils.degToRad(120.0),
     incDeg: 28.5,
     raanDeg: 65.0,
   });
@@ -1265,15 +1294,27 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     return 'top-3 left-1/2 -translate-x-1/2';
   };
 
-  const pathLegIndexRef = useRef<number>(0);
-  const pathLegProgressRef = useRef<number>(0.0);
+  const pathLegIndexRef = useRef<number>(persistentSceneState.pathLegIndex ?? 0);
+  const pathLegProgressRef = useRef<number>(persistentSceneState.pathLegProgress ?? 0.0);
   const pathCurrentLocalPosRef = useRef<THREE.Vector3>(
-    latLonToVector3(PRESET_4POINT_WAYPOINTS[0].lat, PRESET_4POINT_WAYPOINTS[0].lon, EARTH_RENDER_R)
+    persistentSceneState.pathCurrentLocalPos
+      ? new THREE.Vector3(
+          persistentSceneState.pathCurrentLocalPos.x,
+          persistentSceneState.pathCurrentLocalPos.y,
+          persistentSceneState.pathCurrentLocalPos.z
+        )
+      : latLonToVector3(PRESET_4POINT_WAYPOINTS[0].lat, PRESET_4POINT_WAYPOINTS[0].lon, EARTH_RENDER_R)
   );
 
-  const [pathStatusText, setPathStatusText] = useState<string>('Ready at Pt 1 (Starting Point)');
-  const [pathOverallProgressPct, setPathOverallProgressPct] = useState<number>(0);
-  const [pathCurrentLegDisplay, setPathCurrentLegDisplay] = useState<string>('Leg 1→2');
+  const [pathStatusText, setPathStatusText] = useState<string>(
+    persistentSceneState.pathStatusText ?? 'Ready at Pt 1 (Starting Point)'
+  );
+  const [pathOverallProgressPct, setPathOverallProgressPct] = useState<number>(
+    persistentSceneState.pathOverallProgressPct ?? 0
+  );
+  const [pathCurrentLegDisplay, setPathCurrentLegDisplay] = useState<string>(
+    persistentSceneState.pathCurrentLegDisplay ?? 'Leg 1→2'
+  );
   const [pathSpeedMultiplier, setPathSpeedMultiplier] = useState<number>(15);
   const pathSpeedMultiplierRef = useRef<number>(15);
   pathSpeedMultiplierRef.current = pathSpeedMultiplier;
@@ -1576,11 +1617,18 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       earthSpinRef.current.enabled = true;
     };
 
+    const onResetSim = () => {
+      for (const k in persistentSceneState) {
+        delete (persistentSceneState as any)[k];
+      }
+    };
+
     window.addEventListener('fsoc:locate-satellite', onLocateSat);
     window.addEventListener('fsoc:jump-to-sat', onLocateSat);
     window.addEventListener('fsoc:locate-beacon', onLocateBeacon);
     window.addEventListener('fsoc:stop-all-processes', onStopAll);
     window.addEventListener('fsoc:start-all-processes', onStartAll);
+    window.addEventListener('fsoc:reset-sim', onResetSim);
 
     return () => {
       window.removeEventListener('fsoc:locate-satellite', onLocateSat);
@@ -1588,6 +1636,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       window.removeEventListener('fsoc:locate-beacon', onLocateBeacon);
       window.removeEventListener('fsoc:stop-all-processes', onStopAll);
       window.removeEventListener('fsoc:start-all-processes', onStartAll);
+      window.removeEventListener('fsoc:reset-sim', onResetSim);
     };
   }, [handleLocateSatellite, handleLocateBeacon]);
 
@@ -1754,13 +1803,13 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     incDeg: 53.0,
     raanDeg: 35.0,
     argPerigeeDeg: 0.0,
-    meanAnomaly: THREE.MathUtils.degToRad(48.7),
-    trueAnomaly: THREE.MathUtils.degToRad(48.7),
-    anomaly: THREE.MathUtils.degToRad(48.7),
-    radius: getRenderOrbitRadius(550.0, 'TRUE_SCALE'),
+    meanAnomaly: persistentSceneState.satelliteMeanAnomaly ?? THREE.MathUtils.degToRad(48.7),
+    trueAnomaly: persistentSceneState.satelliteTrueAnomaly ?? THREE.MathUtils.degToRad(48.7),
+    anomaly: persistentSceneState.satelliteAnomaly ?? THREE.MathUtils.degToRad(48.7),
+    radius: persistentSceneState.satelliteRadius ?? getRenderOrbitRadius(550.0, 'TRUE_SCALE'),
     currentRadiusKm: 6928.0,
-    currentSpeedKmS: 7.585,
-    altitudeKm: 550.0,
+    currentSpeedKmS: persistentSceneState.satelliteSpeedKmS ?? 7.585,
+    altitudeKm: persistentSceneState.satelliteAltKm ?? 550.0,
     autoRevolve: true,
     speed: 0.003,
   });
@@ -1787,9 +1836,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const isDraggingRef = useRef(false);
   const previousMousePositionRef = useRef({ x: 0, y: 0 });
   const orbitStateRef = useRef({
-    theta: 0.75,
-    phi: 0.45,
-    radius: 340.0,
+    theta: persistentSceneState.cameraTheta ?? 0.75,
+    phi: persistentSceneState.cameraPhi ?? 0.45,
+    radius: persistentSceneState.cameraRadius ?? 340.0,
   });
 
   // Function to recompute active orbit ring line geometry (true Keplerian ellipse)
@@ -2274,9 +2323,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     cameraRef.current = perspCamera;
 
     // 3. WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     rendererRef.current = renderer;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
@@ -2293,6 +2342,12 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     realisticEarthAssemblyRef.current = earthAssembly;
     const globeMesh = earthAssembly.globeMesh;
     globeMesh.position.set(0, 0, 0);
+    if (persistentSceneState.earthRotationY !== undefined) {
+      globeMesh.rotation.y = persistentSceneState.earthRotationY;
+      if (earthAssembly.cloudMesh) {
+        earthAssembly.cloudMesh.rotation.y = persistentSceneState.earthRotationY * 1.05;
+      }
+    }
     globeMesh.renderOrder = 0;
     scene.add(globeMesh);
     globeMeshRef.current = globeMesh;
@@ -2666,7 +2721,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       });
       const nodeSprite = new THREE.Sprite(spriteMat);
       nodeSprite.renderOrder = 10;
-      const startAnomaly = (index + 1) * 1.1;
+      const startAnomaly = persistentSceneState.peerAnomalies?.[preset.id] ?? ((index + 1) * 1.1);
       const startRPhys = e < 1e-8 ? a : (a * (1 - e * e)) / (1 + e * Math.cos(startAnomaly));
       const startRadius = getRenderOrbitRadius(startRPhys - EARTH_RADIUS_KM, scaleModeRef.current);
       nodeSprite.position.copy(computeOrbitPoint(startRadius, preset.incDeg, preset.raanDeg, startAnomaly, preset.argPerigeeDeg ?? 0));
@@ -3196,11 +3251,28 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     let animId: number;
     let frameCount = 0;
     let lastTimeMs = performance.now();
+    let lastRenderMs = 0;
+    const TARGET_FPS = 60;
+    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS; // ~16.67ms
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      frameCount++;
+
+      // Skip rendering if browser tab or window is minimized/hidden, or if viewport container is hidden
+      if (document.hidden || container.offsetParent === null) {
+        lastTimeMs = performance.now();
+        return;
+      }
+
+      // 60 FPS Target Throttling: prevents GPU overload on 120Hz/144Hz/240Hz laptop monitors
       const nowMs = performance.now();
+      const elapsedSinceRender = nowMs - lastRenderMs;
+      if (elapsedSinceRender < FRAME_INTERVAL_MS - 1.0) {
+        return;
+      }
+      lastRenderMs = nowMs - (elapsedSinceRender % FRAME_INTERVAL_MS);
+
+      frameCount++;
       const dtRealSec = Math.min(0.1, (nowMs - lastTimeMs) / 1000.0);
       lastTimeMs = nowMs;
       const isRevolving = activeOrbitRef.current.autoRevolve;
@@ -3910,6 +3982,37 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       perspCamera.position.z = radius * Math.cos(theta) * Math.cos(phi);
       perspCamera.lookAt(0, 0, 0);
 
+      // Persist runtime element positions continuously so navigation across tabs preserves exact element states
+      persistentSceneState.satelliteAnomaly = activeOrbitRef.current.anomaly;
+      persistentSceneState.satelliteMeanAnomaly = activeOrbitRef.current.meanAnomaly;
+      persistentSceneState.satelliteTrueAnomaly = activeOrbitRef.current.trueAnomaly;
+      persistentSceneState.satelliteRadius = activeOrbitRef.current.radius;
+      persistentSceneState.satelliteAltKm = activeOrbitRef.current.altitudeKm;
+      persistentSceneState.satelliteSpeedKmS = activeOrbitRef.current.currentSpeedKmS;
+      persistentSceneState.beaconAnomaly = beaconMotionRef.current.anomaly;
+      if (globeMeshRef.current) {
+        persistentSceneState.earthRotationY = globeMeshRef.current.rotation.y;
+      }
+      persistentSceneState.pathLegIndex = pathLegIndexRef.current;
+      persistentSceneState.pathLegProgress = pathLegProgressRef.current;
+      if (pathCurrentLocalPosRef.current) {
+        persistentSceneState.pathCurrentLocalPos = {
+          x: pathCurrentLocalPosRef.current.x,
+          y: pathCurrentLocalPosRef.current.y,
+          z: pathCurrentLocalPosRef.current.z,
+        };
+      }
+      persistentSceneState.pathStatusText = pathStatusText;
+      persistentSceneState.pathOverallProgressPct = pathOverallProgressPct;
+      persistentSceneState.pathCurrentLegDisplay = pathCurrentLegDisplay;
+      persistentSceneState.cameraTheta = orbitStateRef.current.theta;
+      persistentSceneState.cameraPhi = orbitStateRef.current.phi;
+      persistentSceneState.cameraRadius = orbitStateRef.current.radius;
+      if (!persistentSceneState.peerAnomalies) persistentSceneState.peerAnomalies = {};
+      peerNodesRef.current.forEach((node) => {
+        persistentSceneState.peerAnomalies![node.preset.id] = node.anomaly;
+      });
+
       renderer.render(scene, perspCamera);
     };
     animate();
@@ -3926,8 +4029,17 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     };
     window.addEventListener('resize', onResize);
 
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        lastTimeMs = performance.now();
+        lastRenderMs = performance.now();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);

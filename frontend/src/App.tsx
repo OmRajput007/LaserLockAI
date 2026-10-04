@@ -162,6 +162,11 @@ export const App: React.FC = () => {
     resetSimulation,
   } = useTelemetry();
 
+  const handleResetSim = () => {
+    resetSimulation();
+    window.dispatchEvent(new CustomEvent('fsoc:reset-sim'));
+  };
+
   // Beacon Lost FOV Alarm State & Subscription
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
   const [isAlarmMuted, setIsAlarmMuted] = useState<boolean>(alarmAudio.getIsMuted());
@@ -636,7 +641,7 @@ export const App: React.FC = () => {
 
             {/* Reset */}
             <button
-              onClick={resetSimulation}
+              onClick={handleResetSim}
               className="p-1.5 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
               title="Reset simulation"
             >
@@ -647,25 +652,26 @@ export const App: React.FC = () => {
 
         {/* Page body */}
         <div className="flex-1 overflow-y-auto p-4 bg-[#000000]">
-          {activeTab === 'mission_control' && (
+          {/* Mission Control: Preserved mounted to maintain all dynamic 3D elements, positions & simulation state across tab changes */}
+          <div style={{ display: activeTab === 'mission_control' ? 'block' : 'none' }}>
             <MissionControlPage
               telemetry={telemetry}
               config={config}
               errorHistory={errorHistory}
               onToggleSim={toggleSimulation}
-              onResetSim={resetSimulation}
+              onResetSim={handleResetSim}
               onGimbalNudge={sendGimbalControl}
               onGimbalAngles={sendGimbalTargetAngles}
               onSelectShape={handleSelectShape}
             />
-          )}
+          </div>
           {activeTab === 'virtual_simulation' && (
             <VirtualSimulationPage
               telemetry={telemetry}
               config={config}
               onUpdateConfig={handleUpdateConfig}
               onToggleSim={toggleSimulation}
-              onResetSim={resetSimulation}
+              onResetSim={handleResetSim}
               onSelectMotion={handleSelectMotion}
               onSelectShape={handleSelectShape}
             />
@@ -688,7 +694,7 @@ export const App: React.FC = () => {
               onSelectMotion={handleSelectMotion}
               onSelectShape={handleSelectShape}
               onToggleSim={toggleSimulation}
-              onResetSim={resetSimulation}
+              onResetSim={handleResetSim}
             />
           )}
           {activeTab === 'detection_ai' && (
