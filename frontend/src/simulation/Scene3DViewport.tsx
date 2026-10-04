@@ -3,6 +3,7 @@ import { useSceneSettings } from '../hooks/useSceneSettings';
 import * as THREE from 'three';
 import { TargetState, CameraState, DisturbanceTelemetry } from '../types';
 import { satellitePovSync, computeBeaconOmegaReal, EARTH_CIRCUMFERENCE_KM } from './satellitePovSync';
+import { orbitalEngine } from './orbitalEngine';
 import { formatBeaconRevolutionTime } from '../components/BeaconSpeedControl';
 import { alarmAudio } from '../services/alarmAudio';
 import { getOrCreateEarthTexture, createAtmosphereRimMesh, createRealisticEarthAssembly, RealisticEarthAssembly } from './earthTexture';
@@ -1841,7 +1842,67 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     activeOrbitRef.current.argPerigeeDeg = orbitArgPerigeeDeg;
     activeOrbitRef.current.autoRevolve = autoRevolve;
     activeOrbitRef.current.speed = revolveSpeed;
+
+    orbitalEngine.setOrbit({
+      perigeeAltKm: orbitPerigeeKm,
+      apogeeAltKm: orbitApogeeKm,
+      incDeg: orbitInc,
+      raanDeg: orbitRaan,
+      argPerigeeDeg: orbitArgPerigeeDeg,
+    });
   }, [orbitPerigeeKm, orbitApogeeKm, orbitInc, orbitRaan, orbitArgPerigeeDeg, autoRevolve, revolveSpeed]);
+
+  useEffect(() => {
+    orbitalEngine.setAutoRevolve(autoRevolve);
+  }, [autoRevolve]);
+
+  useEffect(() => {
+    orbitalEngine.setTimeWarp(simTimeWarp);
+  }, [simTimeWarp]);
+
+  useEffect(() => {
+    orbitalEngine.setEarthSpin(earthSpinEnabled, earthSpinMultiplier);
+  }, [earthSpinEnabled, earthSpinMultiplier]);
+
+  useEffect(() => {
+    orbitalEngine.setScaleMode(scaleMode);
+  }, [scaleMode]);
+
+  useEffect(() => {
+    orbitalEngine.setManualGimbal(camera?.pan_deg ?? 0, camera?.tilt_deg ?? 0);
+  }, [camera?.pan_deg, camera?.tilt_deg]);
+
+  useEffect(() => {
+    orbitalEngine.setDisturbance(disturbance ?? null);
+  }, [disturbance]);
+
+  useEffect(() => {
+    orbitalEngine.setBeaconMotion({
+      speedKmh: beaconSpeedKmh,
+      incDeg: beaconInc,
+      raanDeg: beaconRaan,
+    });
+  }, [beaconSpeedKmh, beaconInc, beaconRaan]);
+
+  useEffect(() => {
+    orbitalEngine.setAutoLOS(autoLOS);
+  }, [autoLOS]);
+
+  useEffect(() => {
+    orbitalEngine.setPathWaypoints(beaconPathWaypoints);
+  }, [beaconPathWaypoints]);
+
+  useEffect(() => {
+    orbitalEngine.setPathFollowMode(pathFollowMode);
+  }, [pathFollowMode]);
+
+  useEffect(() => {
+    orbitalEngine.setPathMotionActive(pathMotionActive);
+  }, [pathMotionActive]);
+
+  useEffect(() => {
+    orbitalEngine.setIsDrawingPath(isDrawingPath);
+  }, [isDrawingPath]);
 
   // Orbit camera drag state
   const isDraggingRef = useRef(false);
@@ -2098,6 +2159,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       activeOrbitRef.current.currentSpeedKmS = vPerigee;
       activeOrbitRef.current.altitudeKm = (perigee + apogee) / 2;
 
+      orbitalEngine.setOrbit({
+        perigeeAltKm: perigee,
+        apogeeAltKm: apogee,
+        incDeg: inc,
+        raanDeg: raan,
+        argPerigeeDeg: argPerigee,
+        meanAnomaly: 0,
+      });
+
       updateActiveOrbitRingGeometry(perigee, apogee, inc, raan, argPerigee, scaleMode);
 
       // In TRUE_SCALE, if selecting GEO or GTO (apogee 35,786 km), zoom camera out to frame it (only when in Earth overview)
@@ -2166,6 +2236,15 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     activeOrbitRef.current.raanDeg = raan;
     activeOrbitRef.current.argPerigeeDeg = argPerigee;
     activeOrbitRef.current.altitudeKm = (validPerigee + validApogee) / 2;
+
+    orbitalEngine.setOrbit({
+      perigeeAltKm: validPerigee,
+      apogeeAltKm: validApogee,
+      incDeg: inc,
+      raanDeg: raan,
+      argPerigeeDeg: argPerigee,
+      trueAnomaly: startNuDeg !== undefined ? THREE.MathUtils.degToRad(startNuDeg) : undefined,
+    });
 
     updateActiveOrbitRingGeometry(validPerigee, validApogee, inc, raan, argPerigee, scaleMode);
   };
@@ -3287,20 +3366,51 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       frameCount++;
       const dtRealSec = Math.min(0.1, (nowMs - lastTimeMs) / 1000.0);
       lastTimeMs = nowMs;
-      const isRevolving = activeOrbitRef.current.autoRevolve;
-      const dtSimSec = isRevolving ? dtRealSec * simTimeWarpRef.current : 0;
+      // 0. Fetch single-source-of-truth kinematics state from central orbitalEngine
+      const f = satellitePovSync.getData();
+      const currentSatPos = f.satPos;
+      latestSatPosRef.current.copy(currentSatPos);
+      tgtPosRef.current.copy(f.tgtPos);
+      const isOccluded = f.isOccluded;
+      const hitPoint = f.hitPoint ?? null;
+      const backupSatPos = f.backupSatPos ?? currentSatPos;
+      const currBoresight = f.boresightDir ?? new THREE.Vector3(0, 0, -1);
+      boresightDirRef.current = currBoresight;
+      const angDeg = f.beaconAngularErrorDeg ?? 0.0;
       let isBeaconInFp = false;
 
-      // 0. Advance Earth's diurnal rotation around its polar axis (Y) synchronized with physical clock
-      if (globeMeshRef.current && earthSpinRef.current.enabled) {
-        const dTheta = EARTH_ROT_RAD_PER_SEC * (isRevolving ? dtSimSec : dtRealSec) * earthSpinRef.current.multiplier;
-        globeMeshRef.current.rotation.y += dTheta;
-        if (cloudMeshRef.current) {
-          cloudMeshRef.current.rotation.y += dTheta * 1.05;
-        }
+      // Keep activeOrbitRef in sync for HUD and telemetry
+      activeOrbitRef.current.meanAnomaly = f.meanAnomaly ?? f.anomaly;
+      activeOrbitRef.current.trueAnomaly = f.anomaly;
+      activeOrbitRef.current.anomaly = f.anomaly;
+      activeOrbitRef.current.currentRadiusKm = f.currentRadiusKm ?? 6928.0;
+      activeOrbitRef.current.altitudeKm = f.altitudeKm ?? 550.0;
+      activeOrbitRef.current.currentSpeedKmS = f.speedKmS ?? 7.585;
+      activeOrbitRef.current.radius = f.orbitRadius;
+      if (f.semiMajorAxisKm) activeOrbitRef.current.semiMajorAxisKm = f.semiMajorAxisKm;
+      if (f.eccentricity !== undefined) activeOrbitRef.current.eccentricity = f.eccentricity;
+      if (f.incDeg !== undefined) activeOrbitRef.current.incDeg = f.incDeg;
+      if (f.raanDeg !== undefined) activeOrbitRef.current.raanDeg = f.raanDeg;
+      if (f.argPerigeeDeg !== undefined) activeOrbitRef.current.argPerigeeDeg = f.argPerigeeDeg;
+      if (f.beaconAnomaly !== undefined) beaconMotionRef.current.anomaly = f.beaconAnomaly;
+      if (f.slewProgress !== undefined) slewProgressRef.current = f.slewProgress;
+
+      // 1. Rotate Earth and clouds with diurnal spin
+      if (globeMeshRef.current) {
+        globeMeshRef.current.rotation.y = f.earthRotationY;
+      }
+      if (cloudMeshRef.current) {
+        cloudMeshRef.current.rotation.y = f.earthRotationY * 1.05;
       }
 
-      // 1. Advance peer constellation satellites along their orbits according to Kepler's Third Law
+      // Rotate 3D beacon path group with Earth
+      if (beaconPathGroupRef.current && globeMeshRef.current) {
+        beaconPathGroupRef.current.rotation.y = globeMeshRef.current.rotation.y;
+      }
+
+      // 2. Advance peer constellation satellites along their orbits according to Kepler's Third Law
+      const isRevolving = activeOrbitRef.current.autoRevolve;
+      const dtSimSec = isRevolving ? dtRealSec * simTimeWarpRef.current : 0;
       peerNodesRef.current.forEach((node) => {
         if (isRevolving) {
           node.anomaly = (node.anomaly + node.meanMotionRadS * dtSimSec) % (2 * Math.PI);
@@ -3316,197 +3426,22 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         node.mesh.position.copy(pos);
       });
 
-      // 2. Advance active primary satellite along its Keplerian orbit
-      const aKm = activeOrbitRef.current.semiMajorAxisKm;
-      const e = activeOrbitRef.current.eccentricity;
-      const meanMotionRadS = Math.sqrt(GM_EARTH_KM3_S2 / (aKm * aKm * aKm)); // n = sqrt(GM / a^3)
-
-      if (isRevolving) {
-        // Physical Keplerian motion: mean anomaly advances by mean motion n (rad/s) * dtSimSec
-        const stepRate = meanMotionRadS * dtSimSec;
-        activeOrbitRef.current.meanAnomaly = (activeOrbitRef.current.meanAnomaly + stepRate) % (2 * Math.PI);
-      }
-
-      // Solve Kepler's equation each step: M -> E -> nu
-      const E = solveKepler(activeOrbitRef.current.meanAnomaly, e);
-      const nu = eccentricToTrueAnomaly(E, e);
-      activeOrbitRef.current.trueAnomaly = nu;
-
-      // Current physical distance r from Earth center (km)
-      const currentRPhysKm = e < 1e-8 ? aKm : aKm * (1 - e * Math.cos(E));
-      const currentAltPhysKm = currentRPhysKm - EARTH_RADIUS_KM;
-      activeOrbitRef.current.currentRadiusKm = currentRPhysKm;
-      activeOrbitRef.current.altitudeKm = currentAltPhysKm;
-
-      // Full vis-viva equation: v = sqrt(GM * (2/r - 1/a))
-      // For circular orbit (e = 0), r = a, so 2/r - 1/a = 1/r, v = sqrt(GM/r)
-      const currentSpeedKmS = Math.sqrt(Math.max(0, GM_EARTH_KM3_S2 * (2.0 / currentRPhysKm - 1.0 / aKm)));
-      activeOrbitRef.current.currentSpeedKmS = currentSpeedKmS;
-
-      // 3D Render radius using current scaleMode
-      const activeRenderRadius = getRenderOrbitRadius(currentAltPhysKm, scaleModeRef.current);
-      activeOrbitRef.current.radius = activeRenderRadius;
-
-      // Compute current position of satellite
-      const currentSatPos = computeOrbitPoint(
-        activeRenderRadius,
-        activeOrbitRef.current.incDeg,
-        activeOrbitRef.current.raanDeg,
-        nu,
-        activeOrbitRef.current.argPerigeeDeg
-      );
-
-      // 2b. Advance backup satellite (same orbit, phase-offset along orbit)
-      const backupPhaseRad = THREE.MathUtils.degToRad(backupPhaseOffsetDeg);
-      const backupM = (activeOrbitRef.current.meanAnomaly + backupPhaseRad) % (2 * Math.PI);
-      const backupE = solveKepler(backupM, e);
-      const backupNu = eccentricToTrueAnomaly(backupE, e);
-      const backupRPhysKm = e < 1e-8 ? aKm : aKm * (1 - e * Math.cos(backupE));
-      const backupAltKm = backupRPhysKm - EARTH_RADIUS_KM;
-      const backupRenderRadius = getRenderOrbitRadius(backupAltKm, scaleModeRef.current);
-      const backupSatPos = computeOrbitPoint(
-        backupRenderRadius,
-        activeOrbitRef.current.incDeg,
-        activeOrbitRef.current.raanDeg,
-        backupNu,
-        activeOrbitRef.current.argPerigeeDeg
-      );
+      // 3. Backup satellite
       if (backupSatMeshRef.current) {
         backupSatMeshRef.current.position.copy(backupSatPos);
         backupSatMeshRef.current.lookAt(tgtPosRef.current);
       }
 
-      // Rotate 3D beacon path group with Earth's diurnal spin (15°/hour)
-      if (beaconPathGroupRef.current && globeMeshRef.current) {
-        beaconPathGroupRef.current.rotation.y = globeMeshRef.current.rotation.y;
-      }
-
-      // 3. Advance or maintain beacon ground position (Custom 3D Ground Path or circular UAV orbit)
-      let currentBeaconGroundPos: THREE.Vector3;
-      const isPathActive = pathFollowModeRef.current && beaconPathWaypointsRef.current.length >= 2;
-      const effectiveBeaconSpeedKmh = isPathActive
-        ? (pathMotionActiveRef.current ? (beaconMotionRef.current.speedKmh || 450) : 0)
-        : (beaconMotionRef.current.isRevolving ? beaconMotionRef.current.speedKmh : 0);
-
-      if (isPathActive) {
-        const waypoints = beaconPathWaypointsRef.current;
-        if (beaconTrackRingRef.current) beaconTrackRingRef.current.visible = false;
-
-        if (pathMotionActiveRef.current) {
-          const legIdx = Math.min(pathLegIndexRef.current, waypoints.length - 2);
-          const pA = waypoints[legIdx].localPos;
-          const pB = waypoints[legIdx + 1].localPos;
-
-          // Great-circle angular distance
-          const uA = pA.clone().normalize();
-          const uB = pB.clone().normalize();
-          const cosTheta = THREE.MathUtils.clamp(uA.dot(uB), -1.0, 1.0);
-          const theta = Math.acos(cosTheta);
-          const legDistKm = EARTH_RADIUS_KM * theta;
-
-          // Physical motion progression
-          const speedKmh = beaconMotionRef.current.speedKmh || 450;
-          const warp = (simTimeWarpRef.current || 60) * (pathSpeedMultiplierRef.current || 1);
-          const dtSim = isRevolving ? dtRealSec * warp : dtRealSec * 15;
-          const deltaS = legDistKm > 0.01 ? (dtSim * (speedKmh / 3600.0)) / legDistKm : 1.0;
-
-          pathLegProgressRef.current += deltaS;
-
-          if (pathLegProgressRef.current >= 1.0) {
-            if (legIdx < waypoints.length - 2) {
-              // Advance to next leg
-              pathLegIndexRef.current += 1;
-              pathLegProgressRef.current = 0.0;
-            } else {
-              // Reached final ending point (Point 4)!
-              // Requirement: "The beacon should start moving from the plotted starting point and stop at the plotted ending point."
-              pathLegProgressRef.current = 1.0;
-              pathMotionActiveRef.current = false;
-              setPathMotionActive(false);
-              setPathStatusText(`Completed: Stopped at Pt ${waypoints.length} (Ending Point)`);
-            }
-          }
-
-          // Local position along the sphere between pA and pB
-          const currentLocalPos = slerpOnSphere(pA, pB, Math.min(1.0, pathLegProgressRef.current), globeRadius);
-          pathCurrentLocalPosRef.current.copy(currentLocalPos);
-
-          // Update HUD telemetry every 6 frames
-          if (frameCount % 6 === 0) {
-            const overallPct = Math.round(
-              ((pathLegIndexRef.current + Math.min(1.0, pathLegProgressRef.current)) / (waypoints.length - 1)) * 100
-            );
-            setPathOverallProgressPct(overallPct);
-            setPathCurrentLegDisplay(`Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2}`);
-            if (pathMotionActiveRef.current) {
-              setPathStatusText(
-                `Moving: Leg ${pathLegIndexRef.current + 1}→${pathLegIndexRef.current + 2} (${Math.round(pathLegProgressRef.current * 100)}%) · ${speedKmh} km/h`
-              );
-            }
-          }
-        }
-
-        // Anchor beacon local position to rotating Earth surface
-        currentBeaconGroundPos = pathCurrentLocalPosRef.current.clone();
-        if (globeMeshRef.current) {
-          currentBeaconGroundPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), globeMeshRef.current.rotation.y);
-        }
-      } else {
-        if (beaconTrackRingRef.current) {
-          beaconTrackRingRef.current.visible = true;
-          if (globeMeshRef.current) {
-            beaconTrackRingRef.current.rotation.y = globeMeshRef.current.rotation.y;
-          }
-        }
-        if (effectiveBeaconSpeedKmh > 0) {
-          const omega_real = (2.0 * Math.PI * effectiveBeaconSpeedKmh) / (EARTH_CIRCUMFERENCE_KM * 3600.0);
-          const deltaTheta = (omega_real * simTimeWarpRef.current) * dtRealSec;
-          beaconMotionRef.current.anomaly = (beaconMotionRef.current.anomaly + deltaTheta) % (2.0 * Math.PI);
-        }
-
-        currentBeaconGroundPos = computeOrbitPoint(
-          globeRadius,
-          beaconMotionRef.current.incDeg,
-          beaconMotionRef.current.raanDeg,
-          beaconMotionRef.current.anomaly
-        );
-        if (globeMeshRef.current) {
-          currentBeaconGroundPos.applyAxisAngle(new THREE.Vector3(0, 1, 0), globeMeshRef.current.rotation.y);
-        }
-      }
-
-      tgtPosRef.current.copy(currentBeaconGroundPos);
-
-      // Position and orient the beacon group strictly on top of the globe surface (with platform motion / jitter)
+      // 4. Position and orient the beacon group strictly on top of globe surface
       if (targetMeshRef.current) {
-        const beaconNormal = currentBeaconGroundPos.clone().normalize();
-        let up = new THREE.Vector3(0, 1, 0);
-        if (Math.abs(beaconNormal.dot(up)) > 0.9) up = new THREE.Vector3(1, 0, 0);
-        const tangentX = new THREE.Vector3().crossVectors(beaconNormal, up).normalize();
-        const tangentY = new THREE.Vector3().crossVectors(tangentX, beaconNormal).normalize();
-
-        const dist = disturbancePropRef.current;
-        const jx = dist?.jitter_offset_x_px ?? 0;
-        const jy = dist?.jitter_offset_y_px ?? 0;
-        const px = dist?.platform_offset_x_px ?? 0;
-        const py = dist?.platform_offset_y_px ?? 0;
-
-        const dispScale = 0.08;
-        const surfacePos = beaconNormal.clone().multiplyScalar(globeRadius + 0.05)
-          .addScaledVector(tangentX, (jx + px) * dispScale)
-          .addScaledVector(tangentY, (jy + py) * dispScale);
-
-        targetMeshRef.current.position.copy(surfacePos);
+        const beaconNormal = tgtPosRef.current.clone().normalize();
+        targetMeshRef.current.position.copy(tgtPosRef.current);
         targetMeshRef.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), beaconNormal);
-        tgtPosRef.current.copy(surfacePos);
       }
-
-      // Check whether line of sight to ground station is blocked by Earth
-      const { isOccluded, hitPoint } = checkEarthOcclusion(
-        currentSatPos,
-        tgtPosRef.current,
-        globeRadius
-      );
+      if (beaconTrackRingRef.current && globeMeshRef.current) {
+        beaconTrackRingRef.current.visible = !pathFollowModeRef.current;
+        beaconTrackRingRef.current.rotation.y = globeMeshRef.current.rotation.y;
+      }
 
       // 4. Update Active Satellite Ground Footprint (Elevation Mask Geometry - Tasks 1-3)
       if (footprintGroupRef.current && footprintGroupRef.current.visible) {
@@ -3652,95 +3587,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         }
       }
 
-      // Broadcast live satellite orbital position and beacon state to FPA Camera Viewport
-      satellitePovSync.update({
-        satPos: currentSatPos,
-        tgtPos: tgtPosRef.current,
-        earthRotationY: globeMeshRef.current?.rotation.y ?? 0,
-        isOccluded,
-        orbitRadius: activeOrbitRef.current.radius,
-        incDeg: activeOrbitRef.current.incDeg,
-        raanDeg: activeOrbitRef.current.raanDeg,
-        anomaly: activeOrbitRef.current.trueAnomaly,
-        perigeeAltKm: activeOrbitRef.current.perigeeAltKm,
-        apogeeAltKm: activeOrbitRef.current.apogeeAltKm,
-        argPerigeeDeg: activeOrbitRef.current.argPerigeeDeg,
-        semiMajorAxisKm: activeOrbitRef.current.semiMajorAxisKm,
-        eccentricity: activeOrbitRef.current.eccentricity,
-        speedKmS: activeOrbitRef.current.currentSpeedKmS,
-        currentRadiusKm: activeOrbitRef.current.currentRadiusKm,
-        boresightDir: boresightDirRef.current,
-      });
-
-      // 1. Nominal Nadir pointing direction (Earth center 0, 0, 0), modified by manual gimbal pan/tilt
-      let nadirDir = currentSatPos.clone().negate().normalize();
-      const currentCam = cameraPropRef.current;
-      const panDeg = currentCam?.pan_deg ?? 0;
-      const tiltDeg = currentCam?.tilt_deg ?? 0;
-      const panRad = THREE.MathUtils.degToRad(panDeg);
-      const tiltRad = THREE.MathUtils.degToRad(tiltDeg);
-
-      if (Math.abs(panRad) > 0.0001 || Math.abs(tiltRad) > 0.0001) {
-        let up = new THREE.Vector3(0, 1, 0);
-        if (Math.abs(nadirDir.dot(up)) > 0.92) up = new THREE.Vector3(1, 0, 0);
-        let right = new THREE.Vector3().crossVectors(nadirDir, up).normalize();
-        let realUp = new THREE.Vector3().crossVectors(right, nadirDir).normalize();
-        nadirDir.applyAxisAngle(realUp, -panRad);
-        right.crossVectors(nadirDir, realUp).normalize();
-        nadirDir.applyAxisAngle(right, tiltRad);
-      }
-
-      // 2. Line of sight (LOS) ray direction from satellite directly to beacon
-      const losDir = new THREE.Vector3().subVectors(tgtPosRef.current, currentSatPos).normalize();
-
-      // 3. Update slew progress alpha in [0, 1]
-      // 0.025 per frame at 60 FPS -> 40 frames (~0.67s) smooth gimbal slew
-      if (autoLOSRef.current) {
-        slewProgressRef.current = Math.min(1.0, slewProgressRef.current + 0.025);
-      } else {
-        slewProgressRef.current = Math.max(0.0, slewProgressRef.current - 0.025);
-      }
-      const p = slewProgressRef.current;
-      // Smoothstep easing for natural, gradual acceleration and gentle deceleration
-      const t = p * p * (3 - 2 * p);
-
-      // 4. Closed-form Spherical Linear Interpolation (SLERP) between Nadir and LOS
-      const dot = THREE.MathUtils.clamp(nadirDir.dot(losDir), -1, 1);
-      const omega = Math.acos(dot);
-      let currBoresight: THREE.Vector3;
-      if (p <= 0.0001) {
-        currBoresight = nadirDir.clone();
-      } else if (p >= 0.9999 || omega < 0.001) {
-        currBoresight = losDir.clone();
-      } else {
-        const sinOmega = Math.sin(omega);
-        currBoresight = new THREE.Vector3()
-          .addScaledVector(nadirDir, Math.sin((1 - t) * omega) / sinOmega)
-          .addScaledVector(losDir, Math.sin(t * omega) / sinOmega)
-          .normalize();
-      }
-
-      // Apply mechanical vibration to current boresight
-      const dist = disturbancePropRef.current;
-      const jx = dist?.jitter_offset_x_px ?? 0;
-      const jy = dist?.jitter_offset_y_px ?? 0;
-      if (Math.abs(jx) > 0.001 || Math.abs(jy) > 0.001) {
-        let bUp = new THREE.Vector3(0, 1, 0);
-        if (Math.abs(currBoresight.dot(bUp)) > 0.9) bUp = new THREE.Vector3(1, 0, 0);
-        const bRight = new THREE.Vector3().crossVectors(currBoresight, bUp).normalize();
-        const bRealUp = new THREE.Vector3().crossVectors(bRight, currBoresight).normalize();
-        const vibPanRad = THREE.MathUtils.degToRad((jx * 4.0) / 640);
-        const vibTiltRad = THREE.MathUtils.degToRad((jy * 3.0) / 480);
-        currBoresight.applyAxisAngle(bRealUp, -vibPanRad);
-        currBoresight.applyAxisAngle(bRight, vibTiltRad);
-      }
-      boresightDirRef.current = currBoresight;
-
-      // Angular error between current optical boresight and LOS ray (in degrees)
-      const dotToLos = THREE.MathUtils.clamp(currBoresight.dot(losDir), -1, 1);
-      const angRad = Math.acos(dotToLos);
-      const angDeg = THREE.MathUtils.radToDeg(angRad);
-
       // Re-orient satellite mesh and optical turret smoothly along with current boresight
       if (cameraMeshRef.current) {
         cameraMeshRef.current.position.copy(currentSatPos);
@@ -3838,30 +3684,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         }
       }
 
-      satellitePovSync.update({
-        satPos: currentSatPos,
-        tgtPos: tgtPosRef.current,
-        earthRotationY: globeMeshRef.current?.rotation.y ?? 0,
-        isOccluded,
-        orbitRadius: activeOrbitRef.current.radius,
-        incDeg: activeOrbitRef.current.incDeg,
-        raanDeg: activeOrbitRef.current.raanDeg,
-        anomaly: activeOrbitRef.current.trueAnomaly,
-        meanAnomaly: activeOrbitRef.current.meanAnomaly,
-        beaconAnomaly: beaconMotionRef.current.anomaly,
-        slewProgress: slewProgressRef.current,
-        perigeeAltKm: activeOrbitRef.current.perigeeAltKm,
-        apogeeAltKm: activeOrbitRef.current.apogeeAltKm,
-        argPerigeeDeg: activeOrbitRef.current.argPerigeeDeg,
-        semiMajorAxisKm: activeOrbitRef.current.semiMajorAxisKm,
-        eccentricity: activeOrbitRef.current.eccentricity,
-        speedKmS: activeOrbitRef.current.currentSpeedKmS,
-        currentRadiusKm: activeOrbitRef.current.currentRadiusKm,
-        isLockedInFov,
-        isLostFromFov,
-        boresightDir: currBoresight,
-      });
-
       // Update telemetry state occasionally
       if (frameCount % 6 === 0) {
         const dist = currentSatPos.distanceTo(tgtPosRef.current);
@@ -3879,12 +3701,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         setOrbitAnomalyDeg(THREE.MathUtils.radToDeg(activeOrbitRef.current.trueAnomaly));
 
         // Real physical slant range in km (Rule 1: physics stays in real km, unchanged)
-        const satNorm = currentSatPos.clone().normalize();
-        const tgtNorm = tgtPosRef.current.clone().normalize();
-        const satPhysKm = satNorm.multiplyScalar(activeOrbitRef.current.currentRadiusKm);
-        const tgtPhysKm = tgtNorm.multiplyScalar(EARTH_RADIUS_KM);
-        const physDistKm = satPhysKm.distanceTo(tgtPhysKm);
-        setCurrentSlantRangeKm(physDistKm);
+        setCurrentSlantRangeKm(f.slantRangeKm ?? 550.0);
       }
 
       // 14. Standardized screen-space billboard scaling for all scene markers (Tasks 1, 2, 5, 6)
@@ -3925,6 +3742,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
       );
 
       // Update Beacon Label text & scale if state changed
+      const effectiveBeaconSpeedKmh = pathFollowModeRef.current
+        ? (pathMotionActiveRef.current ? (f.beaconSpeedKmh || 450) : 0)
+        : (f.beaconSpeedKmh && f.beaconSpeedKmh > 0 ? f.beaconSpeedKmh : 0);
+
       if (beaconLabelRef.current) {
         if (
           lastBeaconLabelState.current.speed !== effectiveBeaconSpeedKmh ||

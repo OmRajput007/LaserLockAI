@@ -260,6 +260,23 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     return unsub;
   }, [setAutoLOS]);
 
+  // Synchronize manual gimbal angles to satellitePovSync singleton
+  useEffect(() => {
+    if (camera?.pan_deg !== undefined || camera?.tilt_deg !== undefined) {
+      satellitePovSync.update({
+        gimbalPanDeg: camera?.pan_deg ?? 0,
+        gimbalTiltDeg: camera?.tilt_deg ?? 0,
+      });
+    }
+  }, [camera?.pan_deg, camera?.tilt_deg]);
+
+  // Synchronize disturbance jitter to satellitePovSync singleton
+  useEffect(() => {
+    if (disturbance !== undefined) {
+      satellitePovSync.update({ disturbance: disturbance ?? null });
+    }
+  }, [disturbance]);
+
   const handleToggleAutoLOS = () => {
     const next = !autoLOS;
     setAutoLOS(next);
