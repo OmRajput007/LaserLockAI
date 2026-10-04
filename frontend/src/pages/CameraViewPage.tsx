@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SimulationTelemetry, SystemConfig } from '../types';
 import { FPACameraViewport } from '../simulation/FPACameraViewport';
-import { Video, Sliders, Info, Compass } from 'lucide-react';
+import { satellitePovSync, SatellitePovState } from '../simulation/satellitePovSync';
+import { Video, Sliders, Info, Compass, Radio } from 'lucide-react';
 
 interface Props {
   telemetry: SimulationTelemetry | null;
@@ -19,7 +20,28 @@ export const CameraViewPage: React.FC<Props> = ({
   onSelectShape,
 }) => {
   const target = telemetry?.target ?? null;
-  const inFov = target?.is_in_fov ?? false;
+
+  // Single Source of Truth for Satellite POV (synchronized with Mission Control & 3D environment)
+  const [povState, setPovState] = useState<SatellitePovState>(() => satellitePovSync.getData());
+
+  useEffect(() => {
+    const unsub = satellitePovSync.subscribe((data) => {
+      setPovState({ ...data });
+    });
+    return unsub;
+  }, []);
+
+  const isOccluded = Boolean(povState.isOccluded);
+  const isLocked = Boolean(povState.isLockedInFov && !isOccluded);
+  const inFov = Boolean(povState.beaconInFov && !isOccluded);
+  const hasSpot = !isOccluded && povState.beaconPixelU !== null && povState.beaconPixelV !== null;
+
+  // Slant range in km
+  const slantRangeKm =
+    povState.slantRangeKm ??
+    (povState.satPos && povState.tgtPos
+      ? (povState.satPos.distanceTo(povState.tgtPos) / 100.0) * 6378.137
+      : 550.0);
 
   return (
     <div className="flex flex-col gap-4 font-mono text-xs text-[#F0FFEA]">
@@ -30,11 +52,17 @@ export const CameraViewPage: React.FC<Props> = ({
             <Video className="w-4 h-4 text-[#FF5F40]" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
-              Monochrome Focal Plane Array (FPA) Camera View
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#F0FFEA]">
+                FSOC PAT Satellite Camera POV (FPA Viewport)
+              </h2>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-[#262824] border border-[#33362F] text-[#10b981]">
+                <Radio className="w-3 h-3 animate-pulse text-[#10b981]" />
+                SYNCED WITH MISSION CONTROL
+              </span>
+            </div>
             <p className="text-[#9CA195] text-xs mt-0.5">
-              640 × 480 Resolution • 4.0° × 3.0° Field of View • Calibrated Pin-Hole Projection
+              640 × 480 Resolution • 4.0° × 3.0° Field of View • Real-time Keplerian Orbital Alignment
             </p>
           </div>
         </div>
@@ -69,6 +97,7 @@ export const CameraViewPage: React.FC<Props> = ({
             disturbance={telemetry?.disturbance ?? null}
             onGimbalNudge={onGimbalNudge}
             onGimbalAngles={onGimbalAngles}
+            showGimbalControls={true}
           />
         </div>
 
@@ -82,32 +111,80 @@ export const CameraViewPage: React.FC<Props> = ({
             <div className="flex justify-between items-center text-xs">
               <span className="text-[#9CA195]">Sensor Status:</span>
               <div className="flex items-center gap-1.5 font-medium">
-                <span className={`w-2 h-2 rounded-full ${inFov ? 'bg-[#FF5F40]' : 'bg-[#5E625A]'}`} />
-                <span className={inFov ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195]'}>
-                  {inFov ? '✓ Inside FOV' : '✕ Clipped (Outside FOV)'}
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isOccluded
+                      ? 'bg-[#f43f5e] animate-pulse'
+                      : isLocked
+                      ? 'bg-[#10b981]'
+                      : inFov
+                      ? 'bg-[#FF5F40]'
+                      : 'bg-[#5E625A]'
+                  }`}
+                />
+                <span
+                  className={
+                    isOccluded
+                      ? 'text-[#f43f5e] font-bold'
+                      : isLocked
+                      ? 'text-[#10b981] font-bold'
+                      : inFov
+                      ? 'text-[#FF5F40] font-bold'
+                      : 'text-[#9CA195]'
+                  }
+                >
+                  {isOccluded
+                    ? '✕ Occluded (Earth Limb)'
+                    : isLocked
+                    ? '✓ Locked in FOV'
+                    : inFov
+                    ? '✓ Inside FOV (Acquiring)'
+                    : '✕ Clipped (Outside FOV)'}
                 </span>
               </div>
             </div>
             <div className="flex justify-between font-mono text-xs">
               <span className="text-[#9CA195]">Pixel Coordinates (u, v):</span>
               <span className="text-[#F0FFEA] font-medium">
-                {target?.pixel_x !== null ? `(${target?.pixel_x.toFixed(1)}, ${target?.pixel_y?.toFixed(1)})` : '--'}
+                {hasSpot && povState.beaconPixelU !== null && povState.beaconPixelV !== null
+                  ? `(${povState.beaconPixelU.toFixed(1)}, ${povState.beaconPixelV.toFixed(1)})`
+                  : isOccluded
+                  ? 'Link Blocked'
+                  : 'Clipped'}
               </span>
             </div>
             <div className="flex justify-between font-mono text-xs">
               <span className="text-[#9CA195]">Bearing in Lens (Az, El):</span>
               <span className="text-[#F0FFEA] font-medium">
-                {target?.azimuth_cam_deg !== null ? `Az: ${target?.azimuth_cam_deg.toFixed(2)}° • El: ${target?.elevation_cam_deg?.toFixed(2)}°` : '--'}
+                {hasSpot && povState.beaconPixelU !== null && povState.beaconPixelV !== null
+                  ? `Az: ${(povState.beaconPixelU - 320.0) / 160.0 >= 0 ? '+' : ''}${((povState.beaconPixelU - 320.0) / 160.0).toFixed(2)}° • El: ${(240.0 - povState.beaconPixelV) / 160.0 >= 0 ? '+' : ''}${((240.0 - povState.beaconPixelV) / 160.0).toFixed(2)}°`
+                  : '--'}
               </span>
             </div>
             <div className="flex justify-between font-mono text-xs">
-              <span className="text-[#9CA195]">Target Range Depth:</span>
-              <span className="text-[#F0FFEA] font-medium">{target?.world_z.toFixed(1)} m</span>
+              <span className="text-[#9CA195]">Slant Range Distance:</span>
+              <span className="text-[#F0FFEA] font-medium">
+                {slantRangeKm.toFixed(1)} km
+              </span>
             </div>
             <div className="flex justify-between border-t border-[#33362F] pt-2 font-mono text-xs">
               <span className="text-[#9CA195]">Pointing Error:</span>
-              <span className={`font-semibold ${telemetry?.tracking.is_locked ? 'text-[#FF5F40]' : 'text-[#F0FFEA]'}`}>
-                {telemetry?.tracking.total_error_px !== null ? `${telemetry?.tracking.total_error_px.toFixed(2)} px` : '--'}
+              <span
+                className={`font-semibold ${
+                  isOccluded
+                    ? 'text-[#f43f5e]'
+                    : isLocked
+                    ? 'text-[#10b981]'
+                    : inFov
+                    ? 'text-[#FF5F40]'
+                    : 'text-[#F0FFEA]'
+                }`}
+              >
+                {isOccluded
+                  ? 'Occluded by Earth'
+                  : hasSpot && povState.beaconPixelU !== null && povState.beaconPixelV !== null
+                  ? `${Math.hypot(povState.beaconPixelU - 320, povState.beaconPixelV - 240).toFixed(1)} px (${(povState.beaconAngularErrorDeg ?? 0).toFixed(2)}°)`
+                  : `${(povState.beaconAngularErrorDeg ?? 180.0).toFixed(2)}°`}
               </span>
             </div>
           </div>
@@ -120,21 +197,47 @@ export const CameraViewPage: React.FC<Props> = ({
             </h3>
             <div className="flex justify-between font-mono text-xs">
               <span className="text-[#9CA195]">Current Pan Angle:</span>
-              <span className="text-[#F0FFEA] font-medium">{telemetry?.camera.pan_deg.toFixed(2)}°</span>
+              <span className="text-[#F0FFEA] font-medium">
+                {((povState.gimbalPanDeg ?? 0) >= 0 ? '+' : '') + (povState.gimbalPanDeg ?? 0).toFixed(2)}°
+              </span>
             </div>
             <div className="flex justify-between font-mono text-xs">
               <span className="text-[#9CA195]">Current Tilt Angle:</span>
-              <span className="text-[#F0FFEA] font-medium">{telemetry?.camera.tilt_deg.toFixed(2)}°</span>
+              <span className="text-[#F0FFEA] font-medium">
+                {((povState.gimbalTiltDeg ?? 0) >= 0 ? '+' : '') + (povState.gimbalTiltDeg ?? 0).toFixed(2)}°
+              </span>
             </div>
             <div className="flex justify-between font-mono text-xs">
-              <span className="text-[#9CA195]">Pan Slew Speed:</span>
-              <span className="text-[#FF5F40] font-medium">{telemetry?.camera.pan_rate_deg_s.toFixed(1)}°/s (Max 5.0°/s)</span>
+              <span className="text-[#9CA195]">Tracking Mode:</span>
+              <span
+                className={`font-medium ${
+                  povState.autoLOS
+                    ? isLocked
+                      ? 'text-[#10b981]'
+                      : 'text-[#FF5F40]'
+                    : 'text-[#9CA195]'
+                }`}
+              >
+                {povState.autoLOS
+                  ? isLocked
+                    ? 'AUTO LOS (LOCKED)'
+                    : 'AUTO LOS (SLEWING)'
+                  : 'STANDBY (NADIR HOLD)'}
+              </span>
             </div>
             <div className="flex justify-between font-mono text-xs">
-              <span className="text-[#9CA195]">Tilt Slew Speed:</span>
-              <span className="text-[#FF5F40] font-medium">{telemetry?.camera.tilt_rate_deg_s.toFixed(1)}°/s (Max 5.0°/s)</span>
+              <span className="text-[#9CA195]">Gimbal Slew Speed:</span>
+              <span className="text-[#FF5F40] font-medium">
+                {povState.autoLOS && !isLocked ? '2.5°/s (Active Slew)' : '0.0°/s (Tracking Hold)'}
+              </span>
             </div>
-            <div className="flex justify-between border-t border-[#33362F] pt-2 text-xs">
+            <div className="flex justify-between font-mono text-xs border-t border-[#33362F] pt-2">
+              <span className="text-[#9CA195]">Satellite Velocity:</span>
+              <span className="text-[#F0FFEA] font-medium">
+                ~{povState.speedKmS ? (povState.speedKmS * 3600).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '27,320'} km/h ({(povState.speedKmS ?? 7.59).toFixed(2)} km/s)
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
               <span className="text-[#9CA195]">Actuator Limits:</span>
               <span className="text-[#F0FFEA] font-mono">Pan ±180° • Tilt ±85°</span>
             </div>
@@ -143,10 +246,10 @@ export const CameraViewPage: React.FC<Props> = ({
           {/* FOV Clipping Rule Info */}
           <div className="bg-[#1B1D1A] border border-[#33362F] rounded-lg p-3.5 space-y-1.5 text-xs text-[#9CA195]">
             <div className="text-[#F0FFEA] font-medium flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-[#FF5F40]" /> Field of View Clipping
+              <Info className="w-3.5 h-3.5 text-[#FF5F40]" /> Field of View & LOS Alignment
             </div>
             <p className="leading-relaxed text-[11px] text-[#9CA195]">
-              When the beacon trajectory moves beyond the 4° × 3° frustum cone or behind the camera (Z_c ≤ 0), the optical spot is clipped and will not register on the focal plane array.
+              When the beacon moves beyond the satellite's 4° × 3° sensor cone or is occluded by Earth limb horizon, the optical spot is clipped and the alarm triggers. Engaging Auto LOS automatically slews the optical boresight to acquire and lock the beacon.
             </p>
           </div>
         </div>

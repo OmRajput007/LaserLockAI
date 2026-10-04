@@ -1196,7 +1196,6 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const [isLegendMinimized, setIsLegendMinimized] = [_ss.isLegendMinimized, _bindS('isLegendMinimized')];
   const [isTrackerMinimized, setIsTrackerMinimized] = [_ss.isTrackerMinimized, _bindS('isTrackerMinimized')];
   const [isScaleMinimized, setIsScaleMinimized] = [_ss.isScaleMinimized, _bindS('isScaleMinimized')];
-  const [showLayerBar, setShowLayerBar] = [_ss.showLayerBar, _bindS('showLayerBar')];
 
   // Earth Render Radius state (defaults to 100u, dynamically tunable)
   const [earthRenderRadius, setEarthRenderRadius] = useState<number>(EARTH_RENDER_R);
@@ -1221,7 +1220,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const beaconMotionRef = useRef({
     isRevolving: true,
     speedKmh: 150,
-    anomaly: persistentSceneState.beaconAnomaly ?? THREE.MathUtils.degToRad(120.0),
+    anomaly: satellitePovSync.getData().beaconAnomaly ?? persistentSceneState.beaconAnomaly ?? THREE.MathUtils.degToRad(120.0),
     incDeg: 28.5,
     raanDeg: 65.0,
   });
@@ -1481,6 +1480,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     setIsDrawingPath((prev) => {
       const next = !prev;
       isDrawingPathRef.current = next;
+      satellitePovSync.update({ isDrawingPath: next });
       return next;
     });
   };
@@ -1738,13 +1738,13 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   }[]>([]);
 
   // Auto LOS alignment state (synchronized with satellitePovSync and FPACameraViewport)
-  const [autoLOS, setAutoLOS] = useState<boolean>(false);
-  const autoLOSRef = useRef<boolean>(false);
+  const [autoLOS, setAutoLOS] = [_ss.autoLOS ?? false, _bindS('autoLOS')];
+  const autoLOSRef = useRef<boolean>(_ss.autoLOS ?? false);
   autoLOSRef.current = autoLOS;
 
   // Gradual slew state: current 3D optical boresight direction & angular off-axis error
   const boresightDirRef = useRef<THREE.Vector3 | null>(null);
-  const slewProgressRef = useRef<number>(0);
+  const slewProgressRef = useRef<number>(satellitePovSync.getData().slewProgress ?? (_ss.autoLOS ? 1.0 : 0));
   const [slewAngularError, setSlewAngularError] = useState<number>(0);
 
   const cameraPropRef = useRef(camera);
@@ -1752,7 +1752,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const disturbancePropRef = useRef(disturbance);
   disturbancePropRef.current = disturbance;
 
-  // Sync autoLOS and beaconSpeedKmh state from satellitePovSync
+  // Sync autoLOS, beaconSpeedKmh, isDrawingPath, and pathFollowMode state from satellitePovSync
   useEffect(() => {
     const unsub = satellitePovSync.subscribe((data) => {
       if (data.autoLOS !== undefined && data.autoLOS !== autoLOSRef.current) {
@@ -1764,9 +1764,25 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         beaconMotionRef.current.speedKmh = data.beaconSpeedKmh;
         setBeaconRevolving(data.beaconSpeedKmh > 0);
       }
+      if (data.isDrawingPath !== undefined && data.isDrawingPath !== isDrawingPathRef.current) {
+        setIsDrawingPath(data.isDrawingPath);
+        isDrawingPathRef.current = data.isDrawingPath;
+      }
+      if (data.pathFollowMode !== undefined && data.pathFollowMode !== pathFollowModeRef.current) {
+        setPathFollowMode(data.pathFollowMode);
+        pathFollowModeRef.current = data.pathFollowMode;
+      }
     });
     return unsub;
-  }, []);
+  }, [setPathFollowMode, setAutoLOS]);
+
+  useEffect(() => {
+    pathFollowModeRef.current = pathFollowMode;
+    if (beaconPathSolidLineRef.current) beaconPathSolidLineRef.current.visible = pathFollowMode;
+    if (beaconPathDashedLineRef.current) beaconPathDashedLineRef.current.visible = pathFollowMode;
+    if (beaconPathMarkersGroupRef.current) beaconPathMarkersGroupRef.current.visible = pathFollowMode;
+    if (beaconTrackRingRef.current) beaconTrackRingRef.current.visible = !pathFollowMode;
+  }, [pathFollowMode]);
 
   const handleToggleAutoLOS = () => {
     const next = !autoLOS;
@@ -1798,13 +1814,13 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     incDeg: 53.0,
     raanDeg: 35.0,
     argPerigeeDeg: 0.0,
-    meanAnomaly: persistentSceneState.satelliteMeanAnomaly ?? THREE.MathUtils.degToRad(48.7),
-    trueAnomaly: persistentSceneState.satelliteTrueAnomaly ?? THREE.MathUtils.degToRad(48.7),
-    anomaly: persistentSceneState.satelliteAnomaly ?? THREE.MathUtils.degToRad(48.7),
-    radius: persistentSceneState.satelliteRadius ?? getRenderOrbitRadius(550.0, 'TRUE_SCALE'),
-    currentRadiusKm: 6928.0,
-    currentSpeedKmS: persistentSceneState.satelliteSpeedKmS ?? 7.585,
-    altitudeKm: persistentSceneState.satelliteAltKm ?? 550.0,
+    meanAnomaly: satellitePovSync.getData().meanAnomaly ?? persistentSceneState.satelliteMeanAnomaly ?? THREE.MathUtils.degToRad(48.7),
+    trueAnomaly: satellitePovSync.getData().anomaly ?? persistentSceneState.satelliteTrueAnomaly ?? THREE.MathUtils.degToRad(48.7),
+    anomaly: satellitePovSync.getData().anomaly ?? persistentSceneState.satelliteAnomaly ?? THREE.MathUtils.degToRad(48.7),
+    radius: satellitePovSync.getData().orbitRadius ?? persistentSceneState.satelliteRadius ?? getRenderOrbitRadius(550.0, 'TRUE_SCALE'),
+    currentRadiusKm: satellitePovSync.getData().currentRadiusKm ?? 6928.0,
+    currentSpeedKmS: satellitePovSync.getData().speedKmS ?? persistentSceneState.satelliteSpeedKmS ?? 7.585,
+    altitudeKm: satellitePovSync.getData().altitudeKm ?? persistentSceneState.satelliteAltKm ?? 550.0,
     autoRevolve: true,
     speed: 0.003,
   });
@@ -2337,10 +2353,11 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
     realisticEarthAssemblyRef.current = earthAssembly;
     const globeMesh = earthAssembly.globeMesh;
     globeMesh.position.set(0, 0, 0);
-    if (persistentSceneState.earthRotationY !== undefined) {
-      globeMesh.rotation.y = persistentSceneState.earthRotationY;
+    const initialEarthRot = satellitePovSync.getData().earthRotationY ?? persistentSceneState.earthRotationY;
+    if (initialEarthRot !== undefined) {
+      globeMesh.rotation.y = initialEarthRot;
       if (earthAssembly.cloudMesh) {
-        earthAssembly.cloudMesh.rotation.y = persistentSceneState.earthRotationY * 1.05;
+        earthAssembly.cloudMesh.rotation.y = initialEarthRot * 1.05;
       }
     }
     globeMesh.renderOrder = 0;
@@ -3830,6 +3847,9 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         incDeg: activeOrbitRef.current.incDeg,
         raanDeg: activeOrbitRef.current.raanDeg,
         anomaly: activeOrbitRef.current.trueAnomaly,
+        meanAnomaly: activeOrbitRef.current.meanAnomaly,
+        beaconAnomaly: beaconMotionRef.current.anomaly,
+        slewProgress: slewProgressRef.current,
         perigeeAltKm: activeOrbitRef.current.perigeeAltKm,
         apogeeAltKm: activeOrbitRef.current.apogeeAltKm,
         argPerigeeDeg: activeOrbitRef.current.argPerigeeDeg,
@@ -4110,383 +4130,7 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[#000000] border border-[#33362F] rounded-lg overflow-hidden">
-      {/* 3D Viewport Header - Space-Optimized Mission Control Header */}
-      <div className="flex flex-col bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono z-10 shrink-0 select-none">
-        {/* Row 1: Title, Simulation Playback, Time Warp & Quick Camera Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#33362F]">
-          <div className="flex items-center gap-2 text-[#FF5F40]">
-            <Box className="w-4 h-4 text-[#FF5F40]" />
-            <span className="font-semibold tracking-wider text-xs text-[#F0FFEA]">3D LEO KINEMATICS — LaserLockAI</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {/* Play / Pause Satellite Orbital Motion */}
-            <button
-              onClick={() => setAutoRevolve(!autoRevolve)}
-              className="px-2.5 py-1 rounded bg-[#262824] hover:bg-[#1B1D1A] border border-[#33362F] hover:border-[#FF5F40] text-xs flex items-center gap-2 transition"
-              title={autoRevolve ? 'Pause Satellite Orbital Motion (Spacecraft in Space)' : 'Resume Satellite Orbital Motion'}
-            >
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${
-                  autoRevolve
-                    ? 'bg-[#FF5F40]'
-                    : 'bg-[#5E625A]'
-                }`}
-              />
-              <span className="text-[#9CA195]">
-                Sat Orbit:{' '}
-                <strong className={autoRevolve ? 'text-[#FF5F40] font-medium' : 'text-[#9CA195] font-medium'}>
-                  {autoRevolve ? 'Active' : 'Paused'}
-                </strong>
-              </span>
-            </button>
-
-            {/* Quick Time Warp Badge in Header */}
-            <div className="flex items-center gap-1.5 bg-[#262824] hover:border-[#FF5F40] px-2.5 py-1 rounded border border-[#33362F] text-xs transition">
-              <Clock className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
-              <span className="text-[#9CA195] font-medium shrink-0">Time:</span>
-              <select
-                value={simTimeWarp}
-                onChange={(e) => setSimTimeWarp(Number(e.target.value))}
-                className="bg-transparent text-[#F0FFEA] font-medium focus:outline-none cursor-pointer text-xs pr-1"
-                title="Simulation Physical Time Warp (Keplerian Rate)"
-              >
-                <option value={1} className="bg-[#1B1D1A] text-[#F0FFEA]">1× (Real)</option>
-                <option value={60} className="bg-[#1B1D1A] text-[#F0FFEA]">60× (1m)</option>
-                <option value={120} className="bg-[#1B1D1A] text-[#F0FFEA]">120× (2m)</option>
-                <option value={360} className="bg-[#1B1D1A] text-[#F0FFEA]">360× (6m)</option>
-                <option value={1440} className="bg-[#1B1D1A] text-[#F0FFEA]">1440× (1d)</option>
-              </select>
-              <ChevronDown className="w-3 h-3 text-[#9CA195] pointer-events-none -ml-1 shrink-0" />
-            </div>
-
-            {/* Lower Pole View */}
-            <button
-              onClick={() => {
-                focusModeRef.current = 'earth';
-                setFocusMode('earth');
-                orbitStateRef.current = { theta: 0, phi: -1.35, radius: 340.0 };
-              }}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
-              title="Tilt camera directly to Lower Pole (South Pole / Antarctica)"
-            >
-              <Compass className="w-3.5 h-3.5 text-[#9CA195]" /> <span>S-Pole</span>
-            </button>
-
-            {/* Upper Pole View */}
-            <button
-              onClick={() => {
-                focusModeRef.current = 'earth';
-                setFocusMode('earth');
-                orbitStateRef.current = { theta: 0, phi: 1.35, radius: 340.0 };
-              }}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
-              title="Tilt camera directly to Upper Pole (North Pole / Arctic)"
-            >
-              <Compass className="w-3.5 h-3.5 text-[#9CA195] rotate-180" /> <span>N-Pole</span>
-            </button>
-
-            {/* Locate Satellite Button */}
-            <button
-              onClick={handleLocateSatellite}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
-              title="Instantly orient camera to face satellite on the globe (Shortcut: S)"
-            >
-              <Satellite className="w-3.5 h-3.5 text-[#FF5F40]" />
-              <span>Locate Sat</span>
-            </button>
-
-            {/* Locate Beacon Button */}
-            <button
-              onClick={handleLocateBeacon}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium"
-              title="Instantly orient camera to face beacon on the globe (Shortcut: B)"
-            >
-              <Radio className="w-3.5 h-3.5 text-[#FF5F40]" />
-              <span>Locate Beacon</span>
-            </button>
-
-            {/* Reset Camera View */}
-            <button
-              onClick={resetCameraView}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
-              title="Reset 3D Orbit Camera to Default Earth View"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-[#9CA195]" /> <span>Reset</span>
-            </button>
-
-            {/* Layer / Overlays Toggle Button */}
-            <button
-              onClick={() => setShowLayerBar(!showLayerBar)}
-              className="px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] border-[#33362F] hover:border-[#FF5F40]"
-              title={showLayerBar ? 'Collapse Scene Overlays Toolbar' : 'Expand Scene Overlays Toolbar (Footprint, Sun, Atmo, Rings, etc.)'}
-            >
-              <Layers className="w-3.5 h-3.5 text-[#9CA195]" />
-              <span>Overlays (7)</span>
-              {showLayerBar ? <ChevronUp className="w-3.5 h-3.5 text-[#9CA195]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#9CA195]" />}
-            </button>
-
-            {/* Pop out in new tab option */}
-            <button
-              onClick={() => {
-                const url = new URL(window.location.origin + window.location.pathname);
-                url.searchParams.set('popout', '3d');
-                window.open(url.toString(), '_blank', 'noopener,noreferrer');
-              }}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium ml-1"
-              title="Pop out 3D Virtual Scene & all settings into a new browser tab"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-[#FF5F40]" />
-              <span>Pop out</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Orbit Selection, Scale Mode, Tune & Speeds */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#1B1D1A]/95 border-b border-[#33362F]">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Render Scale Mode Toggle (Compact Segmented Pill) */}
-            <div className="flex items-center bg-[#262824] p-0.5 rounded border border-[#33362F] text-xs">
-              <button
-                onClick={() => handleScaleModeChange('TRUE_SCALE')}
-                className={`px-2.5 py-1 rounded transition text-xs ${
-                  scaleMode === 'TRUE_SCALE'
-                    ? 'border border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                    : 'text-[#9CA195] hover:text-[#F0FFEA] border border-transparent'
-                }`}
-                title="True Physical Scale (1:1): Earth R=100u, LEO 550km = +8.6u, GEO = +561u"
-              >
-                True Scale
-              </button>
-              <button
-                onClick={() => handleScaleModeChange('READABLE_SCALE')}
-                className={`px-2.5 py-1 rounded transition text-xs ${
-                  scaleMode === 'READABLE_SCALE'
-                    ? 'border border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                    : 'text-[#9CA195] hover:text-[#F0FFEA] border border-transparent'
-                }`}
-                title="Readable Logarithmic Scale: Simultaneously view LEO and GEO"
-              >
-                Readable Scale
-              </button>
-            </div>
-
-            {/* Quick Preset Selector Dropdown (Space-Optimized with max-w & truncate) */}
-            <div className="flex items-center gap-2 bg-[#262824] hover:border-[#FF5F40] px-2.5 py-1 rounded border border-[#33362F] text-xs max-w-[280px] transition">
-              <Compass className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
-              <span className="text-[#9CA195] text-xs shrink-0 font-medium">Orbit:</span>
-              <select
-                value={selectedPresetId}
-                onChange={(e) => handlePresetSelect(e.target.value)}
-                className="bg-transparent text-[#F0FFEA] font-medium focus:outline-none cursor-pointer truncate text-xs w-full pr-1"
-                title="Select Orbit Preset or Custom Parameters"
-              >
-                {ORBIT_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-[#1B1D1A] text-[#F0FFEA]">
-                    {p.name}
-                  </option>
-                ))}
-                <option value="custom" className="bg-[#1B1D1A] text-[#FF5F40]">
-                  [Custom Parameters]
-                </option>
-              </select>
-              <ChevronDown className="w-3 h-3 text-[#9CA195] pointer-events-none -ml-1 shrink-0" />
-            </div>
-
-            {/* Toggle Interactive Tuning Drawer */}
-            <button
-              onClick={() => setShowOrbitTuner(!showOrbitTuner)}
-              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition ${
-                showOrbitTuner
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title="Open Interactive Orbit Parameter Sliders"
-            >
-              <Sliders className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
-              <span>Tune Orbit</span>
-            </button>
-
-            {/* Real Orbital Speeds & Revolution Periods Reference Table Modal Toggle */}
-            <button
-              onClick={() => setShowSpecsTable(!showSpecsTable)}
-              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition ${
-                showSpecsTable
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title="View Real Satellite Speeds & Revolution Periods Table (Keplerian Reference)"
-            >
-              <BarChart2 className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
-              <span>Speeds & Periods</span>
-            </button>
-
-            {/* 3D Beacon Ground Path Planner Toggle */}
-            <button
-              onClick={() => setShowBeaconPathPlanner(!showBeaconPathPlanner)}
-              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-2 transition ${
-                showBeaconPathPlanner
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title="Open 3D Beacon Ground Path Planner (Define Waypoints 1→4 on Earth)"
-            >
-              <MapPin className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
-              <span>Beacon Path</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1B1D1A] text-[#9CA195] font-mono border border-[#33362F]">
-                {beaconPathWaypoints.length} pts
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Row 3: Scene Display & Physics Layer Buttons (Expandable/Collapsible via Overlays Button) */}
-        {showLayerBar && (
-          <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-2 bg-[#1B1D1A]/95 border-t border-[#33362F] text-xs animate-in fade-in duration-150">
-            <span className="text-[#9CA195] font-bold text-[10px] uppercase tracking-wider mr-1">LAYERS:</span>
-
-            {/* Auto LOS Alignment Toggle */}
-            <button
-              onClick={handleToggleAutoLOS}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                autoLOS
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={autoLOS ? 'Auto LOS is ON (Calibrating FOV to Beacon)' : 'Auto LOS is OFF (Nadir / Gimbal Hold)'}
-            >
-              <Locate className={`w-3 h-3 ${autoLOS ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Auto LOS: {autoLOS ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Ground Footprint Toggle */}
-            <button
-              onClick={() => setShowFootprint(!showFootprint)}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                showFootprint
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={showFootprint ? 'Hide Ground Footprint' : 'Show Ground Footprint'}
-            >
-              <Target className={`w-3 h-3 ${showFootprint ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Footprint: {showFootprint ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Sun / Terminator Toggle */}
-            <button
-              onClick={() => setShowSunTerminator(!showSunTerminator)}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                showSunTerminator
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={showSunTerminator ? 'Hide Sun Vector & Terminator' : 'Show Sun Vector & Terminator'}
-            >
-              <Sun className={`w-3 h-3 ${showSunTerminator ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Sun/Term: {showSunTerminator ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Atmosphere Shells Toggle */}
-            <button
-              onClick={() => setShowAtmosphereShells(!showAtmosphereShells)}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                showAtmosphereShells
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={showAtmosphereShells ? 'Hide Atmosphere Shells (0-20km, 20-100km, Kármán)' : 'Show Atmosphere Shells'}
-            >
-              <Layers className={`w-3 h-3 ${showAtmosphereShells ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Atmo: {showAtmosphereShells ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Standard Reference Altitude Rings Toggle */}
-            <button
-              onClick={() => setShowReferenceRings(!showReferenceRings)}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                showReferenceRings
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={showReferenceRings ? 'Hide Reference Altitude Rings' : 'Show Reference Altitude Rings (100km, 2000km, 20200km, 35786km)'}
-            >
-              <Compass className={`w-3 h-3 ${showReferenceRings ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Ref Rings: {showReferenceRings ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Beacon Motion Toggle (Revolve vs Static on Ground) */}
-            <button
-              onClick={() => setBeaconRevolving(!beaconRevolving)}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                beaconRevolving
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={beaconRevolving ? 'Put Beacon Static on Ground' : 'Revolve Beacon Around Center of Earth on Ground'}
-            >
-              <Radio className={`w-3 h-3 ${beaconRevolving ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Beacon: {beaconRevolving ? 'Revolving' : 'Static'}</span>
-            </button>
-
-            {/* 3D Ground Path Layer Toggle */}
-            <button
-              onClick={() => {
-                const next = !pathFollowMode;
-                setPathFollowMode(next);
-                pathFollowModeRef.current = next;
-                if (!next) {
-                  setPathMotionActive(false);
-                  pathMotionActiveRef.current = false;
-                }
-                if (beaconPathSolidLineRef.current) beaconPathSolidLineRef.current.visible = next;
-                if (beaconPathDashedLineRef.current) beaconPathDashedLineRef.current.visible = next;
-                if (beaconPathMarkersGroupRef.current) beaconPathMarkersGroupRef.current.visible = next;
-                if (beaconTrackRingRef.current) beaconTrackRingRef.current.visible = !next;
-              }}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                pathFollowMode
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={pathFollowMode ? 'Disable 3D Waypoint Path Mode' : 'Enable 3D Waypoint Path Mode (1→4)'}
-            >
-              <MapPin className={`w-3 h-3 ${pathFollowMode ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Path 1→4: {pathFollowMode ? (pathMotionActive ? 'RUNNING' : 'ON') : 'OFF'}</span>
-            </button>
-
-            {/* Draw Mode Quick Toggle */}
-            <button
-              onClick={handleToggleDrawMode}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                isDrawingPath
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/25 text-[#FF5F40] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title="Click on Earth to add waypoints in 3D"
-            >
-              <PenTool className={`w-3 h-3 ${isDrawingPath ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Draw: {isDrawingPath ? 'ACTIVE' : 'OFF'}</span>
-            </button>
-
-            {/* Earth Diurnal Spin Toggle */}
-            <button
-              onClick={() => setEarthSpinEnabled(!earthSpinEnabled)}
-              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition text-xs ${
-                earthSpinEnabled
-                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
-                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#9CA195] hover:text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
-              }`}
-              title={earthSpinEnabled ? 'Pause Earth Diurnal Spin' : 'Resume Earth Diurnal Spin'}
-            >
-              <Globe className={`w-3 h-3 ${earthSpinEnabled ? 'text-[#FF5F40]' : 'text-[#5E625A]'}`} />
-              <span>Earth Spin: {earthSpinEnabled ? 'ON' : 'OFF'}</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 3D Viewport Canvas & Isolated HUD Layer (prevents any HUD overlay from overlapping the header) */}
+      {/* 3D Viewport Canvas & Isolated HUD Layer (prevents any HUD overlay from overlapping the controls bar) */}
       <div className="relative flex-1 w-full h-full min-h-[380px] overflow-hidden">
         {/* Three.js Canvas Mount */}
         <div
@@ -6026,6 +5670,207 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           </div>
         )}
       </div>
+      </div>
+
+      {/* 3D Viewport Controls Bar - Space-Optimized Mission Control Bar (Flipped to Bottom) */}
+      <div className="flex flex-col bg-[#1B1D1A] border-t border-[#33362F] text-xs font-mono z-10 shrink-0 select-none">
+        {/* Row 1: Title, Simulation Playback, Time Warp & Quick Camera Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#33362F]">
+          <div className="flex items-center gap-2 text-[#FF5F40]">
+            <Box className="w-4 h-4 text-[#FF5F40]" />
+            <span className="font-semibold tracking-wider text-xs text-[#F0FFEA]">3D LEO KINEMATICS — LaserLockAI</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Play / Pause Satellite Orbital Motion */}
+            <button
+              onClick={() => setAutoRevolve(!autoRevolve)}
+              className="px-2.5 py-1 rounded bg-[#262824] hover:bg-[#1B1D1A] border border-[#33362F] hover:border-[#FF5F40] text-xs flex items-center gap-2 transition"
+              title={autoRevolve ? 'Pause Satellite Orbital Motion (Spacecraft in Space)' : 'Resume Satellite Orbital Motion'}
+            >
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  autoRevolve
+                    ? 'bg-[#FF5F40]'
+                    : 'bg-[#5E625A]'
+                }`}
+              />
+              <span className="text-[#9CA195]">
+                Sat Orbit:{' '}
+                <strong className={autoRevolve ? 'text-[#FF5F40] font-medium' : 'text-[#9CA195] font-medium'}>
+                  {autoRevolve ? 'Active' : 'Paused'}
+                </strong>
+              </span>
+            </button>
+
+            {/* Quick Time Warp Badge in Controls Bar */}
+            <div className="flex items-center gap-1.5 bg-[#262824] hover:border-[#FF5F40] px-2.5 py-1 rounded border border-[#33362F] text-xs transition">
+              <Clock className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span className="text-[#9CA195] font-medium shrink-0">Time:</span>
+              <select
+                value={simTimeWarp}
+                onChange={(e) => setSimTimeWarp(Number(e.target.value))}
+                className="bg-transparent text-[#F0FFEA] font-medium focus:outline-none cursor-pointer text-xs pr-1"
+                title="Simulation Physical Time Warp (Keplerian Rate)"
+              >
+                <option value={1} className="bg-[#1B1D1A] text-[#F0FFEA]">1× (Real)</option>
+                <option value={60} className="bg-[#1B1D1A] text-[#F0FFEA]">60× (1m)</option>
+                <option value={120} className="bg-[#1B1D1A] text-[#F0FFEA]">120× (2m)</option>
+                <option value={360} className="bg-[#1B1D1A] text-[#F0FFEA]">360× (6m)</option>
+                <option value={1440} className="bg-[#1B1D1A] text-[#F0FFEA]">1440× (1d)</option>
+              </select>
+              <ChevronDown className="w-3 h-3 text-[#9CA195] pointer-events-none -ml-1 shrink-0" />
+            </div>
+
+            {/* Lower Pole View */}
+            <button
+              onClick={() => {
+                focusModeRef.current = 'earth';
+                setFocusMode('earth');
+                orbitStateRef.current = { theta: 0, phi: -1.35, radius: 340.0 };
+              }}
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
+              title="Tilt camera directly to Lower Pole (South Pole / Antarctica)"
+            >
+              <Compass className="w-3.5 h-3.5 text-[#9CA195]" /> <span>S-Pole</span>
+            </button>
+
+            {/* Upper Pole View */}
+            <button
+              onClick={() => {
+                focusModeRef.current = 'earth';
+                setFocusMode('earth');
+                orbitStateRef.current = { theta: 0, phi: 1.35, radius: 340.0 };
+              }}
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
+              title="Tilt camera directly to Upper Pole (North Pole / Arctic)"
+            >
+              <Compass className="w-3.5 h-3.5 text-[#9CA195] rotate-180" /> <span>N-Pole</span>
+            </button>
+
+
+            {/* Reset Camera View */}
+            <button
+              onClick={resetCameraView}
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition"
+              title="Reset 3D Orbit Camera to Default Earth View"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#9CA195]" /> <span>Reset</span>
+            </button>
+
+            {/* Pop out in new tab option */}
+            <button
+              onClick={() => {
+                const url = new URL(window.location.origin + window.location.pathname);
+                url.searchParams.set('popout', '3d');
+                window.open(url.toString(), '_blank', 'noopener,noreferrer');
+              }}
+              className="px-2.5 py-1 bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] hover:text-[#FF5F40] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1.5 text-xs transition cursor-pointer font-medium ml-1"
+              title="Pop out 3D Virtual Scene & all settings into a new browser tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-[#FF5F40]" />
+              <span>Pop out</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Orbit Selection, Scale Mode, Tune & Speeds */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#1B1D1A]/95">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Render Scale Mode Toggle (Compact Segmented Pill) */}
+            <div className="flex items-center bg-[#262824] p-0.5 rounded border border-[#33362F] text-xs">
+              <button
+                onClick={() => handleScaleModeChange('TRUE_SCALE')}
+                className={`px-2.5 py-1 rounded transition text-xs ${
+                  scaleMode === 'TRUE_SCALE'
+                    ? 'border border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                    : 'text-[#9CA195] hover:text-[#F0FFEA] border border-transparent'
+                }`}
+                title="True Physical Scale (1:1): Earth R=100u, LEO 550km = +8.6u, GEO = +561u"
+              >
+                True Scale
+              </button>
+              <button
+                onClick={() => handleScaleModeChange('READABLE_SCALE')}
+                className={`px-2.5 py-1 rounded transition text-xs ${
+                  scaleMode === 'READABLE_SCALE'
+                    ? 'border border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                    : 'text-[#9CA195] hover:text-[#F0FFEA] border border-transparent'
+                }`}
+                title="Readable Logarithmic Scale: Simultaneously view LEO and GEO"
+              >
+                Readable Scale
+              </button>
+            </div>
+
+            {/* Quick Preset Selector Dropdown (Space-Optimized with max-w & truncate) */}
+            <div className="flex items-center gap-2 bg-[#262824] hover:border-[#FF5F40] px-2.5 py-1 rounded border border-[#33362F] text-xs max-w-[280px] transition">
+              <Compass className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span className="text-[#9CA195] text-xs shrink-0 font-medium">Orbit:</span>
+              <select
+                value={selectedPresetId}
+                onChange={(e) => handlePresetSelect(e.target.value)}
+                className="bg-transparent text-[#F0FFEA] font-medium focus:outline-none cursor-pointer truncate text-xs w-full pr-1"
+                title="Select Orbit Preset or Custom Parameters"
+              >
+                {ORBIT_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-[#1B1D1A] text-[#F0FFEA]">
+                    {p.name}
+                  </option>
+                ))}
+                <option value="custom" className="bg-[#1B1D1A] text-[#FF5F40]">
+                  [Custom Parameters]
+                </option>
+              </select>
+              <ChevronDown className="w-3 h-3 text-[#9CA195] pointer-events-none -ml-1 shrink-0" />
+            </div>
+
+            {/* Toggle Interactive Tuning Drawer */}
+            <button
+              onClick={() => setShowOrbitTuner(!showOrbitTuner)}
+              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition ${
+                showOrbitTuner
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
+              }`}
+              title="Open Interactive Orbit Parameter Sliders"
+            >
+              <Sliders className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span>Tune Orbit</span>
+            </button>
+
+            {/* Real Orbital Speeds & Revolution Periods Reference Table Modal Toggle */}
+            <button
+              onClick={() => setShowSpecsTable(!showSpecsTable)}
+              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-1.5 transition ${
+                showSpecsTable
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
+              }`}
+              title="View Real Satellite Speeds & Revolution Periods Table (Keplerian Reference)"
+            >
+              <BarChart2 className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span>Speeds & Periods</span>
+            </button>
+
+            {/* 3D Beacon Ground Path Planner Toggle */}
+            <button
+              onClick={() => setShowBeaconPathPlanner(!showBeaconPathPlanner)}
+              className={`px-2.5 py-1 rounded border text-xs flex items-center gap-2 transition ${
+                showBeaconPathPlanner
+                  ? 'border-[#FF5F40] bg-[#FF5F40]/15 text-[#F0FFEA] font-medium'
+                  : 'bg-[#262824] hover:bg-[#1B1D1A] text-[#F0FFEA] border-[#33362F] hover:border-[#FF5F40]'
+              }`}
+              title="Open 3D Beacon Ground Path Planner (Define Waypoints 1→4 on Earth)"
+            >
+              <MapPin className="w-3.5 h-3.5 text-[#9CA195] shrink-0" />
+              <span>Beacon Path</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1B1D1A] text-[#9CA195] font-mono border border-[#33362F]">
+                {beaconPathWaypoints.length} pts
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Real Satellite Speeds & Revolution Periods Reference Modal */}

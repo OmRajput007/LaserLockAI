@@ -341,6 +341,8 @@ export const MissionControlPage: React.FC<Props> = ({
               disturbance={telemetry?.disturbance ?? null}
               onGimbalNudge={onGimbalNudge}
               onGimbalAngles={onGimbalAngles}
+              showGimbalControls={false}
+              showSceneLayers={false}
             />
           </div>
         </div>
@@ -368,6 +370,8 @@ export const MissionControlPage: React.FC<Props> = ({
               disturbance={telemetry?.disturbance ?? null}
               onGimbalNudge={onGimbalNudge}
               onGimbalAngles={onGimbalAngles}
+              showGimbalControls={false}
+              showSceneLayers={true}
             />
           </div>
         </div>
@@ -383,6 +387,8 @@ export const MissionControlPage: React.FC<Props> = ({
             disturbance={telemetry?.disturbance ?? null}
             onGimbalNudge={onGimbalNudge}
             onGimbalAngles={onGimbalAngles}
+            showGimbalControls={false}
+            showSceneLayers={false}
           />
         </div>
       )}

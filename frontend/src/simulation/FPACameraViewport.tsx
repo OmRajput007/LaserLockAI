@@ -21,6 +21,8 @@ import {
   Download,
 } from 'lucide-react';
 import { alarmAudio } from '../services/alarmAudio';
+import { SceneLayersControl } from './SceneLayersControl';
+import { useSceneSettings } from '../hooks/useSceneSettings';
 
 interface FPACameraViewportProps {
   target: TargetState | null;
@@ -30,6 +32,8 @@ interface FPACameraViewportProps {
   disturbance?: DisturbanceTelemetry | null;
   onGimbalNudge?: (pan_rate: number, tilt_rate: number) => void;
   onGimbalAngles?: (target_pan: number, target_tilt: number) => void;
+  showGimbalControls?: boolean;
+  showSceneLayers?: boolean;
 }
 
 export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
@@ -40,6 +44,8 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   disturbance,
   onGimbalNudge,
   onGimbalAngles,
+  showGimbalControls = true,
+  showSceneLayers = !showGimbalControls,
 }) => {
   // Default tab on load is OpenCV Annotated per requirements
   const [viewMode, setViewMode] = useState<'opencv_annotated' | 'opencv_raw'>('opencv_annotated');
@@ -220,8 +226,9 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     };
   }, []);
 
-  const [autoLOS, setAutoLOS] = useState(false);
-  const autoLOSRef = useRef(false);
+  const { settings: _ss, bindSetting: _bindS } = useSceneSettings();
+  const [autoLOS, setAutoLOS] = [_ss.autoLOS ?? false, _bindS('autoLOS')];
+  const autoLOSRef = useRef<boolean>(_ss.autoLOS ?? false);
   autoLOSRef.current = autoLOS;
 
   const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
@@ -251,13 +258,17 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       }
     });
     return unsub;
-  }, []);
+  }, [setAutoLOS]);
 
   const handleToggleAutoLOS = () => {
     const next = !autoLOS;
     setAutoLOS(next);
     autoLOSRef.current = next;
     satellitePovSync.update({ autoLOS: next });
+    if (next) {
+      api.setTargetPosition(1000.0, 1000.0, 1000.0).catch(() => {});
+      onGimbalAngles?.(0, 0);
+    }
   };
 
   const nudgeIntervalRef = useRef<any>(null);
@@ -387,18 +398,18 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     };
   }, []);
 
-  // Synchronize backend simulation target to center when satellite POV is locked
+  // Synchronize backend simulation target to center when satellite POV is locked or Auto LOS is active
   const lastSyncTimeRef = useRef<number>(0);
   useEffect(() => {
-    if (isPovLocked) {
+    if (isPovLocked || autoLOS) {
       const now = Date.now();
-      if (now - lastSyncTimeRef.current > 2000) {
+      if (now - lastSyncTimeRef.current > 1500) {
         lastSyncTimeRef.current = now;
         api.setTargetPosition(1000.0, 1000.0, 1000.0).catch(() => {});
         onGimbalAngles?.(0, 0);
       }
     }
-  }, [isPovLocked, onGimbalAngles]);
+  }, [isPovLocked, autoLOS, onGimbalAngles]);
 
   // Determine Beacon optical spot coordinates (u, v) on 640x480 FPA sensor.
   // Priority 1: the satellite POV orbital projection (authoritative for this viewport).
@@ -829,111 +840,118 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       </div>
 
       {/* Interactive Gimbal Pan/Tilt Controls & Angle Sliders */}
-      <div className="p-3 bg-[#1B1D1A] border-t border-[#33362F] font-mono text-xs space-y-2.5">
-        {/* Sliders for Pan & Tilt Angle */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#262824] p-2.5 rounded border border-[#33362F]">
-          <div>
-            <div className="flex justify-between text-[11px] mb-1">
-              <span className="text-[#9CA195]">Commanded Pan Angle (Azimuth):</span>
-              <span className="text-[#FF5F40] font-bold">{camera?.target_pan_deg?.toFixed(1) ?? camera?.pan_deg.toFixed(1)}° (Lim: ±180°)</span>
+      {showGimbalControls && (
+        <div className="p-3 bg-[#1B1D1A] border-t border-[#33362F] font-mono text-xs space-y-2.5">
+          {/* Sliders for Pan & Tilt Angle */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#262824] p-2.5 rounded border border-[#33362F]">
+            <div>
+              <div className="flex justify-between text-[11px] mb-1">
+                <span className="text-[#9CA195]">Commanded Pan Angle (Azimuth):</span>
+                <span className="text-[#FF5F40] font-bold">{camera?.target_pan_deg?.toFixed(1) ?? camera?.pan_deg.toFixed(1)}° (Lim: ±180°)</span>
+              </div>
+              <input
+                type="range"
+                min={camera?.pan_min_limit_deg ?? -180}
+                max={camera?.pan_max_limit_deg ?? 180}
+                step="0.5"
+                value={camera?.target_pan_deg ?? camera?.pan_deg ?? 0}
+                onChange={(e) => {
+                  const p = parseFloat(e.target.value);
+                  onGimbalAngles?.(p, camera?.target_tilt_deg ?? camera?.tilt_deg ?? 0);
+                }}
+                className="w-full accent-[#FF5F40] cursor-pointer"
+              />
             </div>
-            <input
-              type="range"
-              min={camera?.pan_min_limit_deg ?? -180}
-              max={camera?.pan_max_limit_deg ?? 180}
-              step="0.5"
-              value={camera?.target_pan_deg ?? camera?.pan_deg ?? 0}
-              onChange={(e) => {
-                const p = parseFloat(e.target.value);
-                onGimbalAngles?.(p, camera?.target_tilt_deg ?? camera?.tilt_deg ?? 0);
-              }}
-              className="w-full accent-[#FF5F40] cursor-pointer"
-            />
+
+            <div>
+              <div className="flex justify-between text-[11px] mb-1">
+                <span className="text-[#9CA195]">Commanded Tilt Angle (Elevation):</span>
+                <span className="text-[#FF5F40] font-bold">{camera?.target_tilt_deg?.toFixed(1) ?? camera?.tilt_deg.toFixed(1)}° (Lim: ±85°)</span>
+              </div>
+              <input
+                type="range"
+                min={camera?.tilt_min_limit_deg ?? -85}
+                max={camera?.tilt_max_limit_deg ?? 85}
+                step="0.5"
+                value={camera?.target_tilt_deg ?? camera?.tilt_deg ?? 0}
+                onChange={(e) => {
+                  const t = parseFloat(e.target.value);
+                  onGimbalAngles?.(camera?.target_pan_deg ?? camera?.pan_deg ?? 0, t);
+                }}
+                className="w-full accent-[#FF5F40] cursor-pointer"
+              />
+            </div>
           </div>
 
-          <div>
-            <div className="flex justify-between text-[11px] mb-1">
-              <span className="text-[#9CA195]">Commanded Tilt Angle (Elevation):</span>
-              <span className="text-[#FF5F40] font-bold">{camera?.target_tilt_deg?.toFixed(1) ?? camera?.tilt_deg.toFixed(1)}° (Lim: ±85°)</span>
+          {/* Nudge buttons (Respecting max 5°/s slew speed) */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[#9CA195] text-[11px]">
+              <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
+              <span>Manual Slew Nudges (Clamped to 5.0°/s):</span>
             </div>
-            <input
-              type="range"
-              min={camera?.tilt_min_limit_deg ?? -85}
-              max={camera?.tilt_max_limit_deg ?? 85}
-              step="0.5"
-              value={camera?.target_tilt_deg ?? camera?.tilt_deg ?? 0}
-              onChange={(e) => {
-                const t = parseFloat(e.target.value);
-                onGimbalAngles?.(camera?.target_pan_deg ?? camera?.pan_deg ?? 0, t);
-              }}
-              className="w-full accent-[#FF5F40] cursor-pointer"
-            />
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onPointerDown={() => startNudge(-2.5, 0)}
+                onPointerUp={stopNudge}
+                onPointerLeave={stopNudge}
+                className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
+                title="Pan Left (-2.5°/s)"
+              >
+                <ArrowLeft className="w-3 h-3 text-[#FF5F40]" /> Pan Left
+              </button>
+              <button
+                onPointerDown={() => startNudge(0, 2.5)}
+                onPointerUp={stopNudge}
+                onPointerLeave={stopNudge}
+                className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
+                title="Tilt Up (+2.5°/s)"
+              >
+                <ArrowUp className="w-3 h-3 text-[#FF5F40]" /> Tilt Up
+              </button>
+              <button
+                onPointerDown={() => startNudge(0, -2.5)}
+                onPointerUp={stopNudge}
+                onPointerLeave={stopNudge}
+                className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
+                title="Tilt Down (-2.5°/s)"
+              >
+                <ArrowDown className="w-3 h-3 text-[#FF5F40]" /> Tilt Down
+              </button>
+              <button
+                onPointerDown={() => startNudge(2.5, 0)}
+                onPointerUp={stopNudge}
+                onPointerLeave={stopNudge}
+                className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
+                title="Pan Right (+2.5°/s)"
+              >
+                <ArrowRight className="w-3 h-3 text-[#FF5F40]" /> Pan Right
+              </button>
+              <button
+                onClick={() => {
+                  onGimbalNudge?.(0, 0);
+                  onGimbalAngles?.(camera?.pan_deg ?? 0, camera?.tilt_deg ?? 0);
+                }}
+                className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] rounded border border-[#FF5F40] font-bold transition text-[11px]"
+              >
+                Halt Slew
+              </button>
+              <button
+                onClick={() => onGimbalAngles?.(0, 0)}
+                className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] font-bold transition text-[11px]"
+                title="Center Camera to (0, 0)"
+              >
+                Center (0,0)
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Nudge buttons (Respecting max 5°/s slew speed) */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[#9CA195] text-[11px]">
-            <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
-            <span>Manual Slew Nudges (Clamped to 5.0°/s):</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              onPointerDown={() => startNudge(-2.5, 0)}
-              onPointerUp={stopNudge}
-              onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
-              title="Pan Left (-2.5°/s)"
-            >
-              <ArrowLeft className="w-3 h-3 text-[#FF5F40]" /> Pan Left
-            </button>
-            <button
-              onPointerDown={() => startNudge(0, 2.5)}
-              onPointerUp={stopNudge}
-              onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
-              title="Tilt Up (+2.5°/s)"
-            >
-              <ArrowUp className="w-3 h-3 text-[#FF5F40]" /> Tilt Up
-            </button>
-            <button
-              onPointerDown={() => startNudge(0, -2.5)}
-              onPointerUp={stopNudge}
-              onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
-              title="Tilt Down (-2.5°/s)"
-            >
-              <ArrowDown className="w-3 h-3 text-[#FF5F40]" /> Tilt Down
-            </button>
-            <button
-              onPointerDown={() => startNudge(2.5, 0)}
-              onPointerUp={stopNudge}
-              onPointerLeave={stopNudge}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] flex items-center gap-1 transition text-[11px] select-none"
-              title="Pan Right (+2.5°/s)"
-            >
-              <ArrowRight className="w-3 h-3 text-[#FF5F40]" /> Pan Right
-            </button>
-            <button
-              onClick={() => {
-                onGimbalNudge?.(0, 0);
-                onGimbalAngles?.(camera?.pan_deg ?? 0, camera?.tilt_deg ?? 0);
-              }}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] rounded border border-[#FF5F40] font-bold transition text-[11px]"
-            >
-              Halt Slew
-            </button>
-            <button
-              onClick={() => onGimbalAngles?.(0, 0)}
-              className="px-2.5 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] font-bold transition text-[11px]"
-              title="Center Camera to (0, 0)"
-            >
-              Center (0,0)
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* 3D Scene & Orbital Layers (Moved to Green area on Mission Control) */}
+      {showSceneLayers && (
+        <SceneLayersControl />
+      )}
 
       {/* Captured Image Preview Modal */}
       {showPreviewModal && lastCapturedImage && (

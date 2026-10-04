@@ -47,6 +47,8 @@ export interface SceneSettings {
   missionShowKinematics: boolean;
   // VirtualSimulationPage-specific
   virtualSimTab: '2d' | '3d' | 'orbital';
+  // Auto LOS alignment state
+  autoLOS: boolean;
 }
 
 const STORAGE_KEY = 'laserlockAI_sceneSettings_v4';
@@ -80,6 +82,7 @@ export const sceneSettingsDefaults: SceneSettings = {
   missionViewMode: '3d',
   missionShowKinematics: true,
   virtualSimTab: '2d',
+  autoLOS: false,
 };
 
 type Listener = (settings: SceneSettings) => void;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { loadSceneSettings, saveSceneSettings } from '../stores/sceneSettingsStore';
 
 export interface SatellitePovState {
   satPos: THREE.Vector3;
@@ -8,17 +9,18 @@ export interface SatellitePovState {
   orbitRadius: number;
   incDeg: number;
   raanDeg: number;
-  anomaly: number;
+  anomaly: number; // true anomaly nu (radians)
+  meanAnomaly?: number; // mean anomaly M (radians)
   timestamp: number;
   autoLOS: boolean;
   isLockedInFov: boolean; // True when rectangular FOV frustum is GREEN
-  isLostFromFov: boolean;   // True when rectangular FOV frustum is RED
+  isLostFromFov: boolean; // True when rectangular FOV frustum is RED
   // Pixel projection of the orbital beacon onto the 640x480 FPA (satellite POV).
   // Null when the beacon is outside the sensor or the link is occluded.
   beaconPixelU: number | null;
   beaconPixelV: number | null;
   beaconAngularErrorDeg: number; // boresight-to-LOS angle
-  beaconInFov: boolean;          // within 4.0 x 3.0 deg AND inside sensor bounds
+  beaconInFov: boolean; // within 4.0 x 3.0 deg AND inside sensor bounds
   perigeeAltKm?: number;
   apogeeAltKm?: number;
   argPerigeeDeg?: number;
@@ -26,12 +28,28 @@ export interface SatellitePovState {
   eccentricity?: number;
   speedKmS?: number;
   currentRadiusKm?: number;
+  altitudeKm?: number;
+  beaconAnomaly?: number;
   beaconSpeedKmh?: number;
+  beaconInc?: number;
+  beaconRaan?: number;
   boresightDir?: THREE.Vector3;
+  isDrawingPath?: boolean;
+  pathMotionActive?: boolean;
+  pathFollowMode?: boolean;
+  slewProgress?: number;
+  slantRangeKm?: number;
+  gimbalPanDeg?: number;
+  gimbalTiltDeg?: number;
 }
 
-// Earth equatorial circumference for atmospheric beacon kinematics
+// Physical constants for orbital mechanics and Earth rotation
+export const EARTH_RADIUS_KM = 6378.137;
+export const GM_EARTH_KM3_S2 = 398600.4418;
 export const EARTH_CIRCUMFERENCE_KM = 40075.0;
+export const SIDEREAL_DAY_SEC = 86164.0905;
+export const EARTH_ROT_RAD_PER_SEC = (2.0 * Math.PI) / SIDEREAL_DAY_SEC; // ~7.2921159e-5 rad/s
+export const EARTH_ROT_DEG_PER_HOUR = (360.0 / SIDEREAL_DAY_SEC) * 3600.0; // ~15.041°/hour
 
 /**
  * Computes physical real-world angular velocity for an atmospheric beacon (UAV/Drone):
@@ -41,6 +59,49 @@ export const EARTH_CIRCUMFERENCE_KM = 40075.0;
 export const computeBeaconOmegaReal = (speedKmh: number): number => {
   if (speedKmh <= 0) return 0;
   return (2.0 * Math.PI * speedKmh) / (EARTH_CIRCUMFERENCE_KM * 3600.0);
+};
+
+/**
+ * Solve Kepler's equation M = E - e * sin(E) for Eccentric Anomaly E (radians)
+ * using Newton-Raphson iteration.
+ */
+export const solveKepler = (
+  meanAnomalyRad: number,
+  e: number,
+  tolerance: number = 1e-9,
+  maxIter: number = 100
+): number => {
+  let M = meanAnomalyRad % (2 * Math.PI);
+  if (M < 0) M += 2 * Math.PI;
+  if (e < 1e-8) return M;
+  let E = e > 0.8 ? Math.PI : M;
+  for (let i = 0; i < maxIter; i++) {
+    const f = E - e * Math.sin(E) - M;
+    const fPrime = 1 - e * Math.cos(E);
+    const delta = f / fPrime;
+    E -= delta;
+    if (Math.abs(delta) < tolerance) break;
+  }
+  return E;
+};
+
+/**
+ * Convert Eccentric Anomaly E (rad) to True Anomaly nu (rad)
+ */
+export const eccentricToTrueAnomaly = (E: number, e: number): number => {
+  if (e < 1e-8) return E;
+  const halfNu = Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+  let nu = 2 * halfNu;
+  if (nu < 0) nu += 2 * Math.PI;
+  return nu;
+};
+
+/**
+ * Computes Keplerian mean motion in radians per second: n = sqrt(mu / a^3)
+ */
+export const computeMeanMotionRadS = (semiMajorAxisKm: number): number => {
+  if (semiMajorAxisKm <= 0) return 0;
+  return Math.sqrt(GM_EARTH_KM3_S2 / Math.pow(semiMajorAxisKm, 3));
 };
 
 export const computeOrbitPoint = (
@@ -75,55 +136,293 @@ export const checkEarthOcclusion = (
   const disc = b * b - 4 * c;
 
   if (disc >= 0) {
-    const t1 = (-b - Math.sqrt(disc)) / 2;
-    const t2 = (-b + Math.sqrt(disc)) / 2;
-    const minT = Math.min(t1, t2);
-    if (minT > 0.1 && minT < dLen * 0.999) {
+    const sqrtDisc = Math.sqrt(disc);
+    const t1 = (-b - sqrtDisc) / 2;
+    const t2 = (-b + sqrtDisc) / 2;
+    const epsilon = 1.5;
+    if ((t1 > 0.1 && t1 < dLen - epsilon) || (t2 > 0.1 && t2 < dLen - epsilon)) {
       return {
         isOccluded: true,
-        hitPoint: satPos.clone().addScaledVector(dNorm, minT),
+        hitPoint: satPos.clone().addScaledVector(dNorm, Math.min(t1, t2)),
       };
     }
   }
   return { isOccluded: false };
 };
 
-export const EARTH_ROT_DEG_PER_HOUR = 15.0;
-export const EARTH_ROT_RAD_PER_SEC = (15.0 * Math.PI) / (180.0 * 3600.0); // ~7.2722052e-5 rad/s (15 deg/hour)
-
 class SatellitePovSync {
+  private meanAnomaly: number = THREE.MathUtils.degToRad(48.7);
+  private beaconAnomaly: number = THREE.MathUtils.degToRad(120.0);
+  private beaconInc: number = 28.5;
+  private beaconRaan: number = 65.0;
+  private slewProgress: number = 1.0;
+  private lastExternalUpdateTime: number = 0;
+  private lastTickTime: number = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  // Anchor ground station in local Earth coordinates (sub-satellite nadir ground station at 100u)
+  private localTgtPos: THREE.Vector3 = computeOrbitPoint(
+    108.62,
+    53.0,
+    35.0,
+    THREE.MathUtils.degToRad(48.7)
+  ).normalize().multiplyScalar(100.0);
+
   private currentData: SatellitePovState = {
-    satPos: computeOrbitPoint(108.62, 53.0, 35.0, 0.85),
-    tgtPos: computeOrbitPoint(100, 35.0, 25.0, 0.4),
+    satPos: computeOrbitPoint(108.62, 53.0, 35.0, THREE.MathUtils.degToRad(48.7)),
+    tgtPos: computeOrbitPoint(108.62, 53.0, 35.0, THREE.MathUtils.degToRad(48.7)).normalize().multiplyScalar(100.0),
     earthRotationY: 0,
     isOccluded: false,
     orbitRadius: 108.62,
     incDeg: 53.0,
     raanDeg: 35.0,
-    anomaly: 0.85,
+    anomaly: THREE.MathUtils.degToRad(48.7),
+    meanAnomaly: THREE.MathUtils.degToRad(48.7),
     timestamp: Date.now(),
-    autoLOS: false,
-    isLockedInFov: false,
-    isLostFromFov: true,
-    beaconPixelU: null,
-    beaconPixelV: null,
-    beaconAngularErrorDeg: 180.0,
-    beaconInFov: false,
+    autoLOS: typeof window !== 'undefined' ? (loadSceneSettings().autoLOS ?? true) : true,
+    isLockedInFov: true,
+    isLostFromFov: false,
+    beaconPixelU: 320.0,
+    beaconPixelV: 240.0,
+    beaconAngularErrorDeg: 0.0,
+    beaconInFov: true,
+    perigeeAltKm: 550.0,
+    apogeeAltKm: 550.0,
+    argPerigeeDeg: 0.0,
+    semiMajorAxisKm: 6928.0,
+    eccentricity: 0.0,
+    speedKmS: 7.585,
+    currentRadiusKm: 6928.0,
+    altitudeKm: 550.0,
+    beaconSpeedKmh: typeof window !== 'undefined' ? (loadSceneSettings().beaconSpeedKmh ?? 150) : 150,
+    beaconAnomaly: THREE.MathUtils.degToRad(120.0),
+    beaconInc: 28.5,
+    beaconRaan: 65.0,
+    slewProgress: 1.0,
+    slantRangeKm: 550.0,
+    gimbalPanDeg: 0.0,
+    gimbalTiltDeg: 0.0,
     boresightDir: new THREE.Vector3(0, 0, -1),
   };
 
   private listeners: ((data: SatellitePovState) => void)[] = [];
 
+  constructor() {
+    // Initialize boresight aligned with LOS to ground beacon
+    const initLos = new THREE.Vector3().subVectors(this.currentData.tgtPos, this.currentData.satPos).normalize();
+    this.currentData.boresightDir = initLos.clone();
+    this.recomputeFpaProjection();
+
+    if (typeof window !== 'undefined') {
+      const initSettings = loadSceneSettings();
+      if (initSettings.autoLOS !== undefined) {
+        this.currentData.autoLOS = initSettings.autoLOS;
+        this.slewProgress = initSettings.autoLOS ? 1.0 : 0.0;
+        this.currentData.slewProgress = this.slewProgress;
+      }
+      if (initSettings.beaconSpeedKmh !== undefined) {
+        this.currentData.beaconSpeedKmh = initSettings.beaconSpeedKmh;
+      }
+      if (initSettings.beaconInc !== undefined) {
+        this.beaconInc = initSettings.beaconInc;
+        this.currentData.beaconInc = this.beaconInc;
+      }
+      if (initSettings.beaconRaan !== undefined) {
+        this.beaconRaan = initSettings.beaconRaan;
+        this.currentData.beaconRaan = this.beaconRaan;
+      }
+
+      // 60 FPS autonomous physics and orbital propagation loop.
+      // Automatically takes over when Scene3DViewport is not mounted (e.g. Camera View page).
+      const tick = () => {
+        const now = performance.now();
+        const dt = Math.min(0.05, Math.max(0.001, (now - this.lastTickTime) / 1000));
+        this.lastTickTime = now;
+
+        // If no external updates received in >100ms, run autonomous continuous simulation
+        if (now - this.lastExternalUpdateTime > 100) {
+          this.stepKinematics(dt);
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+
+      // Background safety interval (runs even if requestAnimationFrame throttles in background tabs)
+      setInterval(() => {
+        const now = performance.now();
+        if (now - this.lastExternalUpdateTime > 150 && now - this.lastTickTime > 80) {
+          const dt = Math.min(0.05, (now - this.lastTickTime) / 1000);
+          this.lastTickTime = now;
+          this.stepKinematics(dt);
+        }
+      }, 50);
+    }
+  }
+
+  /**
+   * Autonomous Keplerian orbital, Earth diurnal spin, and optical boresight propagation step.
+   * Runs continuously when Scene3DViewport is unmounted so that the Camera View page
+   * remains 100% aligned and continuous with Mission Control.
+   */
+  private stepKinematics(dt: number) {
+    const settings = loadSceneSettings();
+    const timeWarp = settings.simTimeWarp || 60;
+
+    // 1. Advance Earth rotation (15°/hr * timeWarp)
+    if (settings.earthSpinEnabled !== false) {
+      const spinMultiplier = settings.earthSpinMultiplier || 1;
+      const dEarth = EARTH_ROT_RAD_PER_SEC * spinMultiplier * timeWarp * dt;
+      this.currentData.earthRotationY = (this.currentData.earthRotationY + dEarth) % (2 * Math.PI);
+    }
+
+    // 2. Advance primary satellite along Keplerian orbit
+    const aKm = this.currentData.semiMajorAxisKm || 6928.0;
+    const e = this.currentData.eccentricity ?? 0.0;
+    const meanMotion = computeMeanMotionRadS(aKm);
+
+    if (settings.autoRevolve !== false) {
+      this.meanAnomaly = (this.meanAnomaly + meanMotion * timeWarp * dt) % (2 * Math.PI);
+    }
+    const E = solveKepler(this.meanAnomaly, e);
+    const nu = eccentricToTrueAnomaly(E, e);
+    this.currentData.anomaly = nu;
+    this.currentData.meanAnomaly = this.meanAnomaly;
+
+    const rPhys = e < 1e-8 ? aKm : aKm * (1 - e * Math.cos(E));
+    this.currentData.currentRadiusKm = rPhys;
+    this.currentData.altitudeKm = rPhys - EARTH_RADIUS_KM;
+    this.currentData.speedKmS = Math.sqrt(Math.max(0, GM_EARTH_KM3_S2 * (2.0 / rPhys - 1.0 / aKm)));
+
+    const rRender = this.currentData.orbitRadius || 108.62;
+    const satPos = computeOrbitPoint(
+      rRender,
+      this.currentData.incDeg ?? 53.0,
+      this.currentData.raanDeg ?? 35.0,
+      nu,
+      this.currentData.argPerigeeDeg ?? 0
+    );
+    this.currentData.satPos.copy(satPos);
+
+    // 3. Advance beacon position on rotating Earth
+    // Rotate the ground beacon's Earth-fixed local position synchronously with Earth diurnal spin
+    const currentBeaconGroundPos = this.localTgtPos.clone().applyAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      this.currentData.earthRotationY
+    );
+    this.currentData.tgtPos.copy(currentBeaconGroundPos);
+
+    // 4. Check Earth occlusion
+    const occ = checkEarthOcclusion(this.currentData.satPos, this.currentData.tgtPos, 100.0);
+    this.currentData.isOccluded = occ.isOccluded;
+
+    // 5. Line of sight (LOS) and nominal Nadir directions
+    const nadirDir = this.currentData.satPos.clone().negate().normalize();
+    const losDir = new THREE.Vector3().subVectors(this.currentData.tgtPos, this.currentData.satPos).normalize();
+
+    // 6. Smooth slew between Nadir and LOS (0.025 per frame -> ~0.67s smooth transition)
+    if (this.currentData.autoLOS) {
+      this.slewProgress = Math.min(1.0, this.slewProgress + 0.025);
+    } else {
+      this.slewProgress = Math.max(0.0, this.slewProgress - 0.025);
+    }
+    this.currentData.slewProgress = this.slewProgress;
+    const p = this.slewProgress;
+    const t = p * p * (3 - 2 * p); // Smoothstep easing
+
+    const dot = THREE.MathUtils.clamp(nadirDir.dot(losDir), -1, 1);
+    const omega = Math.acos(dot);
+    let currBoresight: THREE.Vector3;
+    if (p <= 0.0001) {
+      currBoresight = nadirDir.clone();
+    } else if (p >= 0.9999 || omega < 0.001) {
+      currBoresight = losDir.clone();
+    } else {
+      const sinOmega = Math.sin(omega);
+      currBoresight = new THREE.Vector3()
+        .addScaledVector(nadirDir, Math.sin((1 - t) * omega) / sinOmega)
+        .addScaledVector(losDir, Math.sin(t * omega) / sinOmega)
+        .normalize();
+    }
+
+    if (!this.currentData.boresightDir) {
+      this.currentData.boresightDir = currBoresight.clone();
+    } else {
+      this.currentData.boresightDir.copy(currBoresight);
+    }
+
+    // 7. Angular error between optical boresight and LOS ray
+    const dotToLos = THREE.MathUtils.clamp(currBoresight.dot(losDir), -1, 1);
+    const angDeg = THREE.MathUtils.radToDeg(Math.acos(dotToLos));
+    this.currentData.beaconAngularErrorDeg = angDeg;
+    this.currentData.isLockedInFov = Boolean(!occ.isOccluded && angDeg <= 2.0);
+    this.currentData.isLostFromFov = Boolean(occ.isOccluded || angDeg > 2.0);
+
+    // 8. Physical slant range distance
+    const distUnits = this.currentData.satPos.distanceTo(this.currentData.tgtPos);
+    this.currentData.slantRangeKm = (distUnits / 100.0) * EARTH_RADIUS_KM;
+
+    // 9. Gimbal pan/tilt relative to Nadir reference frame
+    let upRef = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(nadirDir.dot(upRef)) > 0.9) upRef = new THREE.Vector3(1, 0, 0);
+    const right = new THREE.Vector3().crossVectors(nadirDir, upRef).normalize();
+    const realUp = new THREE.Vector3().crossVectors(right, nadirDir).normalize();
+    this.currentData.gimbalPanDeg = THREE.MathUtils.radToDeg(
+      Math.asin(THREE.MathUtils.clamp(currBoresight.dot(right), -1, 1))
+    );
+    this.currentData.gimbalTiltDeg = THREE.MathUtils.radToDeg(
+      Math.asin(THREE.MathUtils.clamp(currBoresight.dot(realUp), -1, 1))
+    );
+
+    // 10. Recompute FPA sensor projection
+    this.recomputeFpaProjection();
+    this.currentData.timestamp = Date.now();
+
+    // 11. Notify all subscribers (FPACameraViewport, CameraViewPage, App alarm audio, etc.)
+    for (let i = 0; i < this.listeners.length; i++) {
+      this.listeners[i](this.currentData);
+    }
+  }
+
   update(data: Partial<SatellitePovState>) {
+    this.lastExternalUpdateTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
     if (data.satPos) this.currentData.satPos.copy(data.satPos);
-    if (data.tgtPos) this.currentData.tgtPos.copy(data.tgtPos);
+    if (data.tgtPos) {
+      this.currentData.tgtPos.copy(data.tgtPos);
+      const rotY = data.earthRotationY ?? this.currentData.earthRotationY ?? 0;
+      this.localTgtPos = data.tgtPos.clone().applyAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        -rotY
+      );
+    }
     if (data.earthRotationY !== undefined) this.currentData.earthRotationY = data.earthRotationY;
     if (data.isOccluded !== undefined) this.currentData.isOccluded = data.isOccluded;
     if (data.orbitRadius !== undefined) this.currentData.orbitRadius = data.orbitRadius;
     if (data.incDeg !== undefined) this.currentData.incDeg = data.incDeg;
     if (data.raanDeg !== undefined) this.currentData.raanDeg = data.raanDeg;
     if (data.anomaly !== undefined) this.currentData.anomaly = data.anomaly;
-    if (data.autoLOS !== undefined) this.currentData.autoLOS = data.autoLOS;
+    if (data.meanAnomaly !== undefined) {
+      this.meanAnomaly = data.meanAnomaly;
+      this.currentData.meanAnomaly = data.meanAnomaly;
+    }
+    if (data.beaconAnomaly !== undefined) {
+      this.beaconAnomaly = data.beaconAnomaly;
+      this.currentData.beaconAnomaly = data.beaconAnomaly;
+    }
+    if (data.beaconInc !== undefined) {
+      this.beaconInc = data.beaconInc;
+      this.currentData.beaconInc = data.beaconInc;
+    }
+    if (data.beaconRaan !== undefined) {
+      this.beaconRaan = data.beaconRaan;
+      this.currentData.beaconRaan = data.beaconRaan;
+    }
+    if (data.slewProgress !== undefined) {
+      this.slewProgress = data.slewProgress;
+      this.currentData.slewProgress = data.slewProgress;
+    }
+    if (data.autoLOS !== undefined) {
+      this.currentData.autoLOS = data.autoLOS;
+      saveSceneSettings({ autoLOS: data.autoLOS });
+    }
     if (data.isLockedInFov !== undefined) this.currentData.isLockedInFov = data.isLockedInFov;
     if (data.isLostFromFov !== undefined) this.currentData.isLostFromFov = data.isLostFromFov;
     if (data.beaconPixelU !== undefined) this.currentData.beaconPixelU = data.beaconPixelU;
@@ -137,7 +436,11 @@ class SatellitePovSync {
     if (data.eccentricity !== undefined) this.currentData.eccentricity = data.eccentricity;
     if (data.speedKmS !== undefined) this.currentData.speedKmS = data.speedKmS;
     if (data.currentRadiusKm !== undefined) this.currentData.currentRadiusKm = data.currentRadiusKm;
+    if (data.altitudeKm !== undefined) this.currentData.altitudeKm = data.altitudeKm;
     if (data.beaconSpeedKmh !== undefined) this.currentData.beaconSpeedKmh = data.beaconSpeedKmh;
+    if (data.isDrawingPath !== undefined) this.currentData.isDrawingPath = data.isDrawingPath;
+    if (data.pathMotionActive !== undefined) this.currentData.pathMotionActive = data.pathMotionActive;
+    if (data.pathFollowMode !== undefined) this.currentData.pathFollowMode = data.pathFollowMode;
     if (data.boresightDir) {
       if (!this.currentData.boresightDir) {
         this.currentData.boresightDir = data.boresightDir.clone();
@@ -145,6 +448,26 @@ class SatellitePovSync {
         this.currentData.boresightDir.copy(data.boresightDir);
       }
     }
+
+    // Slant range
+    const distUnits = this.currentData.satPos.distanceTo(this.currentData.tgtPos);
+    this.currentData.slantRangeKm = (distUnits / 100.0) * EARTH_RADIUS_KM;
+
+    // Gimbal Pan/Tilt relative to Nadir frame
+    if (this.currentData.boresightDir) {
+      const nadirDir = this.currentData.satPos.clone().negate().normalize();
+      let upRef = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(nadirDir.dot(upRef)) > 0.9) upRef = new THREE.Vector3(1, 0, 0);
+      const right = new THREE.Vector3().crossVectors(nadirDir, upRef).normalize();
+      const realUp = new THREE.Vector3().crossVectors(right, nadirDir).normalize();
+      this.currentData.gimbalPanDeg = THREE.MathUtils.radToDeg(
+        Math.asin(THREE.MathUtils.clamp(this.currentData.boresightDir.dot(right), -1, 1))
+      );
+      this.currentData.gimbalTiltDeg = THREE.MathUtils.radToDeg(
+        Math.asin(THREE.MathUtils.clamp(this.currentData.boresightDir.dot(realUp), -1, 1))
+      );
+    }
+
     this.currentData.timestamp = Date.now();
     this.recomputeFpaProjection();
 
@@ -164,7 +487,7 @@ class SatellitePovSync {
     const boresight =
       d.boresightDir && d.boresightDir.lengthSq() > 1e-9
         ? d.boresightDir.clone().normalize()
-        : d.satPos.clone().negate().normalize();
+        : (d.autoLOS ? losDir.clone() : d.satPos.clone().negate().normalize());
 
     const dot = THREE.MathUtils.clamp(boresight.dot(losDir), -1, 1);
     const angDeg = THREE.MathUtils.radToDeg(Math.acos(dot));
@@ -203,50 +526,20 @@ class SatellitePovSync {
   }
 
   getData(): SatellitePovState {
-    const now = Date.now();
-    // If no external updates received in >300ms, auto-propagate kinematics
-    if (now - this.currentData.timestamp > 300) {
-      const dtSec = Math.min(2.0, (now - this.currentData.timestamp) / 1000);
-      this.currentData.anomaly += 0.003;
-      this.currentData.earthRotationY += EARTH_ROT_RAD_PER_SEC * dtSec;
-      const updatedSat = computeOrbitPoint(
-        this.currentData.orbitRadius,
-        this.currentData.incDeg,
-        this.currentData.raanDeg,
-        this.currentData.anomaly,
-        this.currentData.argPerigeeDeg ?? 0
-      );
-      this.currentData.satPos.copy(updatedSat);
-      const baseTgt = computeOrbitPoint(100, 35.0, 25.0, 0.4);
-      baseTgt.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.currentData.earthRotationY);
-      this.currentData.tgtPos.copy(baseTgt);
-      const occ = checkEarthOcclusion(this.currentData.satPos, this.currentData.tgtPos, 100);
-      this.currentData.isOccluded = occ.isOccluded;
-      if (occ.isOccluded) {
-        this.currentData.isLockedInFov = false;
-        this.currentData.isLostFromFov = true;
-      }
-      if (!this.currentData.boresightDir) {
-        this.currentData.boresightDir = new THREE.Vector3();
-      }
-      if (this.currentData.autoLOS && !this.currentData.isOccluded) {
-        this.currentData.boresightDir.subVectors(this.currentData.tgtPos, this.currentData.satPos).normalize();
-      } else {
-        this.currentData.boresightDir.copy(this.currentData.satPos).negate().normalize();
-      }
-      // Recompute the FPA pixel projection so the fallback path never emits stale coordinates.
-      this.recomputeFpaProjection();
-      this.currentData.timestamp = now;
-    }
     return this.currentData;
   }
 
   getCurrent(): SatellitePovState {
-    return this.getData();
+    return this.currentData;
   }
 
   subscribe(listener: (data: SatellitePovState) => void): () => void {
     this.listeners.push(listener);
+    try {
+      listener(this.currentData);
+    } catch (e) {
+      console.error('Error in initial satellitePovSync listener call:', e);
+    }
     return () => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     };
