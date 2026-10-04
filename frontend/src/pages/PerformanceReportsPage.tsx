@@ -195,6 +195,8 @@ export const PerformanceReportsPage: React.FC<Props> = ({ config }) => {
           <a
             href={report ? api.getExportCsvUrl(report.report_id) : '#'}
             download
+            aria-disabled={!report}
+            tabIndex={!report ? -1 : undefined}
             className={`px-3 py-2 bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] rounded text-xs font-mono flex items-center gap-1.5 transition ${
               !report ? 'pointer-events-none opacity-50' : ''
             }`}
@@ -207,6 +209,8 @@ export const PerformanceReportsPage: React.FC<Props> = ({ config }) => {
           <a
             href={report ? api.getExportJsonUrl(report.report_id) : '#'}
             download
+            aria-disabled={!report}
+            tabIndex={!report ? -1 : undefined}
             className={`px-3 py-2 bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40] text-[#F0FFEA] rounded text-xs font-mono flex items-center gap-1.5 transition ${
               !report ? 'pointer-events-none opacity-50' : ''
             }`}

@@ -95,7 +95,7 @@ class DetectionConfig(BaseModel):
     )
     ai_detection_frequency_hz: float = Field(default=30.0, ge=1.0, le=60.0, description="AI inference frequency (Hz)")
     model_weights_path: str = Field(
-        default="models/yolov8_beacon.onnx", description="Filepath to trained ONNX/YOLO model weights"
+        default="ML_model/my_model.pt", description="Filepath to trained ONNX/YOLO model weights"
     )
 
     # Part 4 Target Identification & False Object Rejection

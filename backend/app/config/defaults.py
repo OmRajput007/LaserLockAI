@@ -39,7 +39,7 @@ def get_default_config() -> SystemConfig:
             target_count=1,  # Target count: 1
             shape="Square",  # Square mandatory
             size_pixels=10,  # 10x10 pixels
-            initial_location_mode="Center",  # Center of FOV
+            initial_location_mode="Random",  # Random initial location
             intensity=255.0,
         ),
         motion=MotionConfig(
@@ -49,8 +49,8 @@ def get_default_config() -> SystemConfig:
             screen_height=2000,
         ),
         detection=DetectionConfig(
-            method="AI + Kalman",
-            algorithm="AI Detector",
+            method="CV + Kalman",
+            algorithm="CV + Kalman",
             intensity_threshold=120,
             subpixel_accuracy=True,
             reject_false_bright_objects=True,

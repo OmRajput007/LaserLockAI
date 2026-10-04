@@ -79,10 +79,13 @@ class Platform:
         vx, vy, vz = self.vel_eci
         return {
             "platform_type":  self.platform_type,
+            "pos_eci":        [x, y, z],
             "pos_eci_km":     {"x": x, "y": y, "z": z},
+            "vel_eci":        [vx, vy, vz],
             "vel_eci_km_s":   {"x": vx, "y": vy, "z": vz},
             "altitude_km":    round(self.altitude_km, 3),
             "radius_km":      round(self.radius_km, 3),
             "speed_km_s":     round(self.speed_km_s, 6),
             "trail_length":   len(self.trail),
+            "trail":          [list(p) for p in list(self.trail)[-200:]] if hasattr(self, "trail") else [],
         }

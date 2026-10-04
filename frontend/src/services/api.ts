@@ -299,6 +299,19 @@ export const api = {
     return res.json();
   },
 
+  // Benchmark export URL helpers (match the pattern of getExportCsvUrl)
+  getBenchmarkExportCsvUrl(): string {
+    return `${API_BASE}/benchmark/export/csv`;
+  },
+
+  getBenchmarkExportJsonUrl(): string {
+    return `${API_BASE}/benchmark/export/json`;
+  },
+
+  getBenchmarkExportReportUrl(): string {
+    return `${API_BASE}/benchmark/export/report`;
+  },
+
   // Part 8: Real-Time Analytics & Requirements Endpoints
   async getAnalyticsSummary(): Promise<AnalyticsSummaryResponse> {
     const res = await fetch(`${API_BASE}/analytics/summary`);
@@ -499,6 +512,19 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Failed to set time warp: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async setScenarioMode(mode: 'Local' | 'Orbital'): Promise<{ status: string; scenario_mode: string }> {
+    const res = await fetch(`${API_BASE}/simulation/scenario-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to set scenario mode: ${res.statusText}`);
     }
     return res.json();
   },

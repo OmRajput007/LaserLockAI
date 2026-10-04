@@ -21,6 +21,67 @@ interface Props {
 
 type ViewTab = '2d' | '3d' | 'orbital';
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallbackTab: () => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  errorMessage: string;
+}
+
+class ViewportErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error: any): ErrorBoundaryState {
+    return { hasError: true, errorMessage: error?.message || '3D graphics viewport error' };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('ViewportErrorBoundary caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full h-full min-h-[400px] flex flex-col items-center justify-center p-6 text-center bg-[#1B1D1A] border border-[#33362F] rounded-lg font-mono">
+          <div className="w-12 h-12 rounded-full bg-[#FF5F40]/15 border border-[#FF5F40] flex items-center justify-center text-[#FF5F40] mb-3">
+            <Compass className="w-6 h-6 animate-pulse" />
+          </div>
+          <h3 className="text-sm font-bold text-[#F0FFEA] uppercase tracking-wider mb-1">
+            Viewport Graphics Recovery
+          </h3>
+          <p className="text-xs text-[#9CA195] max-w-md mb-4 leading-relaxed">
+            The active 3D viewport encountered an unexpected rendering exception. You can switch to the 2D World Grid or reload the viewport.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, errorMessage: '' });
+                this.props.fallbackTab();
+              }}
+              className="px-4 py-2 rounded bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] font-bold text-xs transition cursor-pointer"
+            >
+              Switch to 2D World Grid
+            </button>
+            <button
+              onClick={() => this.setState({ hasError: false, errorMessage: '' })}
+              className="px-4 py-2 rounded bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] text-xs transition cursor-pointer"
+            >
+              Retry Viewport
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export const VirtualSimulationPage: React.FC<Props> = ({
   telemetry,
   config,
@@ -31,8 +92,18 @@ export const VirtualSimulationPage: React.FC<Props> = ({
 }) => {
   const { settings, bindSetting } = useSceneSettings();
   const [activeViewTab, setActiveViewTab] = [settings.virtualSimTab, bindSetting('virtualSimTab')];
+  const currentTab: ViewTab = (activeViewTab === '3d' || activeViewTab === 'orbital') ? activeViewTab : '2d';
   const isRunning = telemetry?.is_running ?? false;
   const target = telemetry?.target ?? null;
+
+  const handleTabChange = (tab: ViewTab) => {
+    setActiveViewTab(tab);
+    if (tab === 'orbital') {
+      api.setScenarioMode('Orbital').catch(() => {});
+    } else {
+      api.setScenarioMode('Local').catch(() => {});
+    }
+  };
 
   // Orbital Scenario state
   const [timeWarp, setTimeWarp] = useState<number>(1);
@@ -108,7 +179,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               Virtual Environment & 3D Kinematics
             </h2>
             <p className="text-[#9CA195] text-xs mt-0.5">
-              {activeViewTab === 'orbital'
+              {currentTab === 'orbital'
                 ? '3D Orbital Scenario (Earth-Scale Physics & Double Precision)'
                 : 'Mathematical Trajectory Synthesis & 3D Frustum Geometry'}
             </p>
@@ -119,9 +190,9 @@ export const VirtualSimulationPage: React.FC<Props> = ({
         <div className="flex items-center gap-2">
           <div className="flex bg-[#262824] p-1 rounded border border-[#33362F]">
             <button
-              onClick={() => setActiveViewTab('2d')}
-              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
-                activeViewTab === '2d'
+              onClick={() => handleTabChange('2d')}
+              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border cursor-pointer ${
+                currentTab === '2d'
                   ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
                   : 'border-transparent text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
@@ -129,9 +200,9 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               <Layers className="w-3.5 h-3.5" /> 2D World Grid
             </button>
             <button
-              onClick={() => setActiveViewTab('3d')}
-              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
-                activeViewTab === '3d'
+              onClick={() => handleTabChange('3d')}
+              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border cursor-pointer ${
+                currentTab === '3d'
                   ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
                   : 'border-transparent text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
@@ -139,9 +210,9 @@ export const VirtualSimulationPage: React.FC<Props> = ({
               <Box className="w-3.5 h-3.5" /> 3D Scene View
             </button>
             <button
-              onClick={() => setActiveViewTab('orbital')}
-              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border ${
-                activeViewTab === 'orbital'
+              onClick={() => handleTabChange('orbital')}
+              className={`px-3 py-1 rounded text-xs font-mono transition flex items-center gap-1.5 border cursor-pointer ${
+                currentTab === 'orbital'
                   ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
                   : 'border-transparent text-[#9CA195] hover:text-[#F0FFEA]'
               }`}
@@ -165,9 +236,9 @@ export const VirtualSimulationPage: React.FC<Props> = ({
             <button
               onClick={() => {
                 onResetSim();
-                if (activeViewTab === 'orbital') handleResetOrbital();
+                if (currentTab === 'orbital') handleResetOrbital();
               }}
-              className="p-1.5 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] transition"
+              className="p-1.5 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] rounded border border-[#33362F] hover:border-[#FF5F40] transition cursor-pointer"
               title="Reset Simulation"
             >
               <RotateCcw className="w-4 h-4" />
@@ -176,8 +247,8 @@ export const VirtualSimulationPage: React.FC<Props> = ({
             {/* Jump to Sat Button */}
             <button
               onClick={() => {
-                if (activeViewTab === '2d') {
-                  setActiveViewTab('3d');
+                if (currentTab === '2d') {
+                  handleTabChange('3d');
                 }
                 window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
               }}
@@ -193,7 +264,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
       </div>
 
       {/* Sub-panel based on active tab */}
-      {activeViewTab === 'orbital' ? (
+      {currentTab === 'orbital' ? (
         <OrbitalControlsPanel
           config={orbitalConfig}
           isRunning={isRunning}
@@ -213,7 +284,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
                 <button
                   key={m}
                   onClick={() => onSelectMotion(m)}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition border ${
+                  className={`px-2.5 py-1 rounded text-xs font-mono transition border cursor-pointer ${
                     config?.motion.trajectory_type === m
                       ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
                       : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
@@ -231,7 +302,7 @@ export const VirtualSimulationPage: React.FC<Props> = ({
                 <button
                   key={o}
                   onClick={() => onSelectMotion(o)}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition border ${
+                  className={`px-2.5 py-1 rounded text-xs font-mono transition border cursor-pointer ${
                     config?.motion.trajectory_type === o
                       ? 'bg-[#FF5F40] text-[#0A0A0A] border-[#FF5F40] font-semibold'
                       : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
@@ -268,37 +339,39 @@ export const VirtualSimulationPage: React.FC<Props> = ({
       {/* Main Viewport & Telemetry Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Main Viewport Canvas (Col Span 2) */}
-        <div className="lg:col-span-2 h-[600px] rounded-lg overflow-hidden border border-[#33362F] bg-[#000000]">
-          {activeViewTab === 'orbital' ? (
-            <OrbitalScene3DViewport
-              orbitalTelemetry={telemetry?.orbital ?? null}
-              cameraPreset={orbitalConfig.camera_sat?.preset}
-              beaconPreset={orbitalConfig.beacon_sat?.preset}
-            />
-          ) : activeViewTab === '3d' ? (
-            <Scene3DViewport
-              target={telemetry?.target ?? null}
-              targets={telemetry?.targets ?? []}
-              camera={telemetry?.camera ?? null}
-              disturbance={telemetry?.disturbance ?? null}
-              worldWidth={config?.motion.screen_width ?? 2000}
-              worldHeight={config?.motion.screen_height ?? 2000}
-            />
-          ) : (
-            <VirtualSceneCanvas
-              target={telemetry?.target ?? null}
-              targets={telemetry?.targets ?? []}
-              camera={telemetry?.camera ?? null}
-              disturbance={telemetry?.disturbance ?? null}
-              worldWidth={config?.motion.screen_width ?? 2000}
-              worldHeight={config?.motion.screen_height ?? 2000}
-            />
-          )}
+        <div className="lg:col-span-2 min-h-[580px] h-[600px] rounded-lg overflow-hidden border border-[#33362F] bg-[#000000]">
+          <ViewportErrorBoundary fallbackTab={() => handleTabChange('2d')}>
+            {currentTab === 'orbital' ? (
+              <OrbitalScene3DViewport
+                orbitalTelemetry={telemetry?.orbital ?? null}
+                cameraPreset={orbitalConfig.camera_sat?.preset}
+                beaconPreset={orbitalConfig.beacon_sat?.preset}
+              />
+            ) : currentTab === '3d' ? (
+              <Scene3DViewport
+                target={telemetry?.target ?? null}
+                targets={telemetry?.targets ?? []}
+                camera={telemetry?.camera ?? null}
+                disturbance={telemetry?.disturbance ?? null}
+                worldWidth={config?.motion.screen_width ?? 2000}
+                worldHeight={config?.motion.screen_height ?? 2000}
+              />
+            ) : (
+              <VirtualSceneCanvas
+                target={telemetry?.target ?? null}
+                targets={telemetry?.targets ?? []}
+                camera={telemetry?.camera ?? null}
+                disturbance={telemetry?.disturbance ?? null}
+                worldWidth={config?.motion.screen_width ?? 2000}
+                worldHeight={config?.motion.screen_height ?? 2000}
+              />
+            )}
+          </ViewportErrorBoundary>
         </div>
 
         {/* Telemetry Inspector (Col Span 1) */}
         <div className="flex flex-col gap-3">
-          {activeViewTab === 'orbital' ? (
+          {currentTab === 'orbital' ? (
             <OrbitalTelemetryPanel telemetry={telemetry?.orbital ?? null} />
           ) : (
             <>

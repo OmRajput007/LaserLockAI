@@ -64,7 +64,13 @@ def main():
     print("[*] Press Ctrl+C to stop the application.\n")
 
     import uvicorn
-    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, log_level="info", access_log=False)
+    import sys
+    import asyncio
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, loop="none", log_level="info", access_log=False)
 
 
 if __name__ == "__main__":

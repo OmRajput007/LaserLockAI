@@ -755,27 +755,36 @@ export const VideoBenchmarkPage: React.FC = () => {
             {/* Export Toolbar */}
             <div className="flex items-center gap-2">
               <a
-                href="http://127.0.0.1:8000/api/benchmark/export/csv"
+                href={results ? api.getBenchmarkExportCsvUrl() : '#'}
                 download
-                className="px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs font-medium flex items-center gap-1.5 transition"
+                className={`px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs font-medium flex items-center gap-1.5 transition ${
+                  !results ? 'pointer-events-none opacity-50' : ''
+                }`}
+                title="Export frame-by-frame centroid telemetry CSV"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Export CSV</span>
               </a>
 
               <a
-                href="http://127.0.0.1:8000/api/benchmark/export/json"
+                href={results ? api.getBenchmarkExportJsonUrl() : '#'}
                 download
-                className="px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs font-medium flex items-center gap-1.5 transition"
+                className={`px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs font-medium flex items-center gap-1.5 transition ${
+                  !results ? 'pointer-events-none opacity-50' : ''
+                }`}
+                title="Export full structured benchmark JSON"
               >
                 <FileCode className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Export JSON</span>
               </a>
 
               <a
-                href="http://127.0.0.1:8000/api/benchmark/export/report"
+                href={results ? api.getBenchmarkExportReportUrl() : '#'}
                 download
-                className="px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs font-medium flex items-center gap-1.5 transition"
+                className={`px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] hover:border-[#FF5F40]/50 text-xs font-medium flex items-center gap-1.5 transition ${
+                  !results ? 'pointer-events-none opacity-50' : ''
+                }`}
+                title="Export official benchmark evaluation report (Markdown)"
               >
                 <FileText className="w-3.5 h-3.5 text-[#FF5F40]" />
                 <span>Report (MD)</span>

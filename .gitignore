@@ -26,3 +26,8 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+scratch/
+
+# ML Model Weights
+my_model.pt
+*.pt

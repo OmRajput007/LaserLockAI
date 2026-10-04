@@ -467,11 +467,10 @@ class AnalyticsEngine:
         # 5. Processing Speed (>= 20.0 FPS)
         min_fps_req = getattr(self.config, "min_processing_speed_fps", 20.0)
         fps_val = metrics.average_fps
-        # If stepped in batch/synchronously, evaluate processing throughput from actual CV latency
-        if fps_val < min_fps_req and metrics.average_processing_time_ms and metrics.average_processing_time_ms > 0:
+        # If stepped in batch/synchronously without explicit frame rate, evaluate processing throughput from actual CV latency
+        if (fps_val == 0.0 or not self.fps_history) and metrics.average_processing_time_ms and metrics.average_processing_time_ms > 0:
             throughput_fps = round(1000.0 / metrics.average_processing_time_ms, 1)
-            if throughput_fps >= min_fps_req:
-                fps_val = min(60.0, throughput_fps)
+            fps_val = min(60.0, throughput_fps)
 
         fps_status = "PASS" if fps_val >= min_fps_req else "FAIL"
         results.append(

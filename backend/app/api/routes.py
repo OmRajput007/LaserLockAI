@@ -1827,6 +1827,17 @@ def set_time_warp(cmd: TimeWarpCommand):
     }
 
 
+class ScenarioModeCommand(BaseModel):
+    mode: str = "Local"  # "Local" or "Orbital"
+
+
+@router.post("/simulation/scenario-mode")
+def set_simulation_scenario_mode(cmd: ScenarioModeCommand):
+    """Switches scenario mode between 'Local' (Cartesian screen) and 'Orbital' (ECI Keplerian physics)."""
+    sim_engine.set_scenario_mode(cmd.mode)
+    return {"status": "ok", "scenario_mode": sim_engine.scenario_mode}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Satellite handover endpoints
 # ─────────────────────────────────────────────────────────────────────────────

@@ -513,24 +513,34 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     };
   }, []);
 
+  // Helper to extract Three.js scene position from platform telemetry
+  const getPlatformPos = (plat: any): THREE.Vector3 => {
+    if (!plat) return new THREE.Vector3(0, 0, 0);
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    if (Array.isArray(plat.pos_eci) && plat.pos_eci.length >= 3) {
+      [x, y, z] = plat.pos_eci;
+    } else if (plat.pos_eci_km) {
+      x = Number(plat.pos_eci_km.x ?? 0);
+      y = Number(plat.pos_eci_km.y ?? 0);
+      z = Number(plat.pos_eci_km.z ?? 0);
+    }
+    // ECI coordinates are in km (1 scene unit = 1000 km, Earth = 6.378 units)
+    // Map Z to Y for standard 3D upright orientation in Three.js
+    return new THREE.Vector3(x / 1000.0, z / 1000.0, y / 1000.0);
+  };
+
   // Synchronize 3D Scene with incoming Orbital Telemetry
   useEffect(() => {
     if (!orbitalTelemetry) return;
 
     const { camera, beacon, link } = orbitalTelemetry;
+    if (!camera || !beacon || !link) return;
 
     // Convert double precision ECI km positions to Three.js scene units (1 unit = 1000 km)
-    const camPos = new THREE.Vector3(
-      camera.pos_eci[0] / 1000.0,
-      camera.pos_eci[2] / 1000.0, // Map Z to Y for standard 3D upright orientation
-      camera.pos_eci[1] / 1000.0
-    );
-
-    const beaconPos = new THREE.Vector3(
-      beacon.pos_eci[0] / 1000.0,
-      beacon.pos_eci[2] / 1000.0,
-      beacon.pos_eci[1] / 1000.0
-    );
+    const camPos = getPlatformPos(camera);
+    const beaconPos = getPlatformPos(beacon);
 
     // Safeguard: Ensure platforms never sink inside Earth globe (R = 6.378 units)
     const earthRUnits = 6.378137 + 0.02;
@@ -585,11 +595,7 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     // 4b. Update Backup Satellite & Backup Dashed LOS Line
     const backupCam = orbitalTelemetry.backup_camera;
     if (backupCam && backupMarkerRef.current && backupLosLineRef.current) {
-      const backupPos = new THREE.Vector3(
-        backupCam.pos_eci[0] / 1000.0,
-        backupCam.pos_eci[2] / 1000.0,
-        backupCam.pos_eci[1] / 1000.0
-      );
+      const backupPos = getPlatformPos(backupCam);
       if (backupPos.length() < earthRUnits) {
         backupPos.normalize().multiplyScalar(earthRUnits);
       }
@@ -692,9 +698,12 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     }
 
     // 6. Update Beacon Trail
-    if (beaconTrailRef.current && beacon.trail && beacon.trail.length > 1) {
+    if (beaconTrailRef.current && beacon.trail && Array.isArray(beacon.trail) && beacon.trail.length > 1) {
       const trailPoints: number[] = [];
-      beacon.trail.forEach(([x, y, z]) => {
+      beacon.trail.forEach((pt: any) => {
+        const x = Array.isArray(pt) ? pt[0] : (pt?.x ?? 0);
+        const y = Array.isArray(pt) ? pt[1] : (pt?.y ?? 0);
+        const z = Array.isArray(pt) ? pt[2] : (pt?.z ?? 0);
         trailPoints.push(x / 1000.0, z / 1000.0, y / 1000.0);
       });
       beaconTrailRef.current.geometry.setAttribute(
@@ -705,9 +714,12 @@ export const OrbitalScene3DViewport: React.FC<Props> = ({
     }
 
     // 7. Update Camera Trail
-    if (cameraTrailRef.current && camera.trail && camera.trail.length > 1) {
+    if (cameraTrailRef.current && camera.trail && Array.isArray(camera.trail) && camera.trail.length > 1) {
       const trailPoints: number[] = [];
-      camera.trail.forEach(([x, y, z]) => {
+      camera.trail.forEach((pt: any) => {
+        const x = Array.isArray(pt) ? pt[0] : (pt?.x ?? 0);
+        const y = Array.isArray(pt) ? pt[1] : (pt?.y ?? 0);
+        const z = Array.isArray(pt) ? pt[2] : (pt?.z ?? 0);
         trailPoints.push(x / 1000.0, z / 1000.0, y / 1000.0);
       });
       cameraTrailRef.current.geometry.setAttribute(
