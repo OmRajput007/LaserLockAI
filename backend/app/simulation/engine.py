@@ -40,6 +40,8 @@ class SimulationEngine:
     def __init__(self, config: SystemConfig):
         self.config = config
         self.is_running = False
+        self.is_isolated = False
+        self._cached_isolated_telem: Optional[Any] = None
         self.frame_number = 0
         self.sim_time = 0.0
         self.dt = 1.0 / config.camera.update_rate_hz  # 0.0333s for 30 Hz
@@ -207,8 +209,12 @@ class SimulationEngine:
           Motion Blur, Temporary Occlusion, Multi-Noise (Gaussian, S&P, Poisson).
         """
         delta_t = dt if dt is not None else self.dt
-        w = self.camera.width
+
+        # If isolated mode is engaged and a frame exists, return it without re-rendering
+        if getattr(self, "is_isolated", False) and self._current_frame is not None:
+            return self._current_frame
         h = self.camera.height
+        w = self.camera.width
         is_color = (self.config.camera.color_mode == "Colour")
         bg_level = float(self.config.target.background_level)
         noise_sigma = float(self.config.target.noise_sigma)
@@ -355,6 +361,10 @@ class SimulationEngine:
         8. Computes center pixel error, angular error, confidence, and telemetry.
         """
         delta_t = dt if dt is not None else self.dt
+
+        # If isolated mode is engaged, return cached telemetry immediately to eliminate CPU/GPU overhead
+        if getattr(self, "is_isolated", False) and getattr(self, "_cached_isolated_telem", None) is not None:
+            return self._cached_isolated_telem
 
         # FPS calculation
         now = time.time()
@@ -666,6 +676,7 @@ class SimulationEngine:
             handover=self.last_orbital_telemetry.get("handover") if self.last_orbital_telemetry else None,
         )
 
+        self._cached_isolated_telem = telemetry
         return telemetry
 
     def update_orbital_config(self, config: OrbitalScenarioConfig) -> dict:

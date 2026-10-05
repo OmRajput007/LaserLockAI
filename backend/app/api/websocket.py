@@ -1,4 +1,5 @@
 import asyncio
+import time
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Set
@@ -45,7 +46,21 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            t_loop_start = asyncio.get_event_loop().time()
+            t_loop_start = time.time()
+
+            # When isolated, completely suspend 30 Hz simulation stepping and CV detection
+            if getattr(sim_engine, "is_isolated", False):
+                if getattr(sim_engine, "_cached_isolated_telem", None) is not None:
+                    await websocket.send_text(sim_engine._cached_isolated_telem.model_dump_json())
+                try:
+                    data = await asyncio.wait_for(websocket.receive_text(), timeout=0.5)
+                    cmd = json.loads(data)
+                    if cmd.get("action") == "reset":
+                        sim_engine.reset()
+                except asyncio.TimeoutError:
+                    pass
+                continue
+
             # If simulation is marked running, advance step; else sample current state
             if sim_engine.is_running:
                 telemetry = sim_engine.step()
@@ -55,7 +70,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
             await websocket.send_text(telemetry.model_dump_json())
 
             target_interval = max(0.010, sim_engine.dt)
-            elapsed = asyncio.get_event_loop().time() - t_loop_start
+            elapsed = time.time() - t_loop_start
             wait_time = max(0.001, target_interval - elapsed)
 
             # Check if any incoming command arrived over WebSocket

@@ -79,8 +79,8 @@ class DetectionConfig(BaseModel):
     # Classical Computer Vision Parameters
     intensity_threshold: int = Field(default=120, ge=0, le=255, description="Binarization threshold (0-255)")
     use_otsu: bool = Field(default=False, description="Use automatic Otsu thresholding")
-    min_area: float = Field(default=3.0, ge=1.0, description="Minimum contour area to consider candidate")
-    max_area: float = Field(default=600.0, le=5000.0, description="Maximum contour area for beacon spot")
+    min_area: float = Field(default=3.0, ge=0.5, description="Minimum contour area to consider candidate")
+    max_area: float = Field(default=600.0, le=50000.0, description="Maximum contour area for beacon spot")
     morph_kernel_size: int = Field(default=3, ge=1, le=11, description="Morphological structuring element size")
     gaussian_blur_kernel: int = Field(default=3, ge=1, le=15, description="Gaussian filter kernel size (odd)")
     subpixel_accuracy: bool = Field(default=True, description="Calculate centroid using image moments")
@@ -88,7 +88,7 @@ class DetectionConfig(BaseModel):
 
     # Part 4 AI Detector Configuration
     ai_model_name: str = Field(default="YOLOv8-Nano-FSOC", description="Target AI detection model architecture")
-    ai_confidence_threshold: float = Field(default=0.50, ge=0.05, le=1.0, description="AI confidence score acceptance threshold")
+    ai_confidence_threshold: float = Field(default=0.20, ge=0.05, le=1.0, description="AI confidence score acceptance threshold")
     ai_input_resolution: str = Field(default="640x480", description="Model input image resolution")
     ai_inference_device: Literal["CPU", "GPU", "CUDA", "DirectML"] = Field(
         default="CPU", description="Inference execution device"

@@ -865,30 +865,57 @@ class ProcessVideoCommand(BaseModel):
     max_frames: Optional[int] = Field(None, ge=1, description="Max frames to process (None for entire video)")
 
 
+class BenchmarkConfigCommand(BaseModel):
+    method: Optional[Literal["Classical CV", "AI Detector", "CV + Kalman", "AI + Kalman"]] = None
+    intensity_threshold: Optional[int] = Field(None, ge=0, le=255, description="Binarization threshold (0-255)")
+    use_otsu: Optional[bool] = Field(None, description="Automatic Otsu thresholding")
+    min_area: Optional[float] = Field(None, ge=0.5, description="Min contour area")
+    max_area: Optional[float] = Field(None, le=50000.0, description="Max contour area")
+    ai_confidence_threshold: Optional[float] = Field(None, ge=0.05, le=1.0, description="AI confidence threshold")
+
+
 @router.post("/benchmark/upload")
 async def upload_benchmark_video(file: UploadFile = File(...)):
     """
-    Accepts MP4 video upload via drag & drop or file picker.
-    Validates MP4 codec/headers, saves to disk, and decodes metadata.
+    Accepts video upload via drag & drop or file picker.
+    Validates video format, saves to disk, and decodes metadata.
     """
-    if not file.filename.lower().endswith(".mp4"):
-        raise HTTPException(status_code=400, detail="Only MP4 video files are supported (.mp4)")
+    ext = os.path.splitext(file.filename)[1].lower()
+    valid_exts = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
+    if ext not in valid_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported video format '{ext}'. Supported formats: {', '.join(sorted(valid_exts))}"
+        )
+
+    # Release any existing video handle before saving to avoid Windows file locks
+    benchmark_engine.release()
 
     upload_dir = "benchmark_videos"
     os.makedirs(upload_dir, exist_ok=True)
     clean_name = os.path.basename(file.filename)
-    dest_path = os.path.join(upload_dir, clean_name)
+    dest_path = os.path.abspath(os.path.join(upload_dir, clean_name))
 
-    # Save uploaded file contents
-    with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Save uploaded file contents safely with fallback for in-use files
+    try:
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except (PermissionError, OSError):
+        base, ext_part = os.path.splitext(clean_name)
+        clean_name = f"{base}_{int(time.time())}{ext_part}"
+        dest_path = os.path.abspath(os.path.join(upload_dir, clean_name))
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
     try:
         metadata = benchmark_engine.load_video(dest_path, original_filename=clean_name)
     except Exception as e:
         if os.path.exists(dest_path):
-            os.remove(dest_path)
-        raise HTTPException(status_code=400, detail=f"Invalid or unreadable MP4 video: {str(e)}")
+            try:
+                os.remove(dest_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=400, detail=f"Invalid or unreadable video: {str(e)}")
 
     return {
         "status": "video_loaded",
@@ -963,11 +990,46 @@ def set_benchmark_detector_method(cmd: BenchmarkMethodCommand):
     }
 
 
+@router.post("/benchmark/config")
+def update_benchmark_config(cmd: BenchmarkConfigCommand):
+    """Updates benchmark detector configuration parameters."""
+    if cmd.method:
+        benchmark_engine.set_detection_method(cmd.method)
+    if cmd.intensity_threshold is not None:
+        benchmark_engine.detection_config.intensity_threshold = cmd.intensity_threshold
+    if cmd.use_otsu is not None:
+        benchmark_engine.detection_config.use_otsu = cmd.use_otsu
+    if cmd.min_area is not None:
+        benchmark_engine.detection_config.min_area = cmd.min_area
+    if cmd.max_area is not None:
+        benchmark_engine.detection_config.max_area = cmd.max_area
+    if cmd.ai_confidence_threshold is not None:
+        benchmark_engine.detection_config.ai_confidence_threshold = cmd.ai_confidence_threshold
+    benchmark_engine.detector.update_config(benchmark_engine.detection_config, benchmark_engine.camera_config)
+    # Immediately reprocess current frame so preview updates
+    if benchmark_engine.current_raw_frame is not None:
+        benchmark_engine.process_current_frame()
+    return {
+        "status": "config_updated",
+        "config": {
+            "method": benchmark_engine.detection_config.method,
+            "intensity_threshold": benchmark_engine.detection_config.intensity_threshold,
+            "use_otsu": benchmark_engine.detection_config.use_otsu,
+            "min_area": benchmark_engine.detection_config.min_area,
+            "max_area": benchmark_engine.detection_config.max_area,
+            "ai_confidence_threshold": benchmark_engine.detection_config.ai_confidence_threshold,
+        },
+    }
+
+
 @router.post("/benchmark/control")
 def control_benchmark_playback(cmd: BenchmarkControlCommand):
     """
     Handles video controls: play, pause, stop, step_forward, step_backward, seek, set_speed.
+    Returns synchronized frame state, telemetry, and base64 preview image in a single response.
     """
+    import base64
+    import cv2
     action = cmd.action
 
     if action == "seek" and cmd.frame_idx is not None:
@@ -987,11 +1049,27 @@ def control_benchmark_playback(cmd: BenchmarkControlCommand):
         benchmark_engine.playback_speed = cmd.speed
 
     curr_log = benchmark_engine.frame_logs.get(benchmark_engine.current_frame_idx)
+
+    # Ultra-low-latency single-roundtrip preview frame
+    preview_b64 = None
+    frame_preview = benchmark_engine.current_annotated_frame
+    if frame_preview is not None:
+        h, w = frame_preview.shape[:2]
+        if w > 960:
+            scale = 960.0 / w
+            frame_resized = cv2.resize(frame_preview, (960, int(h * scale)), interpolation=cv2.INTER_AREA)
+        else:
+            frame_resized = frame_preview
+        ok, buf = cv2.imencode(".jpg", frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        if ok:
+            preview_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode("ascii")
+
     return {
         "status": "control_applied",
         "action": action,
         "state": benchmark_engine.get_playback_state().model_dump(),
         "frame_log": curr_log.model_dump() if curr_log else None,
+        "frame_image": preview_b64,
     }
 
 
@@ -1024,6 +1102,14 @@ def get_benchmark_state():
         "state": benchmark_engine.get_playback_state().model_dump(),
         "ground_truth_loaded": len(benchmark_engine.ground_truth) > 0,
         "ground_truth_points": len(benchmark_engine.ground_truth),
+        "config": {
+            "method": benchmark_engine.detection_config.method,
+            "intensity_threshold": benchmark_engine.detection_config.intensity_threshold,
+            "use_otsu": benchmark_engine.detection_config.use_otsu,
+            "min_area": benchmark_engine.detection_config.min_area,
+            "max_area": benchmark_engine.detection_config.max_area,
+            "ai_confidence_threshold": benchmark_engine.detection_config.ai_confidence_threshold,
+        },
     }
 
 
@@ -1039,7 +1125,14 @@ def get_benchmark_frame_image(annotated: bool = True):
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.putText(frame, "NO VIDEO LOADED", (220, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (120, 120, 120), 2)
 
-    success, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+    h, w = frame.shape[:2]
+    if w > 960:
+        scale = 960.0 / w
+        display_frame = cv2.resize(frame, (960, int(h * scale)), interpolation=cv2.INTER_AREA)
+    else:
+        display_frame = frame
+
+    success, buffer = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
     if not success:
         raise HTTPException(status_code=500, detail="Failed to encode frame")
 
@@ -1096,6 +1189,56 @@ def export_benchmark_report():
         media_type="text/markdown",
         headers={"Content-Disposition": "attachment; filename=benchmark_report.md"},
     )
+
+
+class BenchmarkIsolateCommand(BaseModel):
+    isolate: Optional[bool] = None
+
+
+@router.post("/benchmark/isolate")
+def toggle_benchmark_isolation(cmd: Optional[BenchmarkIsolateCommand] = None):
+    """
+    Toggles or explicitly sets isolation mode for Video Benchmark testing.
+    When isolated, all background 3D simulation loops, gimbal dynamics,
+    noise engines, orbital physics, and background CV detection are halted,
+    ensuring 100% of CPU and GPU compute is dedicated solely to the Video Benchmark page.
+    """
+    if cmd is not None and cmd.isolate is not None:
+        new_state = bool(cmd.isolate)
+    else:
+        new_state = not getattr(sim_engine, "is_isolated", False)
+
+    sim_engine.is_isolated = new_state
+    if new_state:
+        # Halt simulation clock & gimbals
+        sim_engine.is_running = False
+        sim_engine.camera.apply_rate_command(0.0, 0.0)
+        try:
+            from backend.app.demo.demo_orchestrator import demo_orchestrator
+            demo_orchestrator.stop_demo()
+        except Exception:
+            pass
+        if getattr(sim_engine, "_cached_isolated_telem", None) is None:
+            sim_engine._cached_isolated_telem = sim_engine.step(dt=0.0)
+
+    return {
+        "status": "isolation_updated",
+        "is_isolated": sim_engine.is_isolated,
+        "message": (
+            "System isolated: all background simulation, gimbal kinematics, and telemetry loops halted."
+            if sim_engine.is_isolated
+            else "System deisolated: normal testbench operations restored."
+        ),
+    }
+
+
+@router.get("/benchmark/isolate/status")
+def get_benchmark_isolation_status():
+    """Returns current isolation status of the benchmark environment."""
+    return {
+        "is_isolated": getattr(sim_engine, "is_isolated", False),
+        "sim_running": sim_engine.is_running,
+    }
 
 
 # ==============================================================================

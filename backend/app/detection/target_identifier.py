@@ -95,14 +95,17 @@ class TargetIdentificationEngine:
             # Direct hard-rejection for extreme false bright objects if enabled
             is_clutter = False
             if self.config.reject_false_bright_objects:
-                # Glints that are larger than 2x expected area (cloud glints) or smaller than 0.05x (hot pixels)
-                if cand.area > 200.0 or cand.area < 2.0:
+                # Glints that are significantly larger than expected area (cloud glints) or tiny hot pixels
+                max_allowed_area = max(200.0, 2.5 * self.expected_area)
+                min_allowed_area = min(2.0, 0.02 * self.expected_area)
+                if cand.area > max_allowed_area or cand.area < min_allowed_area:
                     is_clutter = True
                 # Elongated glints / scratch reflections failing circularity / aspect ratio consistency
+                # (relaxed to 3.0 / 0.33 to tolerate optical motion blur during fast traverse)
                 if cand.bbox and len(cand.bbox) >= 4:
                     bw, bh = cand.bbox[2], cand.bbox[3]
                     ar = float(bw) / max(1.0, float(bh))
-                    if ar > 2.2 or ar < 0.45:
+                    if ar > 3.0 or ar < 0.33:
                         is_clutter = True
 
             # 2. Position Score (Spatial Gating):
@@ -158,6 +161,15 @@ class TargetIdentificationEngine:
                 rejected_clutter_count += 1
             else:
                 scored_candidates.append((id_score, cand))
+
+        # Fallback: if clutter rejection eliminated ALL candidates, but raw candidates exist,
+        # rescue the best candidate so legitimate beacons in real videos aren't dropped into LOST
+        if not scored_candidates and raw_candidates:
+            best_raw = max(raw_candidates, key=lambda c: (c.confidence, c.brightness))
+            if best_raw.brightness >= 80.0 and best_raw.confidence >= 0.40:
+                best_raw.is_primary = True
+                best_raw.classification = "Primary Target"
+                scored_candidates.append((0.5, best_raw))
 
         # Sort valid candidates by identification score descending
         scored_candidates.sort(key=lambda item: item[0], reverse=True)

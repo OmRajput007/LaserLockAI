@@ -218,10 +218,6 @@ class OpenCVBeaconDetector(BaseDetector):
         # Stage 5: Contour detection
         contours, _ = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Stage 6: Candidate filtering & feature extraction
-        candidates: List[DetectionCandidateTelemetry] = []
-        candidate_idx = 1
-
         # Estimate image background baseline and noise stddev for SNR computation
         # Use border pixels or global percentile
         bg_sample = np.concatenate([gray[0, :], gray[-1, :], gray[:, 0], gray[:, -1]])
@@ -230,10 +226,30 @@ class OpenCVBeaconDetector(BaseDetector):
         if est_noise_sigma < 0.5:
             est_noise_sigma = 1.0
 
+        # Dynamic fallback: if fixed thresholding yielded zero contours,
+        # try Otsu thresholding ONLY if there is actual bright spot contrast above noise floor
+        peak_brightness_val = float(gray.max())
+        if len(contours) == 0 and not self.config.use_otsu and peak_brightness_val >= 80.0 and (peak_brightness_val - est_bg_mean) >= 30.0:
+            _, thresh_otsu = cv2.threshold(preprocessed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            opened_otsu = cv2.morphologyEx(thresh_otsu, cv2.MORPH_OPEN, kernel)
+            morphed_otsu = cv2.morphologyEx(opened_otsu, cv2.MORPH_CLOSE, kernel)
+            cnts_otsu, _ = cv2.findContours(morphed_otsu, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if len(cnts_otsu) > 0:
+                contours = cnts_otsu
+                thresh = thresh_otsu
+                morphed = morphed_otsu
+
+        # Stage 6: Candidate filtering & feature extraction
+        candidates: List[DetectionCandidateTelemetry] = []
+        candidate_idx = 1
+
+        min_a = max(1.0, self.config.min_area)
+        max_a = max(600.0, getattr(self.config, 'max_area', 600.0))
+
         for cnt in contours:
             # Area calculation via image moments or contourArea
             area = float(cv2.contourArea(cnt))
-            if area < self.config.min_area or area > self.config.max_area:
+            if area < min_a or area > max_a:
                 continue
 
             # Bounding box

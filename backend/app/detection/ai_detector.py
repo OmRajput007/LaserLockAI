@@ -78,6 +78,10 @@ class AIDetector(BaseDetector):
         raw_path = self.config.model_weights_path
         resolved_path = self._resolve_weights_path(raw_path)
 
+        # Avoid redundant disk reload if weights path has not changed
+        if self.model_loaded and self.yolo_model is not None and getattr(self, "_loaded_weights_path", None) == resolved_path:
+            return
+
         if resolved_path and os.path.isfile(resolved_path):
             try:
                 # Load the model exactly ONCE into memory
@@ -102,6 +106,7 @@ class AIDetector(BaseDetector):
 
                 self.yolo_model = model
                 self.model_loaded = True
+                self._loaded_weights_path = resolved_path
                 self.model_status = (
                     f"Trained model '{self.config.ai_model_name}' loaded successfully "
                     f"on {device.upper()} ({os.path.basename(resolved_path)})"
@@ -237,9 +242,8 @@ class AIDetector(BaseDetector):
         h, w = frame.shape[:2]
         conf_thresh = self.config.ai_confidence_threshold
 
-        # Run inference via the loaded model
-        # Passing verbose=False suppresses stdout noise
-        results = self.yolo_model(frame, verbose=False)
+        # Run inference via the loaded model with optimized size and minimum confidence
+        results = self.yolo_model(frame, conf=min(0.15, conf_thresh), imgsz=640, verbose=False)
 
         detections: List[Detection] = []
         if not results or len(results) == 0:

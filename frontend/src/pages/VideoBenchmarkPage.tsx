@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Crosshair,
   RefreshCw,
+  Sliders,
 } from 'lucide-react';
 import { api } from '../services/api';
 import {
@@ -43,6 +44,14 @@ export const VideoBenchmarkPage: React.FC = () => {
   const [activeMethod, setActiveMethod] = useState<string>('Classical CV');
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [frameImgKey, setFrameImgKey] = useState<number>(Date.now());
+  const [frameImage, setFrameImage] = useState<string | null>(null);
+  const [intensityThreshold, setIntensityThreshold] = useState<number>(50);
+  const [aiConfidenceThreshold, setAiConfidenceThreshold] = useState<number>(0.20);
+  const [useOtsu, setUseOtsu] = useState<boolean>(false);
+  const [isIsolated, setIsIsolated] = useState<boolean>(false);
+  const [isIsolating, setIsIsolating] = useState<boolean>(false);
+  const [isDraggingVideo, setIsDraggingVideo] = useState<boolean>(false);
+  const [isDraggingGt, setIsDraggingGt] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gtInputRef = useRef<HTMLInputElement>(null);
@@ -53,10 +62,10 @@ export const VideoBenchmarkPage: React.FC = () => {
     refreshBenchmarkState();
   }, []);
 
-  // Continuous playback loop when playing
+  // Continuous playback loop when playing - ultra-smooth single-roundtrip
   useEffect(() => {
     if (playbackState?.is_playing && !batchProcessing) {
-      const intervalMs = playbackSpeed > 0 ? Math.max(20, 1000 / (30 * playbackSpeed)) : 20;
+      const intervalMs = playbackSpeed > 0 ? Math.max(16, 1000 / (30 * playbackSpeed)) : 16;
       let inFlight = false;
       playLoopRef.current = setInterval(async () => {
         if (inFlight) return;
@@ -65,7 +74,11 @@ export const VideoBenchmarkPage: React.FC = () => {
           const res = await api.controlBenchmark('step_forward');
           if (res?.state) setPlaybackState(res.state);
           if (res?.frame_log) setFrameLog(res.frame_log);
-          setFrameImgKey(Date.now());
+          if (res?.frame_image) {
+            setFrameImage(res.frame_image);
+          } else {
+            setFrameImgKey(Date.now());
+          }
           // If reached end of video, pause
           if (res?.state && res.state.current_frame_idx >= res.state.total_frames - 1) {
             await api.controlBenchmark('pause');
@@ -99,9 +112,21 @@ export const VideoBenchmarkPage: React.FC = () => {
       setPlaybackState(data.state);
       setActiveMethod(data.state.active_method || 'Classical CV');
       setPlaybackSpeed(data.state.playback_speed || 1.0);
+      if (data.config) {
+        if (data.config.intensity_threshold !== undefined) setIntensityThreshold(data.config.intensity_threshold);
+        if (data.config.ai_confidence_threshold !== undefined) setAiConfidenceThreshold(data.config.ai_confidence_threshold);
+        if (data.config.use_otsu !== undefined) setUseOtsu(data.config.use_otsu);
+      }
 
       const telemData = await api.getBenchmarkFrameTelemetry();
       if (telemData.log) setFrameLog(telemData.log);
+
+      try {
+        const isoData = await api.getBenchmarkIsolationStatus();
+        setIsIsolated(isoData.is_isolated);
+      } catch {
+        // Backend isolation endpoint optional fallback
+      }
 
       try {
         const resData = await api.getBenchmarkResults();
@@ -117,12 +142,23 @@ export const VideoBenchmarkPage: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleToggleIsolate = async () => {
+    setIsIsolating(true);
+    try {
+      const res = await api.isolateBenchmark(!isIsolated);
+      setIsIsolated(res.is_isolated);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to toggle isolation mode');
+    } finally {
+      setIsIsolating(false);
+    }
+  };
 
-    if (!file.name.toLowerCase().endsWith('.mp4')) {
-      setErrorMsg('Invalid file format. Please upload a standard MP4 video (.mp4).');
+  const processVideoFile = async (file: File) => {
+    const validExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!validExtensions.includes(ext)) {
+      setErrorMsg(`Invalid file format '${ext}'. Supported formats: .mp4, .mov, .avi, .webm, .m4v, .mkv`);
       return;
     }
 
@@ -140,9 +176,17 @@ export const VideoBenchmarkPage: React.FC = () => {
     }
   };
 
-  const handleGroundTruthUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) processVideoFile(file);
+  };
+
+  const processGtFile = async (file: File) => {
+    const fn = file.name.toLowerCase();
+    if (!fn.endsWith('.csv') && !fn.endsWith('.json')) {
+      setErrorMsg('Invalid format. Please upload ground-truth .csv or .json file.');
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
@@ -154,6 +198,36 @@ export const VideoBenchmarkPage: React.FC = () => {
     } finally {
       setLoading(false);
       if (gtInputRef.current) gtInputRef.current.value = '';
+    }
+  };
+
+  const handleGroundTruthUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processGtFile(file);
+  };
+
+  const handleThresholdChange = async (val: number) => {
+    setIntensityThreshold(val);
+    try {
+      await api.updateBenchmarkConfig({ intensity_threshold: val, use_otsu: false });
+      setUseOtsu(false);
+      setFrameImgKey(Date.now());
+      const telemData = await api.getBenchmarkFrameTelemetry();
+      if (telemData.log) setFrameLog(telemData.log);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update threshold');
+    }
+  };
+
+  const handleToggleOtsu = async (enabled: boolean) => {
+    setUseOtsu(enabled);
+    try {
+      await api.updateBenchmarkConfig({ use_otsu: enabled });
+      setFrameImgKey(Date.now());
+      const telemData = await api.getBenchmarkFrameTelemetry();
+      if (telemData.log) setFrameLog(telemData.log);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to toggle auto threshold');
     }
   };
 
@@ -175,19 +249,43 @@ export const VideoBenchmarkPage: React.FC = () => {
       const res = await api.controlBenchmark(action, frameIdx, speed);
       setPlaybackState(res.state);
       if (res.frame_log) setFrameLog(res.frame_log);
-      setFrameImgKey(Date.now());
+      if (res.frame_image) {
+        setFrameImage(res.frame_image);
+      } else {
+        setFrameImage(null);
+        setFrameImgKey(Date.now());
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Control action failed');
     }
   };
 
+  const handleAiConfidenceChange = async (val: number) => {
+    setAiConfidenceThreshold(val);
+    try {
+      await api.updateBenchmarkConfig({ ai_confidence_threshold: val });
+      setFrameImage(null);
+      setFrameImgKey(Date.now());
+      const telemData = await api.getBenchmarkFrameTelemetry();
+      if (telemData?.log) setFrameLog(telemData.log);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update AI confidence threshold');
+    }
+  };
+
   const handleMethodChange = async (method: string) => {
+    setActiveMethod(method);
+    setErrorMsg(null);
     try {
       await api.setBenchmarkMethod(method);
-      setActiveMethod(method);
-      await handleControl('seek', playbackState?.current_frame_idx || 0);
+      if (metadata) {
+        setFrameImage(null);
+        setFrameImgKey(Date.now());
+        const telemData = await api.getBenchmarkFrameTelemetry();
+        if (telemData?.log) setFrameLog(telemData.log);
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to set detector method');
+      setErrorMsg(err.message || 'Failed to set detector method. Ensure the backend server is running.');
     }
   };
 
@@ -252,6 +350,37 @@ export const VideoBenchmarkPage: React.FC = () => {
             </div>
           )}
 
+          {/* Isolate Button */}
+          <button
+            onClick={handleToggleIsolate}
+            disabled={isIsolating}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition cursor-pointer font-semibold text-xs ${
+              isIsolated
+                ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                : 'bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border-[#33362F]'
+            } ${isIsolating ? 'opacity-60 cursor-not-allowed' : ''}`}
+            title={
+              isIsolated
+                ? 'Simulation isolated: click to restore normal background simulation processes'
+                : 'Isolate Video Benchmark: halts all 3D simulation loops, gimbal dynamics, and disturbance generators so 100% compute is dedicated to this page'
+            }
+          >
+            {isIsolated ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                </span>
+                <span>Isolate: ACTIVE</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-4 h-4 text-[#9CA195]" />
+                <span>Isolate</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={refreshBenchmarkState}
             className="p-2 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] transition cursor-pointer"
@@ -275,6 +404,33 @@ export const VideoBenchmarkPage: React.FC = () => {
         </div>
       )}
 
+      {/* Active isolation alert banner */}
+      {isIsolated && (
+        <div className="bg-gradient-to-r from-amber-950/40 via-[#262824] to-amber-950/40 border border-amber-500/40 px-4 py-3 rounded-xl text-amber-200 text-xs flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-semibold text-amber-300 uppercase tracking-wide flex items-center gap-2">
+                <span>Video Benchmark Isolated</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono">100% COMPUTE DEDICATED</span>
+              </div>
+              <p className="text-[#9CA195] text-[11px] mt-0.5">
+                All background 3D simulation loops, PTZ gimbal calculations, orbital physics, disturbance noise, and telemetry generation are paused so you can test benchmark fixes in complete isolation.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggleIsolate}
+            disabled={isIsolating}
+            className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition text-xs font-semibold cursor-pointer shrink-0"
+          >
+            Restore Background Processes
+          </button>
+        </div>
+      )}
+
       {/* Top Ingestion Grid: Video Upload & One-Click Synthetic Test Sequences */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left: Video Dropzone & Reference Ingestion */}
@@ -294,22 +450,36 @@ export const VideoBenchmarkPage: React.FC = () => {
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* MP4 Picker */}
+              {/* Video File Picker & Dropzone */}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".mp4,video/mp4"
+                accept=".mp4,.avi,.mov,.mkv,.webm,.m4v,video/*"
                 onChange={handleFileUpload}
                 className="hidden"
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingVideo(true); }}
+                onDragLeave={() => setIsDraggingVideo(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingVideo(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) processVideoFile(file);
+                }}
                 disabled={loading}
-                className="p-3.5 rounded-lg bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40]/50 flex flex-col items-center justify-center gap-2 transition text-center group cursor-pointer"
+                className={`p-3.5 rounded-lg border transition text-center group cursor-pointer flex flex-col items-center justify-center gap-2 ${
+                  isDraggingVideo
+                    ? 'bg-[#FF5F40]/15 border-[#FF5F40] scale-[1.02]'
+                    : 'bg-[#262824] hover:bg-[#33362F] border-[#33362F] hover:border-[#FF5F40]/50'
+                }`}
               >
-                <Upload className="w-5 h-5 text-[#FF5F40] group-hover:scale-105 transition-transform" />
-                <span className="text-xs font-semibold text-[#F0FFEA]">Select MP4 Video</span>
-                <span className="text-[10px] text-[#9CA195]">Drag & drop or file picker</span>
+                <Upload className={`w-5 h-5 transition-transform ${isDraggingVideo ? 'text-[#FF5F40] scale-110' : 'text-[#FF5F40] group-hover:scale-105'}`} />
+                <span className="text-xs font-semibold text-[#F0FFEA]">
+                  {loading ? 'Processing Video...' : isDraggingVideo ? 'Drop Video Here' : 'Select Video'}
+                </span>
+                <span className="text-[10px] text-[#9CA195]">MP4, MOV, AVI, WEBM, MKV</span>
               </button>
 
               {/* Optional Ground Truth Reference */}
@@ -322,11 +492,25 @@ export const VideoBenchmarkPage: React.FC = () => {
               />
               <button
                 onClick={() => gtInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingGt(true); }}
+                onDragLeave={() => setIsDraggingGt(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingGt(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) processGtFile(file);
+                }}
                 disabled={loading}
-                className="p-3.5 rounded-lg bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40]/50 flex flex-col items-center justify-center gap-2 transition text-center group cursor-pointer"
+                className={`p-3.5 rounded-lg border transition text-center group cursor-pointer flex flex-col items-center justify-center gap-2 ${
+                  isDraggingGt
+                    ? 'bg-[#FF5F40]/15 border-[#FF5F40] scale-[1.02]'
+                    : 'bg-[#262824] hover:bg-[#33362F] border-[#33362F] hover:border-[#FF5F40]/50'
+                }`}
               >
-                <Crosshair className="w-5 h-5 text-[#FF5F40] group-hover:scale-105 transition-transform" />
-                <span className="text-xs font-semibold text-[#F0FFEA]">Load Ground Truth</span>
+                <Crosshair className={`w-5 h-5 transition-transform ${isDraggingGt ? 'text-[#FF5F40] scale-110' : 'text-[#FF5F40] group-hover:scale-105'}`} />
+                <span className="text-xs font-semibold text-[#F0FFEA]">
+                  {isDraggingGt ? 'Drop Reference Data' : 'Load Ground Truth'}
+                </span>
                 <span className="text-[10px] text-[#9CA195]">Optional CSV or JSON</span>
               </button>
             </div>
@@ -513,37 +697,163 @@ export const VideoBenchmarkPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Video Canvas Container */}
-            <div className="relative w-full aspect-[4/3] bg-[#000000] rounded-lg overflow-hidden border border-[#33362F] flex items-center justify-center">
-              <img
-                key={frameImgKey}
-                src={`http://127.0.0.1:8000/api/benchmark/frame/image?annotated=${annotated}&t=${frameImgKey}`}
-                alt="Benchmark Video Stream"
-                className="w-full h-full object-contain"
-              />
+            {/* Sensitivity & Threshold Tuning Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3 px-3 py-2 bg-[#121310] border border-[#262824] rounded-lg text-xs">
+              <div className="flex items-center flex-wrap gap-3">
+                <div className="flex items-center gap-1.5 text-[#9CA195]">
+                  <Sliders className="w-3.5 h-3.5 text-[#FF5F40]" />
+                  <span className="font-semibold text-[#F0FFEA]">SENSITIVITY:</span>
+                </div>
 
-              {/* In-Frame Status Overlay */}
-              <div className="absolute bottom-3 left-3 flex items-center gap-2 pointer-events-none">
-                <span className="px-2.5 py-1 rounded bg-[#000000]/80 backdrop-blur-sm border border-[#33362F] text-[#F0FFEA] text-[11px]">
-                  FRAME: {currentFrame} / {totalFrames}
-                </span>
-                {frameLog && (
-                  <span
-                    className={`px-2.5 py-1 rounded text-[11px] font-semibold border backdrop-blur-sm ${
-                      frameLog.detection_status === 'DETECTED'
-                        ? 'bg-[#FF5F40]/20 border-[#FF5F40] text-[#FF5F40]'
-                        : 'bg-[#262824] border-[#5E625A] text-[#9CA195]'
-                    }`}
-                  >
-                    {frameLog.detection_status}
-                  </span>
-                )}
-                {frameLog?.centroid_error_px !== null && frameLog?.centroid_error_px !== undefined && (
-                  <span className="px-2.5 py-1 rounded bg-[#000000]/80 backdrop-blur-sm border border-[#33362F] text-[#FF5F40] text-[11px]">
-                    ERROR: {frameLog.centroid_error_px.toFixed(2)} px
-                  </span>
+                {activeMethod.includes('AI') ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#9CA195] text-[11px]">AI Confidence:</span>
+                    <input
+                      type="range"
+                      min={0.05}
+                      max={0.95}
+                      step={0.05}
+                      value={aiConfidenceThreshold}
+                      onChange={(e) => handleAiConfidenceChange(Number(e.target.value))}
+                      className="w-24 h-1 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
+                      title={`AI Confidence Threshold: ${(aiConfidenceThreshold * 100).toFixed(0)}%`}
+                    />
+                    <span className="font-mono text-[#FF5F40] w-10 text-[11px] font-semibold">
+                      {(aiConfidenceThreshold * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#9CA195] text-[11px]">Threshold:</span>
+                      <input
+                        type="range"
+                        min={5}
+                        max={250}
+                        step={5}
+                        value={intensityThreshold}
+                        onChange={(e) => handleThresholdChange(Number(e.target.value))}
+                        className="w-24 h-1 bg-[#262824] rounded-lg appearance-none cursor-pointer accent-[#FF5F40]"
+                        title={`Detection Intensity Threshold: ${intensityThreshold}`}
+                      />
+                      <span className="font-mono text-[#FF5F40] w-7 text-[11px] font-semibold">{intensityThreshold}</span>
+                    </div>
+
+                    <label className="flex items-center gap-1.5 text-[#9CA195] hover:text-[#F0FFEA] cursor-pointer text-[11px] ml-1">
+                      <input
+                        type="checkbox"
+                        checked={useOtsu}
+                        onChange={(e) => handleToggleOtsu(e.target.checked)}
+                        className="rounded bg-[#262824] border-[#33362F] text-[#FF5F40] accent-[#FF5F40] focus:ring-0 cursor-pointer"
+                      />
+                      <span>Dynamic Otsu Auto-Adaptive</span>
+                    </label>
+                  </>
                 )}
               </div>
+
+              <div className="flex items-center gap-1.5 text-[11px]">
+                {activeMethod.includes('AI') ? (
+                  <>
+                    <button
+                      onClick={() => handleAiConfidenceChange(0.15)}
+                      className={`px-2 py-0.5 rounded border transition cursor-pointer ${
+                        aiConfidenceThreshold === 0.15 ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold' : 'bg-[#262824] hover:bg-[#33362F] text-[#9CA195] border-[#33362F]'
+                      }`}
+                      title="High Sensitivity for Dim/Faint Beacons"
+                    >
+                      Sensitive (15%)
+                    </button>
+                    <button
+                      onClick={() => handleAiConfidenceChange(0.20)}
+                      className={`px-2 py-0.5 rounded border transition cursor-pointer ${
+                        aiConfidenceThreshold === 0.20 ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold' : 'bg-[#262824] hover:bg-[#33362F] text-[#9CA195] border-[#33362F]'
+                      }`}
+                      title="Optimized for custom trained beacon model"
+                    >
+                      Beacon Model (20%)
+                    </button>
+                    <button
+                      onClick={() => handleAiConfidenceChange(0.40)}
+                      className={`px-2 py-0.5 rounded border transition cursor-pointer ${
+                        aiConfidenceThreshold === 0.40 ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold' : 'bg-[#262824] hover:bg-[#33362F] text-[#9CA195] border-[#33362F]'
+                      }`}
+                      title="Strict threshold for high-contrast scenes"
+                    >
+                      Strict (40%)
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleThresholdChange(30)}
+                      className="px-2 py-0.5 rounded bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] transition cursor-pointer"
+                      title="High Sensitivity for Dim/Faint Targets"
+                    >
+                      Dim Target (30)
+                    </button>
+                    <button
+                      onClick={() => handleThresholdChange(50)}
+                      className="px-2 py-0.5 rounded bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] transition cursor-pointer"
+                      title="Default Balanced Sensitivity"
+                    >
+                      Default (50)
+                    </button>
+                    <button
+                      onClick={() => handleThresholdChange(90)}
+                      className="px-2 py-0.5 rounded bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] transition cursor-pointer"
+                      title="Aggressive Clutter Rejection"
+                    >
+                      Bright/Noisy (90)
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Video Canvas Container */}
+            <div className="relative w-full aspect-[4/3] bg-[#000000] rounded-lg overflow-hidden border border-[#33362F] flex items-center justify-center">
+              {metadata ? (
+                <img
+                  key={frameImage ? undefined : frameImgKey}
+                  src={frameImage || `/api/benchmark/frame/image?annotated=${annotated}&t=${frameImgKey}`}
+                  alt="Benchmark Video Stream"
+                  className="w-full h-full object-contain pointer-events-none select-none"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-center p-6 text-[#9CA195]">
+                  <Film className="w-12 h-12 text-[#33362F] mb-3 animate-pulse" />
+                  <p className="text-sm font-semibold text-[#F0FFEA]">No Benchmark Video Loaded</p>
+                  <p className="text-xs text-[#5E625A] mt-1 max-w-sm">
+                    Upload an MP4/AVI/MOV video above or click any synthetic scenario to begin optical spot tracking & benchmark analysis.
+                  </p>
+                </div>
+              )}
+
+              {/* In-Frame Status Overlay */}
+              {metadata && (
+                <div className="absolute bottom-3 left-3 flex items-center gap-2 pointer-events-none">
+                  <span className="px-2.5 py-1 rounded bg-[#000000]/80 backdrop-blur-sm border border-[#33362F] text-[#F0FFEA] text-[11px]">
+                    FRAME: {currentFrame} / {totalFrames}
+                  </span>
+                  {frameLog && (
+                    <span
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold border backdrop-blur-sm ${
+                        frameLog.detection_status === 'DETECTED'
+                          ? 'bg-[#FF5F40]/20 border-[#FF5F40] text-[#FF5F40]'
+                          : 'bg-[#262824] border-[#5E625A] text-[#9CA195]'
+                      }`}
+                    >
+                      {frameLog.detection_status}
+                    </span>
+                  )}
+                  {frameLog?.centroid_error_px !== null && frameLog?.centroid_error_px !== undefined && (
+                    <span className="px-2.5 py-1 rounded bg-[#000000]/80 backdrop-blur-sm border border-[#33362F] text-[#FF5F40] text-[11px]">
+                      ERROR: {frameLog.centroid_error_px.toFixed(2)} px
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Scrubber Slider & Timing Info */}

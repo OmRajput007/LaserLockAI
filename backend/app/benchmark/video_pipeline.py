@@ -65,7 +65,14 @@ class VideoBenchmarkEngine:
 
         # Dedicated PTZ-bypassed detection and tracking subsystem
         self.camera_config = CameraConfig(resolution_width=640, resolution_height=480, fov_horizontal_deg=4.0, fov_vertical_deg=3.0)
-        self.detection_config = DetectionConfig(method="Classical CV", threshold_value=50)
+        self.detection_config = DetectionConfig(
+            method="Classical CV",
+            intensity_threshold=50,
+            use_otsu=False,
+            min_area=2.0,
+            max_area=10000.0,
+            reject_false_bright_objects=False,
+        )
         self.tracking_config = TrackingConfig(algorithm="Kalman Filter")
 
         self.detector = DetectionManager(self.detection_config, self.camera_config)
@@ -81,6 +88,16 @@ class VideoBenchmarkEngine:
         self.results: Optional[BenchmarkResults] = None
         self.last_results: Optional[BenchmarkResults] = None
 
+    def release(self):
+        """Releases video capture resources and unlocks file handles."""
+        with self._lock:
+            if self.capture is not None:
+                try:
+                    self.capture.release()
+                except Exception:
+                    pass
+                self.capture = None
+
     # =========================================================================
     # 1. Video Loading & Ground Truth Reference Ingestion
     # =========================================================================
@@ -92,18 +109,25 @@ class VideoBenchmarkEngine:
         original_filename: Optional[str] = None,
     ) -> VideoMetadata:
         """
-        Validates and loads an MP4 video file, extracting metadata.
+        Validates and loads an MP4/video file, extracting metadata.
         Resets all tracking states and frame logs.
+        Dynamically adapts detector spot size and boundaries to video resolution.
         """
-        if not os.path.exists(filepath):
+        abs_path = os.path.abspath(filepath)
+        if not os.path.exists(abs_path):
             raise FileNotFoundError(f"Video file not found at: {filepath}")
 
         with self._lock:
-            # Open video capture
+            # Release any previously opened video capture
             if self.capture is not None:
-                self.capture.release()
+                try:
+                    self.capture.release()
+                except Exception:
+                    pass
 
-            cap = cv2.VideoCapture(filepath)
+            cap = cv2.VideoCapture(abs_path)
+            if not cap.isOpened():
+                cap = cv2.VideoCapture(abs_path, cv2.CAP_FFMPEG)
             if not cap.isOpened():
                 raise ValueError(f"OpenCV failed to open video file: {filepath}")
 
@@ -114,7 +138,7 @@ class VideoBenchmarkEngine:
                 fps = 30.0
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             duration_s = total_frames / fps if total_frames > 0 else 0.0
-            file_size = os.path.getsize(filepath)
+            file_size = os.path.getsize(abs_path)
 
             self.capture = cap
             self.current_frame_idx = 0
@@ -129,15 +153,21 @@ class VideoBenchmarkEngine:
             self.detector.reset()
             self.tracker.reset()
 
-            # Update camera config dimensions to match input video
+            # Dynamic resolution adaptation
+            res_scale = max(1.0, math.sqrt((width * height) / (640.0 * 480.0)))
             self.camera_config.resolution_width = width
             self.camera_config.resolution_height = height
+            self.detection_config.expected_spot_size_px = 10.0 * res_scale
+            self.detection_config.max_area = max(10000.0, 600.0 * (res_scale ** 2))
+            self.detection_config.min_area = max(1.0, 2.0 * res_scale)
+            self.detection_config.max_spatial_jump_px = 80.0 * res_scale
+            self.detection_config.reject_false_bright_objects = False  # Permit arbitrary real beacons
             self.detector.update_config(self.detection_config, self.camera_config)
 
             display_name = filename or original_filename or os.path.basename(filepath)
             self.metadata = VideoMetadata(
                 filename=display_name,
-                filepath=os.path.abspath(filepath),
+                filepath=abs_path,
                 width=width,
                 height=height,
                 fps=round(fps, 2),
@@ -204,6 +234,9 @@ class VideoBenchmarkEngine:
         """Switches active detector method: 'Classical CV', 'AI Detector', 'CV + Kalman', 'AI + Kalman'."""
         self.detection_config.method = method
         self.detector.update_config(self.detection_config, self.camera_config)
+        # Immediately reprocess current frame so video preview and telemetry update
+        if self.current_raw_frame is not None:
+            self.process_current_frame()
 
     # =========================================================================
     # 2. Frame-by-Frame Decoding & Processing Pipeline
@@ -231,8 +264,29 @@ class VideoBenchmarkEngine:
             return False
 
     def step_forward(self) -> bool:
-        """Advances by +1 frame."""
-        return self.seek(self.current_frame_idx + 1)
+        """Advances by +1 frame, reading sequentially for fast playback."""
+        if self.is_processing_batch:
+            return False
+
+        with self._lock:
+            if self.capture is None or not self.capture.isOpened():
+                return False
+
+            total = self.metadata.total_frames if self.metadata else 0
+            target_idx = self.current_frame_idx + 1
+            if target_idx >= total and total > 0:
+                return False
+
+            # Fast path: read directly if capture is sequentially aligned
+            ret, frame = self.capture.read()
+            if ret and frame is not None:
+                self.current_frame_idx = target_idx
+                self.current_raw_frame = frame
+                self.process_current_frame()
+                return True
+            else:
+                # Fallback to seek if direct read fails
+                return self.seek(target_idx)
 
     def step_backward(self) -> bool:
         """Rewinds by -1 frame."""

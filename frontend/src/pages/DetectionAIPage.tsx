@@ -43,7 +43,7 @@ export const DetectionAIPage: React.FC<Props> = ({ config, telemetry, onUpdateCo
   const fetchIntermediates = async () => {
     try {
       setLoadingStages(true);
-      const res = await fetch('http://127.0.0.1:8000/api/simulation/detection/intermediates');
+      const res = await fetch('/api/simulation/detection/intermediates');
       if (res.ok) {
         const data = await res.json();
         if (data.stages) {
@@ -60,7 +60,7 @@ export const DetectionAIPage: React.FC<Props> = ({ config, telemetry, onUpdateCo
   const fetchComparison = async () => {
     try {
       setLoadingComparison(true);
-      const res = await fetch('http://127.0.0.1:8000/api/simulation/detection/comparison');
+      const res = await fetch('/api/simulation/detection/comparison');
       if (res.ok) {
         const data = await res.json();
         setComparisonData(data);
@@ -74,7 +74,7 @@ export const DetectionAIPage: React.FC<Props> = ({ config, telemetry, onUpdateCo
 
   const handleSelectMethod = async (method: 'Classical CV' | 'AI Detector' | 'CV + Kalman' | 'AI + Kalman') => {
     try {
-      await fetch('http://127.0.0.1:8000/api/simulation/detection/method', {
+      await fetch('/api/simulation/detection/method', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method }),
@@ -91,7 +91,7 @@ export const DetectionAIPage: React.FC<Props> = ({ config, telemetry, onUpdateCo
   const handleToggleClutter = async (inject: boolean, count?: number) => {
     const currentCount = count ?? config?.detection.false_bright_object_count ?? 2;
     try {
-      await fetch('http://127.0.0.1:8000/api/simulation/detection/clutter', {
+      await fetch('/api/simulation/detection/clutter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inject, count: currentCount }),
@@ -681,7 +681,7 @@ export const DetectionAIPage: React.FC<Props> = ({ config, telemetry, onUpdateCo
                   onChange={async (e) => {
                     const dev = e.target.value as any;
                     try {
-                      await fetch('http://127.0.0.1:8000/api/simulation/detection/ai', {
+                      await fetch('/api/simulation/detection/ai', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ ai_inference_device: dev }),

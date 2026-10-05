@@ -263,6 +263,23 @@ export const api = {
     return res.json();
   },
 
+  async updateBenchmarkConfig(config: {
+    method?: string;
+    intensity_threshold?: number;
+    use_otsu?: boolean;
+    min_area?: number;
+    max_area?: number;
+    ai_confidence_threshold?: number;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE}/benchmark/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error(`Failed to update benchmark config: ${res.statusText}`);
+    return res.json();
+  },
+
   async processBenchmarkVideo(max_frames?: number): Promise<any> {
     const res = await fetch(`${API_BASE}/benchmark/process`, {
       method: 'POST',
@@ -296,6 +313,22 @@ export const api = {
   async getBenchmarkResults(): Promise<any> {
     const res = await fetch(`${API_BASE}/benchmark/results`);
     if (!res.ok) throw new Error(`Failed to get benchmark results: ${res.statusText}`);
+    return res.json();
+  },
+
+  async isolateBenchmark(enable?: boolean): Promise<{ status: string; is_isolated: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/benchmark/isolate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(enable !== undefined ? { isolate: enable } : {}),
+    });
+    if (!res.ok) throw new Error(`Failed to toggle benchmark isolation: ${res.statusText}`);
+    return res.json();
+  },
+
+  async getBenchmarkIsolationStatus(): Promise<{ is_isolated: boolean; sim_running: boolean }> {
+    const res = await fetch(`${API_BASE}/benchmark/isolate/status`);
+    if (!res.ok) throw new Error(`Failed to get benchmark isolation status: ${res.statusText}`);
     return res.json();
   },
 
