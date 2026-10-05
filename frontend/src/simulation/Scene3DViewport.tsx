@@ -1184,6 +1184,16 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
   const footprintCenterMarkerRef = useRef<THREE.Mesh | null>(null);
   const footprintLabelRef = useRef<THREE.Sprite | null>(null);
 
+  // Optimization 4.B: Direct DOM refs for high-frequency telemetry & footprint HUD
+  // Completely eliminates component re-renders (10 Hz) during 60 FPS animation loop
+  const footprintStatusRef = useRef<HTMLSpanElement | null>(null);
+  const footprintRadiusRef = useRef<HTMLSpanElement | null>(null);
+  const cameraFovStatusRef = useRef<HTMLSpanElement | null>(null);
+  const trackerSlantRangeRef = useRef<HTMLSpanElement | null>(null);
+  const trackerPatStateRef = useRef<HTMLSpanElement | null>(null);
+  const trackerSpeedPeriodRef = useRef<HTMLSpanElement | null>(null);
+  const trackerKeplerRef = useRef<HTMLDivElement | null>(null);
+
   // ── Persisted scene settings (survive page navigation via localStorage) ──
   const { settings: _ss, set: _setS, bindSetting: _bindS } = useSceneSettings();
   const [showAtmosphereShells, setShowAtmosphereShells] = [_ss.showAtmosphereShells, _bindS('showAtmosphereShells')];
@@ -3578,12 +3588,22 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
           }
         }
 
-        // Update React state periodically (every 6 frames)
+        // Update direct DOM refs periodically (every 6 frames) without React re-render (Optimization 4.B)
         if (frameCount % 6 === 0) {
-          setIsBeaconInFootprint(isInside);
-          setBeaconElevationDeg(elDeg);
-          setFootprintThetaDeg(THREE.MathUtils.radToDeg(theta));
-          setFootprintGroundRadiusKm(EARTH_RADIUS_KM * theta);
+          if (footprintStatusRef.current) {
+            footprintStatusRef.current.textContent = isInside
+              ? `✓ BEACON IN COVERAGE (El = ${elDeg.toFixed(1)}°)`
+              : `✕ BEACON OUTSIDE (El = ${elDeg.toFixed(1)}°)`;
+            footprintStatusRef.current.className = isInside ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-bold';
+          }
+          if (footprintRadiusRef.current) {
+            footprintRadiusRef.current.textContent = `Radius θ = ${THREE.MathUtils.radToDeg(theta).toFixed(1)}° (${Math.round(EARTH_RADIUS_KM * theta).toLocaleString()} km)`;
+          }
+          if (cameraFovStatusRef.current) {
+            const inFov = !isOccluded && isInside;
+            cameraFovStatusRef.current.textContent = inFov ? '✓ IN FIELD OF VIEW' : '[!] OUTSIDE FIELD OF VIEW';
+            cameraFovStatusRef.current.className = `font-bold ${inFov ? 'text-[#F0FFEA]' : 'text-[#FF5F40]'}`;
+          }
         }
       }
 
@@ -3684,24 +3704,41 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
         }
       }
 
-      // Update telemetry state occasionally
+      // Update telemetry text elements directly (every 6 frames) without React re-render (Optimization 4.B)
       if (frameCount % 6 === 0) {
         const dist = currentSatPos.distanceTo(tgtPosRef.current);
-        setCurrentSlantRange(dist);
-        setOrbitRadius(Number(currentSatPos.length().toFixed(1)));
-        setIsOccludedByEarth(isOccluded);
-        setSlewAngularError(angDeg);
-
-        // Update live derived values (Rule 4)
-        setDerivedA(activeOrbitRef.current.semiMajorAxisKm);
-        setDerivedE(activeOrbitRef.current.eccentricity);
-        setDerivedR(activeOrbitRef.current.currentRadiusKm);
-        setDerivedSpeed(activeOrbitRef.current.currentSpeedKmS);
-        setDerivedPeriodSec(computeOrbitalPeriodSec(activeOrbitRef.current.semiMajorAxisKm));
-        setOrbitAnomalyDeg(THREE.MathUtils.radToDeg(activeOrbitRef.current.trueAnomaly));
-
-        // Real physical slant range in km (Rule 1: physics stays in real km, unchanged)
-        setCurrentSlantRangeKm(f.slantRangeKm ?? 550.0);
+        const slantKm = f.slantRangeKm ?? 550.0;
+        if (trackerSlantRangeRef.current) {
+          trackerSlantRangeRef.current.textContent = formatDistAndUnits(slantKm, dist);
+        }
+        if (trackerPatStateRef.current) {
+          if (isOccluded) {
+            trackerPatStateRef.current.textContent = '! OCCLUDED BY EARTH LIMB (NO LOS)';
+            trackerPatStateRef.current.className = 'text-[#FF5F40] font-bold animate-pulse';
+          } else if (!autoLOSRef.current) {
+            trackerPatStateRef.current.textContent = 'AUTO LOS OFF (HOLDING NADIR ATTITUDE)';
+            trackerPatStateRef.current.className = 'text-[#9CA195] font-bold';
+          } else if (angDeg > 1.5) {
+            trackerPatStateRef.current.textContent = `! SLEWING TO BEACON LOS (${angDeg.toFixed(1)}° OFF-AXIS)`;
+            trackerPatStateRef.current.className = 'text-[#FF5F40] font-bold animate-pulse';
+          } else if (activeOrbitRef.current.autoRevolve) {
+            trackerPatStateRef.current.textContent = '✓ ACTIVE PAT TRACKING (CLEAR LOS)';
+            trackerPatStateRef.current.className = 'text-[#F0FFEA] font-bold';
+          } else {
+            trackerPatStateRef.current.textContent = '✓ LOCKED ON BEACON (CLEAR LOS)';
+            trackerPatStateRef.current.className = 'text-[#F0FFEA] font-bold';
+          }
+        }
+        if (trackerSpeedPeriodRef.current) {
+          const curSpeed = activeOrbitRef.current.currentSpeedKmS;
+          const curPeriod = computeOrbitalPeriodSec(activeOrbitRef.current.semiMajorAxisKm);
+          trackerSpeedPeriodRef.current.textContent = `${formatOrbitalSpeed(curSpeed)} | 1 Rev: ${formatOrbitalPeriod(curPeriod)}`;
+        }
+        if (trackerKeplerRef.current) {
+          const curA = activeOrbitRef.current.semiMajorAxisKm;
+          const curR = activeOrbitRef.current.currentRadiusKm;
+          trackerKeplerRef.current.textContent = `Kepler Orbit: a = ${formatDistAndUnits(curA, getRenderOrbitRadius(curA - EARTH_RADIUS_KM, scaleModeRef.current))} | r = ${formatDistAndUnits(curR, getRenderOrbitRadius(curR - EARTH_RADIUS_KM, scaleModeRef.current))}`;
+        }
       }
 
       // 14. Standardized screen-space billboard scaling for all scene markers (Tasks 1, 2, 5, 6)
@@ -4371,7 +4408,10 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
 
                   <div className="flex justify-between items-center text-[10px] bg-[#262824] p-1.5 rounded border border-[#33362F]">
                     <span className="text-[#9CA195]">Status:</span>
-                    <span className={`font-bold ${!isOccludedByEarth && isBeaconInFootprint ? 'text-[#F0FFEA]' : 'text-[#FF5F40]'}`}>
+                    <span
+                      ref={cameraFovStatusRef}
+                      className={`font-bold ${!isOccludedByEarth && isBeaconInFootprint ? 'text-[#F0FFEA]' : 'text-[#FF5F40]'}`}
+                    >
                       {!isOccludedByEarth && isBeaconInFootprint ? '✓ IN FIELD OF VIEW' : '[!] OUTSIDE FIELD OF VIEW'}
                     </span>
                   </div>
@@ -5238,15 +5278,11 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             </div>
             <div>
               Orbital Speed & Period (1 Rev):{' '}
-              <span className="text-[#FF5F40] font-bold">
-                {formatOrbitalSpeed(derivedSpeed)}
-              </span>{' '}
-              |{' '}
-              <span className="text-[#F0FFEA] font-bold">
-                1 Rev: {formatOrbitalPeriod(derivedPeriodSec)}
+              <span ref={trackerSpeedPeriodRef} className="text-[#FF5F40] font-bold">
+                {formatOrbitalSpeed(derivedSpeed)} | 1 Rev: {formatOrbitalPeriod(derivedPeriodSec)}
               </span>
             </div>
-            <div className="text-[9px] text-[#9CA195]">
+            <div ref={trackerKeplerRef} className="text-[9px] text-[#9CA195]">
               Kepler Orbit: a = {formatDistAndUnits(derivedA, getRenderOrbitRadius(derivedA - EARTH_RADIUS_KM, scaleMode))} | r = {formatDistAndUnits(derivedR, getRenderOrbitRadius(derivedR - EARTH_RADIUS_KM, scaleMode))}
             </div>
             <div>Target Entity: <span className="text-[#F0FFEA] font-bold">Ground Station ({formatAltAndUnits(0, scaleMode)})</span></div>
@@ -5268,23 +5304,36 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             </div>
             <div>
               Slant Range:{' '}
-              <span className="text-[#FF5F40] font-bold">{formatDistAndUnits(currentSlantRangeKm, currentSlantRange)}</span>
+              <span ref={trackerSlantRangeRef} className="text-[#FF5F40] font-bold">
+                {formatDistAndUnits(currentSlantRangeKm, currentSlantRange)}
+              </span>
             </div>
             <div>
               PAT State:{' '}
-              {isOccludedByEarth ? (
-                <span className="text-[#FF5F40] font-bold animate-pulse">! OCCLUDED BY EARTH LIMB (NO LOS)</span>
-              ) : !autoLOS ? (
-                <span className="text-[#9CA195] font-bold">AUTO LOS OFF (HOLDING NADIR ATTITUDE)</span>
-              ) : slewAngularError > 1.5 ? (
-                <span className="text-[#FF5F40] font-bold animate-pulse">
-                  ! SLEWING TO BEACON LOS ({slewAngularError.toFixed(1)}° OFF-AXIS)
-                </span>
-              ) : autoRevolve ? (
-                <span className="text-[#F0FFEA] font-bold">✓ ACTIVE PAT TRACKING (CLEAR LOS)</span>
-              ) : (
-                <span className="text-[#F0FFEA] font-bold">✓ LOCKED ON BEACON (CLEAR LOS)</span>
-              )}
+              <span
+                ref={trackerPatStateRef}
+                className={
+                  isOccludedByEarth
+                    ? 'text-[#FF5F40] font-bold animate-pulse'
+                    : !autoLOS
+                    ? 'text-[#9CA195] font-bold'
+                    : slewAngularError > 1.5
+                    ? 'text-[#FF5F40] font-bold animate-pulse'
+                    : 'text-[#F0FFEA] font-bold'
+                }
+              >
+                {isOccludedByEarth ? (
+                  '! OCCLUDED BY EARTH LIMB (NO LOS)'
+                ) : !autoLOS ? (
+                  'AUTO LOS OFF (HOLDING NADIR ATTITUDE)'
+                ) : slewAngularError > 1.5 ? (
+                  `! SLEWING TO BEACON LOS (${slewAngularError.toFixed(1)}° OFF-AXIS)`
+                ) : autoRevolve ? (
+                  '✓ ACTIVE PAT TRACKING (CLEAR LOS)'
+                ) : (
+                  '✓ LOCKED ON BEACON (CLEAR LOS)'
+                )}
+              </span>
             </div>
             {showAtmosphereShells && (
               <div className="pt-1 border-t border-[#33362F] text-[10px]">
@@ -5331,13 +5380,16 @@ export const Scene3DViewport: React.FC<Scene3DProps> = ({
             {showFootprint && (
               <div className="pt-1 border-t border-[#33362F] text-[10px]">
                 Ground Footprint (El ≥ 10°):{' '}
-                <span className={isBeaconInFootprint ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-bold'}>
+                <span
+                  ref={footprintStatusRef}
+                  className={isBeaconInFootprint ? 'text-[#FF5F40] font-bold' : 'text-[#9CA195] font-bold'}
+                >
                   {isBeaconInFootprint
                     ? `✓ BEACON IN COVERAGE (El = ${beaconElevationDeg.toFixed(1)}°)`
                     : `✕ BEACON OUTSIDE (El = ${beaconElevationDeg.toFixed(1)}°)`}
                 </span>{' '}
                 |{' '}
-                <span className="text-[#9CA195]">
+                <span ref={footprintRadiusRef} className="text-[#9CA195]">
                   Radius θ = {footprintThetaDeg.toFixed(1)}° ({Math.round(footprintGroundRadiusKm).toLocaleString()} km)
                 </span>
               </div>

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.routes import router as api_router
-from backend.app.api.websocket import ws_router
+from backend.app.api.websocket import ws_router, manager
 from backend.app.config.manager import config_manager
 from backend.app.simulation.engine import sim_engine
 
@@ -35,6 +35,7 @@ async def startup_event():
     # Ensure configuration is verified and simulation engine is ready
     cfg = config_manager.get_config()
     sim_engine.update_config(cfg)
+    manager.start_producer()
     print(f"[*] FSOC Testbench Backend initialized successfully with {cfg.project_title}")
     print(f"[*] Camera FPA: {cfg.camera.sensor_type} ({cfg.camera.resolution_width}x{cfg.camera.resolution_height})")
     print(f"[*] Virtual Screen: {cfg.motion.screen_width}x{cfg.motion.screen_height}")

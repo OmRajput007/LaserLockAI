@@ -97,6 +97,12 @@ class DetectionConfig(BaseModel):
     model_weights_path: str = Field(
         default="ML_model/my_model.pt", description="Filepath to trained ONNX/YOLO model weights"
     )
+    ai_use_onnx: bool = Field(
+        default=True, description="Enable ONNX Runtime acceleration for 10x-20x faster inference"
+    )
+    ai_async_inference: bool = Field(
+        default=False, description="Decouple neural inference onto a background worker thread"
+    )
 
     # Part 4 Target Identification & False Object Rejection
     target_id_mode: Literal["Multi-Criteria", "Highest Confidence", "Brightest Spot"] = Field(

@@ -39,6 +39,7 @@ export const VideoBenchmarkPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [generatingSynthetic, setGeneratingSynthetic] = useState<string | null>(null);
   const [batchProcessing, setBatchProcessing] = useState<boolean>(false);
+  const [batchProgress, setBatchProgress] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [annotated, setAnnotated] = useState<boolean>(true);
   const [activeMethod, setActiveMethod] = useState<string>('Classical CV');
@@ -291,14 +292,28 @@ export const VideoBenchmarkPage: React.FC = () => {
 
   const handleRunBatchBenchmark = async () => {
     setBatchProcessing(true);
+    setBatchProgress(0);
     setErrorMsg(null);
+
+    // Periodically poll backend progress during batch evaluation
+    const progressTimer = setInterval(async () => {
+      try {
+        const stateData = await api.getBenchmarkState();
+        if (stateData?.state?.batch_progress_percent !== undefined) {
+          setBatchProgress(stateData.state.batch_progress_percent);
+        }
+      } catch {}
+    }, 350);
+
     try {
       const res = await api.processBenchmarkVideo();
       setResults(res.results);
+      setBatchProgress(100);
       await refreshBenchmarkState();
     } catch (err: any) {
       setErrorMsg(err.message || 'Batch benchmark evaluation failed');
     } finally {
+      clearInterval(progressTimer);
       setBatchProcessing(false);
     }
   };
@@ -926,20 +941,35 @@ export const VideoBenchmarkPage: React.FC = () => {
                 </div>
 
                 {/* Batch Evaluation Launchers */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {batchProcessing ? (
-                    <button
-                      onClick={handleCancelBatch}
-                      className="px-3.5 py-2 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40]/50 font-medium text-xs flex items-center gap-2 transition cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                      <span>ABORT BENCHMARK</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-[#262824] border border-[#FF5F40]/40 rounded-lg">
+                        <Activity className="w-3.5 h-3.5 text-[#FF5F40] animate-pulse" />
+                        <span className="text-[11px] text-[#FF5F40] font-bold">
+                          EVALUATING: {batchProgress.toFixed(0)}%
+                        </span>
+                        <div className="w-20 bg-[#1B1D1A] h-2 rounded-full overflow-hidden border border-[#33362F]">
+                          <div
+                            className="bg-[#FF5F40] h-full transition-all duration-300 rounded-full"
+                            style={{ width: `${Math.min(100, Math.max(5, batchProgress))}%` }}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleCancelBatch}
+                        className="px-3 py-1.5 rounded-lg bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40]/50 font-medium text-xs flex items-center gap-1.5 transition cursor-pointer"
+                        title="Cancel running evaluation"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                        <span>ABORT</span>
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={handleRunBatchBenchmark}
                       disabled={!metadata}
-                      className="px-4 py-2 rounded-lg bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] font-bold text-xs flex items-center gap-2 transition disabled:opacity-50 cursor-pointer"
+                      className="px-4 py-2 rounded-lg bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] font-bold text-xs flex items-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-[0_0_12px_rgba(255,95,64,0.3)]"
                     >
                       <Activity className="w-4 h-4" />
                       <span>RUN FULL BENCHMARK (BATCH)</span>

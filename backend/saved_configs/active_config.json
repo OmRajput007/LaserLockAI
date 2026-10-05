@@ -62,6 +62,8 @@
     "ai_inference_device": "GPU",
     "ai_detection_frequency_hz": 30.0,
     "model_weights_path": "ML_model/my_model.pt",
+    "ai_use_onnx": true,
+    "ai_async_inference": false,
     "target_id_mode": "Multi-Criteria",
     "reject_false_bright_objects": true,
     "max_spatial_jump_px": 80.0,

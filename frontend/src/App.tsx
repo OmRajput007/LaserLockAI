@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Compass,
   Video,
@@ -33,7 +33,17 @@ import {
 } from 'lucide-react';
 
 import { NavTabId, SystemConfig } from './types';
-import { useTelemetry } from './hooks/useTelemetry';
+import {
+  telemetryStore,
+  useTelemetry,
+  useIsConnected,
+  useSimFps,
+  useSimTime,
+  useSimFrame,
+  useSimRunning,
+  useSimActions,
+  useActiveTelemetry,
+} from './store/telemetryStore';
 import { api } from './services/api';
 import { alarmAudio } from './services/alarmAudio';
 import { satellitePovSync } from './simulation/satellitePovSync';
@@ -89,6 +99,319 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'documentation', label: 'Documentation', icon: BookOpen, group: 'SPECIFICATION' },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
+
+/**
+ * Leaf component for sidebar connection indicator.
+ * Only re-renders when connection status or FPS changes, never re-rendering the sidebar buttons.
+ */
+const SidebarConnectionStatus: React.FC<{ isSidebarCollapsed: boolean }> = React.memo(({ isSidebarCollapsed }) => {
+  const isConnected = useIsConnected();
+  const fps = useSimFps();
+
+  return (
+    <div className={`border-t border-[#33362F] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[#FF5F40] shadow-[0_0_6px_#FF5F40]' : 'bg-[#5E625A]'}`} />
+        {!isSidebarCollapsed && (
+          <span className="text-[10px] text-[#9CA195] font-mono">
+            {isConnected ? `LIVE · ${fps.toFixed(0)} HZ` : 'STANDBY'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Leaf component for header simulation clock.
+ * Isolates high-frequency 30 Hz time/frame updates to this tiny text node.
+ */
+const HeaderSimClock: React.FC = React.memo(() => {
+  const time = useSimTime();
+  const frame = useSimFrame();
+
+  return (
+    <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9CA195] num-mono border-r border-[#33362F] pr-3 mr-1">
+      <span>t = <span className="text-[#F0FFEA]">{time.toFixed(1)}s</span></span>
+      <span className="text-[#33362F]">·</span>
+      <span>f = <span className="text-[#F0FFEA]">{frame}</span></span>
+    </div>
+  );
+});
+
+/**
+ * Leaf component for header simulation controls (Run/Pause toggle & Reset).
+ * Only re-renders when running state changes.
+ */
+const HeaderSimControls: React.FC<{ onResetSim: () => void }> = React.memo(({ onResetSim }) => {
+  const isRunning = useSimRunning();
+  const { toggleSimulation } = useSimActions();
+
+  return (
+    <>
+      <button
+        onClick={() => toggleSimulation(!isRunning)}
+        className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
+          isRunning
+            ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40] hover:bg-[rgba(255,95,64,0.14)]'
+            : 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] hover:bg-[#FF7459]'
+        }`}
+      >
+        {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+        <span>{isRunning ? 'Pause' : 'Run'}</span>
+      </button>
+
+      <button
+        onClick={onResetSim}
+        className="p-1.5 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
+        title="Reset simulation"
+      >
+        <RotateCcw className="w-3 h-3" />
+      </button>
+    </>
+  );
+});
+
+/**
+ * Leaf component for header alarm toggle.
+ * Only re-renders when alarm state transitions (Lost / Armed / Muted), completely isolating App.tsx.
+ */
+const HeaderAlarmButton: React.FC = React.memo(() => {
+  const [isAlarmActive, setIsAlarmActive] = useState<boolean>(alarmAudio.getIsAlarmRunning());
+  const [isAlarmMuted, setIsAlarmMuted] = useState<boolean>(alarmAudio.getIsMuted());
+
+  useEffect(() => {
+    return alarmAudio.subscribe((active, muted) => {
+      setIsAlarmActive(active);
+      setIsAlarmMuted(muted);
+    });
+  }, []);
+
+  return (
+    <button
+      onClick={() => {
+        alarmAudio.unlock();
+        alarmAudio.toggleMute();
+      }}
+      title={isAlarmMuted ? 'Unmute alarm' : isAlarmActive ? 'Beacon lost — click to mute' : 'Alarm armed'}
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] border transition cursor-pointer ${
+        isAlarmActive && !isAlarmMuted
+          ? 'bg-[rgba(255,95,64,0.2)] border-[#FF5F40] text-[#FF5F40]'
+          : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
+      }`}
+    >
+      {isAlarmMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+      <span>{isAlarmMuted ? 'Muted' : isAlarmActive ? 'Lost' : 'Armed'}</span>
+    </button>
+  );
+});
+
+/**
+ * Standalone Popout 3D Viewport.
+ */
+const Popout3DViewport: React.FC<{ config: SystemConfig | null; onResetSim: () => void }> = React.memo(({ config, onResetSim }) => {
+  const isConnected = useIsConnected();
+  const fps = useSimFps();
+  const time = useSimTime();
+  const frame = useSimFrame();
+  const isRunning = useSimRunning();
+  const { toggleSimulation } = useSimActions();
+  const telemetry = useTelemetry();
+
+  return (
+    <div
+      className="flex h-screen w-screen flex-col overflow-hidden bg-[#000000] text-[#F0FFEA] antialiased"
+      style={{ fontFamily: "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" }}
+    >
+      <header className="h-10 bg-[#1B1D1A] border-b border-[#33362F] px-4 flex items-center justify-between flex-shrink-0 select-none">
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#FF5F40] shadow-[0_0_8px_rgba(255,95,64,0.8)]' : 'bg-[#9CA195] animate-pulse'}`} />
+          <span className="text-xs font-semibold tracking-wider text-[#F0FFEA] uppercase">
+            LaserLockAI — 3D LEO Kinematics (Standalone Window)
+          </span>
+          <span className="text-[11px] text-[#9CA195] font-mono">
+            {isConnected ? `LIVE · ${fps.toFixed(0)} FPS` : 'CONNECTING…'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9CA195] num-mono border-r border-[#33362F] pr-3 mr-1">
+            <span>t = <span className="text-[#F0FFEA]">{time.toFixed(1)}s</span></span>
+            <span className="text-[#33362F]">·</span>
+            <span>f = <span className="text-[#F0FFEA]">{frame}</span></span>
+          </div>
+
+          <button
+            onClick={() => toggleSimulation(!isRunning)}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
+              isRunning
+                ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40] hover:bg-[rgba(255,95,64,0.14)]'
+                : 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] hover:bg-[#FF7459]'
+            }`}
+          >
+            {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+            <span>{isRunning ? 'Pause' : 'Run'}</span>
+          </button>
+
+          <button
+            onClick={onResetSim}
+            className="p-1 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
+            title="Reset simulation"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => {
+              window.location.href = window.location.origin + window.location.pathname;
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-[#33362F] bg-[#262824] text-[#F0FFEA] hover:border-[#FF5F40] hover:text-[#FF5F40] transition cursor-pointer ml-1"
+            title="Open full Mission Control Dashboard in this tab"
+          >
+            <span>Main Dashboard</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full h-full p-2 overflow-hidden bg-[#000000]">
+        <Scene3DViewport
+          target={telemetry?.target ?? null}
+          targets={telemetry?.targets ?? []}
+          camera={telemetry?.camera ?? null}
+          disturbance={telemetry?.disturbance ?? null}
+          worldWidth={config?.motion.screen_width ?? 2000}
+          worldHeight={config?.motion.screen_height ?? 2000}
+        />
+      </main>
+    </div>
+  );
+});
+
+/**
+ * Leaf component for Mission Control tab.
+ * Subscribes to active telemetry ONLY when isActive is true.
+ * When hidden (isActive = false), updates are completely frozen, preventing 30 Hz virtual DOM recalculations.
+ */
+const MissionControlTabWrapper: React.FC<{
+  isActive: boolean;
+  config: SystemConfig | null;
+  onResetSim: () => void;
+  onSelectShape: (shape: 'Square' | 'Circle' | 'Gaussian') => void;
+  onUpdateConfig?: (updater: (prev: SystemConfig) => SystemConfig) => void;
+}> = React.memo(({ isActive, config, onResetSim, onSelectShape, onUpdateConfig }) => {
+  const { telemetry, errorHistory } = useActiveTelemetry(isActive);
+  const { sendGimbalControl, sendGimbalTargetAngles, toggleSimulation } = useSimActions();
+
+  return (
+    <div style={{ display: isActive ? 'block' : 'none' }}>
+      <MissionControlPage
+        telemetry={telemetry}
+        config={config}
+        errorHistory={errorHistory}
+        onToggleSim={toggleSimulation}
+        onResetSim={onResetSim}
+        onGimbalNudge={sendGimbalControl}
+        onGimbalAngles={sendGimbalTargetAngles}
+        onSelectShape={onSelectShape}
+        onUpdateConfig={onUpdateConfig}
+      />
+    </div>
+  );
+});
+
+/**
+ * Leaf component for rendering the active page.
+ * Only subscribes to high-frequency telemetry when the active tab is telemetry-dependent.
+ */
+const ActiveTabRenderer: React.FC<{
+  activeTab: NavTabId;
+  config: SystemConfig | null;
+  setConfig: React.Dispatch<React.SetStateAction<SystemConfig | null>>;
+  onResetSim: () => void;
+  onSelectShape: (shape: 'Square' | 'Circle' | 'Gaussian') => void;
+  onSelectMotion: (trajectory_type: string) => void;
+  onUpdateConfig: (updater: (prev: SystemConfig) => SystemConfig) => Promise<void>;
+}> = React.memo(({
+  activeTab,
+  config,
+  setConfig,
+  onResetSim,
+  onSelectShape,
+  onSelectMotion,
+  onUpdateConfig,
+}) => {
+  const isTelemetryTab = [
+    'virtual_simulation',
+    'camera_view',
+    'target_environment',
+    'detection_ai',
+    'tracking_control',
+    'disturbances',
+    'analytics',
+  ].includes(activeTab);
+
+  const { telemetry, errorHistory } = useActiveTelemetry(isTelemetryTab);
+  const { sendGimbalControl, sendGimbalTargetAngles, toggleSimulation } = useSimActions();
+
+  if (activeTab === 'virtual_simulation') {
+    return (
+      <VirtualSimulationPage
+        telemetry={telemetry}
+        config={config}
+        onUpdateConfig={onUpdateConfig}
+        onToggleSim={toggleSimulation}
+        onResetSim={onResetSim}
+        onSelectMotion={onSelectMotion}
+        onSelectShape={onSelectShape}
+      />
+    );
+  }
+  if (activeTab === 'camera_view') {
+    return (
+      <CameraViewPage
+        telemetry={telemetry}
+        config={config}
+        onGimbalNudge={sendGimbalControl}
+        onGimbalAngles={sendGimbalTargetAngles}
+        onSelectShape={onSelectShape}
+      />
+    );
+  }
+  if (activeTab === 'video_benchmark') return <VideoBenchmarkPage />;
+  if (activeTab === 'target_environment') {
+    return (
+      <TargetEnvironmentPage
+        telemetry={telemetry}
+        config={config}
+        onUpdateConfig={onUpdateConfig}
+        onSelectMotion={onSelectMotion}
+        onSelectShape={onSelectShape}
+        onToggleSim={toggleSimulation}
+        onResetSim={onResetSim}
+      />
+    );
+  }
+  if (activeTab === 'detection_ai') {
+    return <DetectionAIPage config={config} telemetry={telemetry} onUpdateConfig={onUpdateConfig} />;
+  }
+  if (activeTab === 'tracking_control') {
+    return <TrackingControlPage config={config} telemetry={telemetry} onUpdateConfig={onUpdateConfig} />;
+  }
+  if (activeTab === 'disturbances') {
+    return <DisturbancesPage config={config} telemetry={telemetry} onUpdateConfig={onUpdateConfig} />;
+  }
+  if (activeTab === 'analytics') {
+    return <AnalyticsPage telemetry={telemetry} config={config} errorHistory={errorHistory} />;
+  }
+  if (activeTab === 'experiments') return <ExperimentsPage />;
+  if (activeTab === 'performance_reports') return <PerformanceReportsPage config={config} />;
+  if (activeTab === 'requirements') return <RequirementsPage />;
+  if (activeTab === 'architecture') return <ArchitecturePage />;
+  if (activeTab === 'documentation') return <DocumentationPage />;
+  if (activeTab === 'settings') return <SettingsPage config={config} onConfigChange={setConfig} />;
+
+  return null;
+});
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTabId>('mission_control');
@@ -152,134 +475,109 @@ export const App: React.FC = () => {
     }
   }, [activeTab]);
 
-  const {
-    telemetry,
-    isConnected,
-    errorHistory,
-    sendGimbalControl,
-    sendGimbalTargetAngles,
-    toggleSimulation,
-    resetSimulation,
-  } = useTelemetry();
+  const { resetSimulation } = useSimActions();
 
-  const handleResetSim = () => {
+  const handleResetSim = useCallback(() => {
     resetSimulation();
     window.dispatchEvent(new CustomEvent('fsoc:reset-sim'));
-  };
+  }, [resetSimulation]);
 
-  // Beacon Lost FOV Alarm State & Subscription
-  const [isAlarmActive, setIsAlarmActive] = useState<boolean>(false);
-  const [isAlarmMuted, setIsAlarmMuted] = useState<boolean>(alarmAudio.getIsMuted());
-  const [isAlarmSuspended, setIsAlarmSuspended] = useState<boolean>(alarmAudio.getIsSuspended());
 
+  // Monitor satellite camera FOV and trigger alarm when beacon is lost (Optimization 4.A: zero App re-renders at 30 Hz)
   useEffect(() => {
-    const unsub = alarmAudio.subscribe((active, muted, suspended) => {
-      setIsAlarmActive(active);
-      setIsAlarmMuted(muted);
-      setIsAlarmSuspended(suspended);
-    });
-    return unsub;
-  }, []);
+    const checkAlarm = () => {
+      const pov = satellitePovSync.getData();
+      if (pov.isLockedInFov) {
+        alarmAudio.stopLostAlarm();
+        return;
+      }
+      if (pov.isLostFromFov) {
+        alarmAudio.startLostAlarm();
+        return;
+      }
 
-  // Synchronize alarm with satellitePovSync (when rectangular frustum turns green -> silence, when red -> beep)
-  useEffect(() => {
-    const unsub = satellitePovSync.subscribe((data) => {
+      const telemetry = telemetryStore.getState().telemetry;
+      if (!telemetry) {
+        alarmAudio.stopLostAlarm();
+        return;
+      }
+
+      const t = telemetry.target;
+      const det = telemetry.detection;
+      const trk = telemetry.tracking;
+
+      const isCvDetected = Boolean(
+        det?.beacon_detected &&
+        det.detected_centroid_x !== null &&
+        det.detected_centroid_y !== null &&
+        det.detected_centroid_x >= 0 &&
+        det.detected_centroid_x <= 640 &&
+        det.detected_centroid_y >= 0 &&
+        det.detected_centroid_y <= 480
+      );
+
+      const isTrackingLocked = Boolean(
+        trk?.is_locked ||
+        trk?.state === 'LOCKED' ||
+        trk?.state === 'TRACKING' ||
+        trk?.mode === 'TRACKING' ||
+        trk?.mode === 'LOCKED'
+      );
+
+      const isTrackedInSensor = Boolean(
+        trk &&
+        trk.state !== 'LOST' &&
+        trk.state !== 'SEARCHING' &&
+        trk.filtered_x !== null &&
+        trk.filtered_x !== undefined &&
+        trk.filtered_y !== null &&
+        trk.filtered_y !== undefined &&
+        trk.filtered_x >= 0 &&
+        trk.filtered_x <= 640 &&
+        trk.filtered_y >= 0 &&
+        trk.filtered_y <= 480
+      );
+
+      const isGroundTruthInSensor = Boolean(
+        t &&
+        t.pixel_x !== null &&
+        t.pixel_x !== undefined &&
+        t.pixel_y !== null &&
+        t.pixel_y !== undefined &&
+        t.pixel_x >= 0 &&
+        t.pixel_x <= 640 &&
+        t.pixel_y >= 0 &&
+        t.pixel_y <= 480
+      );
+
+      const isPovOccluded = Boolean(satellitePovSync.getCurrent()?.isOccluded);
+      const isOccluded = Boolean(
+        telemetry.disturbance?.is_occluded ||
+        telemetry.orbital?.link?.link_state === 'LINK_BLOCKED' ||
+        isPovOccluded
+      );
+
+      const isVisibleInFov = !isOccluded && (isCvDetected || isTrackingLocked || isTrackedInSensor || isGroundTruthInSensor);
+
+      if (!isVisibleInFov) {
+        alarmAudio.startLostAlarm();
+      } else {
+        alarmAudio.stopLostAlarm();
+      }
+    };
+
+    const unsubTelemetry = telemetryStore.subscribe(checkAlarm);
+    const unsubPov = satellitePovSync.subscribe((data) => {
       if (data.isLockedInFov) {
         alarmAudio.stopLostAlarm();
       } else if (data.isLostFromFov) {
         alarmAudio.startLostAlarm();
       }
     });
-    return unsub;
-  }, []);
 
-  // Monitor satellite camera FOV and trigger alarm when beacon is lost
-  useEffect(() => {
-    // 3D FOV frustum is the primary source of truth:
-    // When locked in FOV (rectangular frustum is GREEN), alarm MUST be silent
-    const pov = satellitePovSync.getData();
-    if (pov.isLockedInFov) {
-      alarmAudio.stopLostAlarm();
-      return;
-    }
-    // When lost from FOV (rectangular frustum is RED), alarm MUST sound
-    if (pov.isLostFromFov) {
-      alarmAudio.startLostAlarm();
-      return;
-    }
-
-    if (!telemetry) {
-      alarmAudio.stopLostAlarm();
-      return;
-    }
-
-    const t = telemetry.target;
-    const det = telemetry.detection;
-    const trk = telemetry.tracking;
-
-    const isCvDetected = Boolean(
-      det?.beacon_detected &&
-      det.detected_centroid_x !== null &&
-      det.detected_centroid_y !== null &&
-      det.detected_centroid_x >= 0 &&
-      det.detected_centroid_x <= 640 &&
-      det.detected_centroid_y >= 0 &&
-      det.detected_centroid_y <= 480
-    );
-
-    const isTrackingLocked = Boolean(
-      trk?.is_locked ||
-      trk?.state === 'LOCKED' ||
-      trk?.state === 'TRACKING' ||
-      trk?.mode === 'TRACKING' ||
-      trk?.mode === 'LOCKED'
-    );
-
-    const isTrackedInSensor = Boolean(
-      trk &&
-      trk.state !== 'LOST' &&
-      trk.state !== 'SEARCHING' &&
-      trk.filtered_x !== null &&
-      trk.filtered_x !== undefined &&
-      trk.filtered_y !== null &&
-      trk.filtered_y !== undefined &&
-      trk.filtered_x >= 0 &&
-      trk.filtered_x <= 640 &&
-      trk.filtered_y >= 0 &&
-      trk.filtered_y <= 480
-    );
-
-    const isGroundTruthInSensor = Boolean(
-      t &&
-      t.pixel_x !== null &&
-      t.pixel_x !== undefined &&
-      t.pixel_y !== null &&
-      t.pixel_y !== undefined &&
-      t.pixel_x >= 0 &&
-      t.pixel_x <= 640 &&
-      t.pixel_y >= 0 &&
-      t.pixel_y <= 480
-    );
-
-    const isPovOccluded = Boolean(satellitePovSync.getCurrent()?.isOccluded);
-    const isOccluded = Boolean(
-      telemetry.disturbance?.is_occluded ||
-      telemetry.orbital?.link?.link_state === 'LINK_BLOCKED' ||
-      isPovOccluded
-    );
-
-    const isVisibleInFov = !isOccluded && (isCvDetected || isTrackingLocked || isTrackedInSensor || isGroundTruthInSensor);
-
-    // Alarm beeps whenever beacon is lost from the satellite camera FOV
-    if (!isVisibleInFov) {
-      alarmAudio.startLostAlarm();
-    } else {
-      alarmAudio.stopLostAlarm();
-    }
-  }, [telemetry]);
-
-  useEffect(() => {
     return () => {
+      unsubTelemetry();
+      unsubPov();
       alarmAudio.stopLostAlarm();
     };
   }, []);
@@ -337,78 +635,7 @@ export const App: React.FC = () => {
   const isPopout3D = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popout') === '3d';
 
   if (isPopout3D) {
-    return (
-      <div
-        className="flex h-screen w-screen flex-col overflow-hidden bg-[#000000] text-[#F0FFEA] antialiased"
-        style={{ fontFamily: "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" }}
-      >
-        {/* Sleek minimal header for the standalone 3D tab */}
-        <header className="h-10 bg-[#1B1D1A] border-b border-[#33362F] px-4 flex items-center justify-between flex-shrink-0 select-none">
-          <div className="flex items-center gap-2.5">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#FF5F40] shadow-[0_0_8px_rgba(255,95,64,0.8)]' : 'bg-[#9CA195] animate-pulse'}`} />
-            <span className="text-xs font-semibold tracking-wider text-[#F0FFEA] uppercase">
-              LaserLockAI — 3D LEO Kinematics (Standalone Window)
-            </span>
-            <span className="text-[11px] text-[#9CA195] font-mono">
-              {isConnected ? `LIVE · ${telemetry?.fps.toFixed(0) || 30} FPS` : 'CONNECTING…'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9CA195] num-mono border-r border-[#33362F] pr-3 mr-1">
-              <span>t = <span className="text-[#F0FFEA]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
-              <span className="text-[#33362F]">·</span>
-              <span>f = <span className="text-[#F0FFEA]">{telemetry?.frame_number ?? 0}</span></span>
-            </div>
-
-            {/* Run / Pause */}
-            <button
-              onClick={() => toggleSimulation(!telemetry?.is_running)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
-                telemetry?.is_running
-                  ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40] hover:bg-[rgba(255,95,64,0.14)]'
-                  : 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] hover:bg-[#FF7459]'
-              }`}
-            >
-              {telemetry?.is_running ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-              <span>{telemetry?.is_running ? 'Pause' : 'Run'}</span>
-            </button>
-
-            {/* Reset */}
-            <button
-              onClick={resetSimulation}
-              className="p-1 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
-              title="Reset simulation"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-
-            {/* Return to Main Dashboard */}
-            <button
-              onClick={() => {
-                window.location.href = window.location.origin + window.location.pathname;
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border border-[#33362F] bg-[#262824] text-[#F0FFEA] hover:border-[#FF5F40] hover:text-[#FF5F40] transition cursor-pointer ml-1"
-              title="Open full Mission Control Dashboard in this tab"
-            >
-              <span>Main Dashboard</span>
-            </button>
-          </div>
-        </header>
-
-        {/* Dedicated 100% Space 3D Virtual Scene */}
-        <main className="flex-1 w-full h-full p-2 overflow-hidden bg-[#000000]">
-          <Scene3DViewport
-            target={telemetry?.target ?? null}
-            targets={telemetry?.targets ?? []}
-            camera={telemetry?.camera ?? null}
-            disturbance={telemetry?.disturbance ?? null}
-            worldWidth={config?.motion.screen_width ?? 2000}
-            worldHeight={config?.motion.screen_height ?? 2000}
-          />
-        </main>
-      </div>
-    );
+    return <Popout3DViewport config={config} onResetSim={handleResetSim} />;
   }
 
   return (
@@ -557,17 +784,8 @@ export const App: React.FC = () => {
           )}
         </nav>
 
-        {/* Connection status */}
-        <div className={`border-t border-[#33362F] ${isSidebarCollapsed ? 'flex justify-center py-3' : 'px-4 py-2.5 flex items-center justify-between'}`}>
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isConnected ? 'bg-[#FF5F40] shadow-[0_0_6px_#FF5F40]' : 'bg-[#5E625A]'}`} />
-            {!isSidebarCollapsed && (
-              <span className="text-[10px] text-[#9CA195] font-mono">
-                {isConnected ? `LIVE · ${telemetry?.fps.toFixed(0) || 30} HZ` : 'STANDBY'}
-              </span>
-            )}
-          </div>
-        </div>
+        {/* Connection status (Optimization 4.A: isolated leaf component) */}
+        <SidebarConnectionStatus isSidebarCollapsed={isSidebarCollapsed} />
       </aside>
 
       {/* ── Main ── */}
@@ -593,28 +811,13 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Right: sim controls + status */}
+          {/* Right: sim controls + status (Optimization 4.A: isolated leaf components) */}
           <div className="flex items-center gap-2 text-xs">
-            {/* Sim clock — minimal */}
-            <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#9CA195] num-mono border-r border-[#33362F] pr-3 mr-1">
-              <span>t = <span className="text-[#F0FFEA]">{telemetry?.simulation_time_s.toFixed(1)}s</span></span>
-              <span className="text-[#33362F]">·</span>
-              <span>f = <span className="text-[#F0FFEA]">{telemetry?.frame_number ?? 0}</span></span>
-            </div>
+            {/* Sim clock — isolated leaf node */}
+            <HeaderSimClock />
 
-            {/* Alarm */}
-            <button
-              onClick={() => { alarmAudio.unlock(); alarmAudio.toggleMute(); }}
-              title={isAlarmMuted ? 'Unmute alarm' : isAlarmActive ? 'Beacon lost — click to mute' : 'Alarm armed'}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] border transition cursor-pointer ${
-                isAlarmActive && !isAlarmMuted
-                  ? 'bg-[rgba(255,95,64,0.2)] border-[#FF5F40] text-[#FF5F40]'
-                  : 'bg-[#262824] border-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
-              }`}
-            >
-              {isAlarmMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
-              <span>{isAlarmMuted ? 'Muted' : isAlarmActive ? 'Lost' : 'Armed'}</span>
-            </button>
+            {/* Alarm — isolated leaf node */}
+            <HeaderAlarmButton />
 
             {/* Demo */}
             <button
@@ -626,96 +829,32 @@ export const App: React.FC = () => {
               <span>Demo</span>
             </button>
 
-            {/* Run / Pause */}
-            <button
-              onClick={() => toggleSimulation(!telemetry?.is_running)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${
-                telemetry?.is_running
-                  ? 'bg-[#262824] border-[#FF5F40] text-[#FF5F40] hover:bg-[rgba(255,95,64,0.14)]'
-                  : 'bg-[#FF5F40] border-[#FF5F40] text-[#0A0A0A] hover:bg-[#FF7459]'
-              }`}
-            >
-              {telemetry?.is_running ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-              <span>{telemetry?.is_running ? 'Pause' : 'Run'}</span>
-            </button>
-
-            {/* Reset */}
-            <button
-              onClick={handleResetSim}
-              className="p-1.5 rounded border border-[#33362F] bg-[#262824] text-[#9CA195] hover:text-[#F0FFEA] hover:border-[#FF5F40] transition cursor-pointer"
-              title="Reset simulation"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
+            {/* Run / Pause / Reset controls — isolated leaf node */}
+            <HeaderSimControls onResetSim={handleResetSim} />
           </div>
         </header>
 
         {/* Page body */}
         <div className="flex-1 overflow-y-auto p-4 bg-[#000000]">
-          {/* Mission Control: Preserved mounted to maintain all dynamic 3D elements, positions & simulation state across tab changes */}
-          <div style={{ display: activeTab === 'mission_control' ? 'block' : 'none' }}>
-            <MissionControlPage
-              telemetry={telemetry}
-              config={config}
-              errorHistory={errorHistory}
-              onToggleSim={toggleSimulation}
-              onResetSim={handleResetSim}
-              onGimbalNudge={sendGimbalControl}
-              onGimbalAngles={sendGimbalTargetAngles}
-              onSelectShape={handleSelectShape}
-              onUpdateConfig={handleUpdateConfig}
-            />
-          </div>
-          {activeTab === 'virtual_simulation' && (
-            <VirtualSimulationPage
-              telemetry={telemetry}
-              config={config}
-              onUpdateConfig={handleUpdateConfig}
-              onToggleSim={toggleSimulation}
-              onResetSim={handleResetSim}
-              onSelectMotion={handleSelectMotion}
-              onSelectShape={handleSelectShape}
-            />
-          )}
-          {activeTab === 'camera_view' && (
-            <CameraViewPage
-              telemetry={telemetry}
-              config={config}
-              onGimbalNudge={sendGimbalControl}
-              onGimbalAngles={sendGimbalTargetAngles}
-              onSelectShape={handleSelectShape}
-            />
-          )}
-          {activeTab === 'video_benchmark' && <VideoBenchmarkPage />}
-          {activeTab === 'target_environment' && (
-            <TargetEnvironmentPage
-              telemetry={telemetry}
-              config={config}
-              onUpdateConfig={handleUpdateConfig}
-              onSelectMotion={handleSelectMotion}
-              onSelectShape={handleSelectShape}
-              onToggleSim={toggleSimulation}
-              onResetSim={handleResetSim}
-            />
-          )}
-          {activeTab === 'detection_ai' && (
-            <DetectionAIPage config={config} telemetry={telemetry} onUpdateConfig={handleUpdateConfig} />
-          )}
-          {activeTab === 'tracking_control' && (
-            <TrackingControlPage config={config} telemetry={telemetry} onUpdateConfig={handleUpdateConfig} />
-          )}
-          {activeTab === 'disturbances' && (
-            <DisturbancesPage config={config} telemetry={telemetry} onUpdateConfig={handleUpdateConfig} />
-          )}
-          {activeTab === 'analytics' && (
-            <AnalyticsPage telemetry={telemetry} config={config} errorHistory={errorHistory} />
-          )}
-          {activeTab === 'experiments' && <ExperimentsPage />}
-          {activeTab === 'performance_reports' && <PerformanceReportsPage config={config} />}
-          {activeTab === 'requirements' && <RequirementsPage />}
-          {activeTab === 'architecture' && <ArchitecturePage />}
-          {activeTab === 'documentation' && <DocumentationPage />}
-          {activeTab === 'settings' && <SettingsPage config={config} onConfigChange={setConfig} />}
+          {/* Mission Control: Preserved mounted with frozen updates when hidden (Optimization 4.A) */}
+          <MissionControlTabWrapper
+            isActive={activeTab === 'mission_control'}
+            config={config}
+            onResetSim={handleResetSim}
+            onSelectShape={handleSelectShape}
+            onUpdateConfig={handleUpdateConfig}
+          />
+
+          {/* Active Tab Renderer: Only subscribes to high-frequency telemetry when active tab needs it */}
+          <ActiveTabRenderer
+            activeTab={activeTab}
+            config={config}
+            setConfig={setConfig}
+            onResetSim={handleResetSim}
+            onSelectShape={handleSelectShape}
+            onSelectMotion={handleSelectMotion}
+            onUpdateConfig={handleUpdateConfig}
+          />
         </div>
 
         {/* Status bar — single row, minimal */}

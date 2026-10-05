@@ -1,5 +1,6 @@
 import time
 import math
+import cv2
 import numpy as np
 from typing import Optional, Tuple, List, Dict, Any
 
@@ -69,6 +70,10 @@ class SimulationEngine:
         self.last_step_wall_time = time.time()
         self.measured_fps = config.camera.update_rate_hz
         self._current_frame: Optional[np.ndarray] = None
+        self._scratch_float32: np.ndarray = np.empty((self.camera.height, self.camera.width), dtype=np.float32)
+        self._scratch_float32_color: np.ndarray = np.empty((self.camera.height, self.camera.width, 3), dtype=np.float32)
+        self._last_raw_jpeg: Optional[Tuple[int, bytes]] = None
+        self._last_annotated_jpeg: Optional[Tuple[int, bytes]] = None
         self.last_tracking_telemetry: Optional[TrackingTelemetry] = None
         self.last_detection_telemetry: Optional[DetectionTelemetry] = None
 
@@ -116,6 +121,8 @@ class SimulationEngine:
         self.controller.reset()
         self.analytics.reset()
         self._current_frame = None
+        self._last_raw_jpeg = None
+        self._last_annotated_jpeg = None
         self.last_step_wall_time = time.time()
         self._lost_time = 0.0
         self._adaptive_speed_factor = 1.0
@@ -222,14 +229,26 @@ class SimulationEngine:
         # 1. Base sensor background with baseline readout noise
         if not is_color:
             if noise_sigma > 0.01:
-                noise = np.random.normal(loc=bg_level, scale=noise_sigma, size=(h, w))
-                frame = np.clip(noise, 0, 255).astype(np.uint8)
+                if self._scratch_float32.shape != (h, w):
+                    self._scratch_float32 = np.empty((h, w), dtype=np.float32)
+                std_norm = np.random.standard_normal(size=(h, w)).astype(np.float32)
+                np.multiply(std_norm, noise_sigma, out=self._scratch_float32)
+                np.add(self._scratch_float32, bg_level, out=self._scratch_float32)
+                np.clip(self._scratch_float32, 0.0, 255.0, out=self._scratch_float32)
+                frame = np.empty((h, w), dtype=np.uint8)
+                frame[:] = self._scratch_float32
             else:
                 frame = np.full((h, w), int(round(bg_level)), dtype=np.uint8)
         else:
             if noise_sigma > 0.01:
-                noise = np.random.normal(loc=bg_level, scale=noise_sigma, size=(h, w, 3))
-                frame = np.clip(noise, 0, 255).astype(np.uint8)
+                if self._scratch_float32_color.shape != (h, w, 3):
+                    self._scratch_float32_color = np.empty((h, w, 3), dtype=np.float32)
+                std_norm = np.random.standard_normal(size=(h, w, 3)).astype(np.float32)
+                np.multiply(std_norm, noise_sigma, out=self._scratch_float32_color)
+                np.add(self._scratch_float32_color, bg_level, out=self._scratch_float32_color)
+                np.clip(self._scratch_float32_color, 0.0, 255.0, out=self._scratch_float32_color)
+                frame = np.empty((h, w, 3), dtype=np.uint8)
+                frame[:] = self._scratch_float32_color
             else:
                 frame = np.full((h, w, 3), int(round(bg_level)), dtype=np.uint8)
 
@@ -347,6 +366,33 @@ class SimulationEngine:
                 tracking=self.last_tracking_telemetry,
             )
         return self._current_frame
+
+    def get_encoded_frame(self, annotated: bool = False, quality: int = 80) -> bytes:
+        """
+        Returns compressed JPEG bytes for the current simulation frame.
+        Caches encoded bytes by frame_number to eliminate duplicate cv2.imencode overhead
+        when multiple streams, viewports, or snapshot requests occur on the same frame.
+        """
+        curr_frame_num = self.frame_number
+        if annotated:
+            if self._last_annotated_jpeg is not None and self._last_annotated_jpeg[0] == curr_frame_num:
+                return self._last_annotated_jpeg[1]
+            frame = self.render_fpa_frame(annotated=True)
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            if ok:
+                b = buf.tobytes()
+                self._last_annotated_jpeg = (curr_frame_num, b)
+                return b
+        else:
+            if self._last_raw_jpeg is not None and self._last_raw_jpeg[0] == curr_frame_num:
+                return self._last_raw_jpeg[1]
+            frame = self.render_fpa_frame(annotated=False)
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            if ok:
+                b = buf.tobytes()
+                self._last_raw_jpeg = (curr_frame_num, b)
+                return b
+        raise RuntimeError("Failed to encode FPA frame to JPEG")
 
     def step(self, dt: Optional[float] = None) -> SimulationTelemetry:
         """

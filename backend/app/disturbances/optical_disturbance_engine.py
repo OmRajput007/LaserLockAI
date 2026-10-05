@@ -64,6 +64,24 @@ class OpticalDisturbanceEngine:
         # Random seed state for reproducibility
         self.rng = np.random.default_rng(seed=42)
 
+        # Pre-allocated scratch buffers to eliminate per-frame GC churn
+        h = self.camera_config.resolution_height if self.camera_config else 480
+        w = self.camera_config.resolution_width if self.camera_config else 640
+        self._scratch_float32: np.ndarray = np.empty((h, w), dtype=np.float32)
+        self._scratch_float32_color: np.ndarray = np.empty((h, w, 3), dtype=np.float32)
+        self._rain_layer: np.ndarray = np.zeros((h, w), dtype=np.uint8)
+
+    def _get_scratch(self, shape: Tuple[int, ...]) -> np.ndarray:
+        """Returns or reallocates scratch float32 buffer matching the requested frame shape."""
+        if len(shape) == 2:
+            if self._scratch_float32.shape != shape:
+                self._scratch_float32 = np.empty(shape, dtype=np.float32)
+            return self._scratch_float32
+        else:
+            if self._scratch_float32_color.shape != shape:
+                self._scratch_float32_color = np.empty(shape, dtype=np.float32)
+            return self._scratch_float32_color
+
     def update_config(self, config: DisturbanceConfig, camera_config: Optional[CameraConfig] = None):
         self.config = config
         if camera_config:
@@ -454,52 +472,62 @@ class OpticalDisturbanceEngine:
 
     def apply_sensor_noise(self, frame: np.ndarray) -> np.ndarray:
         """
-        Applies multiple noise types simultaneously:
+        Applies multiple noise types simultaneously using pre-allocated scratch buffers:
         - Gaussian Readout Noise (<= 20 px std dev)
         - Salt & Pepper Impulsive Noise
         - Poisson (Photon Shot) Noise
         """
-        noisy = frame.astype(np.float32)
-        applied_noises = []
-
         cfg = self.config
         noise_mode = cfg.noise_type
         is_multi = (noise_mode == "Multi-Noise")
 
-        # 4.1 Additive Gaussian Noise
-        apply_gauss = cfg.gaussian_noise_enabled or is_multi or (noise_mode == "Gaussian")
-        sigma = min(cfg.noise_std_dev, 20.0)
-        if apply_gauss and sigma > 0.1:
-            gauss = self.rng.normal(loc=0.0, scale=sigma, size=frame.shape)
-            noisy += gauss
+        apply_gauss = (cfg.gaussian_noise_enabled or is_multi or (noise_mode == "Gaussian")) and (cfg.noise_std_dev > 0.1)
+        apply_poisson = cfg.poisson_noise_enabled or is_multi or (noise_mode == "Poisson")
+        apply_sp = (cfg.salt_pepper_enabled or is_multi or (noise_mode == "Salt & Pepper")) and (cfg.salt_pepper_ratio > 0.001)
+
+        # Zero-allocation fast return if no noise enabled
+        if not (apply_gauss or apply_poisson or apply_sp):
+            return frame
+
+        shape = frame.shape
+        scratch = self._get_scratch(shape)
+        np.copyto(scratch, frame)  # Fast in-place uint8 -> float32
+        applied_noises = []
+
+        # 4.1 Additive Gaussian Noise in float32
+        if apply_gauss:
+            sigma = min(cfg.noise_std_dev, 20.0)
+            gauss = self.rng.standard_normal(size=shape, dtype=np.float32)
+            if abs(sigma - 1.0) > 1e-4:
+                np.multiply(gauss, sigma, out=gauss)
+            np.add(scratch, gauss, out=scratch)
             applied_noises.append("Gaussian")
 
         # 4.2 Poisson (Photon Shot) Noise
-        apply_poisson = cfg.poisson_noise_enabled or is_multi or (noise_mode == "Poisson")
         if apply_poisson:
-            # Normalize to photon scale, sample Poisson, scale back
-            norm = np.maximum(noisy, 0.0) / 255.0
-            scale = 40.0  # Photon flux count scaling
-            poisson_sample = self.rng.poisson(norm * scale) / scale * 255.0
-            # Blend 50/50 to preserve mean while injecting Poisson variance
-            noisy = 0.5 * noisy + 0.5 * poisson_sample
+            np.maximum(scratch, 0.0, out=scratch)
+            scale = 40.0
+            norm_scaled = scratch / (255.0 / scale)
+            poisson_sample = self.rng.poisson(norm_scaled).astype(np.float32) * (255.0 / scale)
+            np.add(scratch, poisson_sample, out=scratch)
+            np.multiply(scratch, 0.5, out=scratch)
             applied_noises.append("Poisson")
 
-        # Clip back to 0-255 uint8 before Salt & Pepper
-        noisy = np.clip(noisy, 0.0, 255.0).astype(np.uint8)
+        # Clip back to 0-255 uint8 in-place
+        np.clip(scratch, 0.0, 255.0, out=scratch)
+        noisy = np.empty_like(frame)
+        noisy[:] = scratch
 
         # 4.3 Salt & Pepper Impulsive Noise
-        apply_sp = cfg.salt_pepper_enabled or is_multi or (noise_mode == "Salt & Pepper")
-        if apply_sp and cfg.salt_pepper_ratio > 0.001:
+        if apply_sp:
             ratio = min(cfg.salt_pepper_ratio, 0.20)
-            rand_mask = self.rng.random(size=frame.shape[:2])
+            rand_mask = self.rng.random(size=shape[:2], dtype=np.float32)
+            half_ratio = ratio * 0.5
 
-            # Pepper (black = 0)
-            pepper_mask = rand_mask < (ratio / 2.0)
+            pepper_mask = rand_mask < half_ratio
             noisy[pepper_mask] = 0
 
-            # Salt (white = 255)
-            salt_mask = (rand_mask >= (ratio / 2.0)) & (rand_mask < ratio)
+            salt_mask = (rand_mask >= half_ratio) & (rand_mask < ratio)
             noisy[salt_mask] = 255
             applied_noises.append("Salt & Pepper")
 
@@ -524,10 +552,16 @@ class OpticalDisturbanceEngine:
 
         # 1. Contrast reduction & path radiance wash
         if abs(contrast_scale - 1.0) > 0.01 or abs(path_radiance) > 0.5:
-            f_float = frame.astype(np.float32)
-            # Contrast: scale around midpoint (128)
-            f_float = (f_float - 128.0) * contrast_scale + 128.0 + path_radiance
-            frame = np.clip(f_float, 0, 255).astype(np.uint8)
+            f_float = self._get_scratch(frame.shape)
+            np.copyto(f_float, frame)
+            # Contrast: scale around midpoint (128): (f - 128) * contrast_scale + 128 + path_radiance
+            offset = 128.0 * (1.0 - contrast_scale) + path_radiance
+            np.multiply(f_float, contrast_scale, out=f_float)
+            np.add(f_float, offset, out=f_float)
+            np.clip(f_float, 0.0, 255.0, out=f_float)
+            out = np.empty_like(frame)
+            out[:] = f_float
+            frame = out
 
         # 2. Fog Mie Scattering Blur (scaled by atmosphere_path_frac)
         fog_d = self.config.fog_density if (self.config.fog_density and self.config.fog_density > 0.05) else 0.65
@@ -544,28 +578,37 @@ class OpticalDisturbanceEngine:
         # 4. Brightness Fluctuation Drift
         if self.config.brightness_fluctuation_enabled:
             drift = math.sin(0.4 * self.sim_time) * min(self.config.brightness_fluctuation_amplitude, 50.0)
-            frame = np.clip(frame.astype(np.float32) + drift, 0, 255).astype(np.uint8)
+            f_float = self._get_scratch(frame.shape)
+            np.copyto(f_float, frame)
+            np.add(f_float, drift, out=f_float)
+            np.clip(f_float, 0.0, 255.0, out=f_float)
+            out = np.empty_like(frame)
+            out[:] = f_float
+            frame = out
 
         return frame
 
     def _render_rain_streaks(self, frame: np.ndarray) -> np.ndarray:
-        """Renders falling slanted precipitation streaks onto the frame."""
+        """Renders falling slanted precipitation streaks onto the frame using pre-allocated rain buffer."""
         h, w = frame.shape[:2]
         num_streaks = int(self.config.rain_rate_mm_hr * 4.0)
 
-        # Generate sparse rain layer
-        rain_layer = np.zeros((h, w), dtype=np.uint8)
+        # Clear reusable rain layer
+        if self._rain_layer.shape != (h, w):
+            self._rain_layer = np.zeros((h, w), dtype=np.uint8)
+        else:
+            self._rain_layer.fill(0)
+
         xs = self.rng.integers(0, w, size=num_streaks)
-        ys = self.rng.integers(0, h - 20, size=num_streaks)
+        ys = self.rng.integers(0, max(1, h - 20), size=num_streaks)
         lens = self.rng.integers(6, 18, size=num_streaks)
 
         for x, y, l in zip(xs, ys, lens):
-            cv2.line(rain_layer, (x, y), (x + 3, y + l), 180, 1)
+            cv2.line(self._rain_layer, (int(x), int(y)), (int(x + 3), int(y + l)), 180, 1)
 
-        # Motion blur rain lines slightly
-        rain_layer = cv2.GaussianBlur(rain_layer, (3, 5), sigmaX=0.8)
-        frame = cv2.add(frame, rain_layer)
-        return frame
+        # Motion blur rain lines slightly and add in-place
+        blurred_rain = cv2.GaussianBlur(self._rain_layer, (3, 5), sigmaX=0.8)
+        return cv2.add(frame, blurred_rain)
 
     def apply_motion_blur(self, frame: np.ndarray, pan_rate: float, tilt_rate: float) -> np.ndarray:
         """

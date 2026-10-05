@@ -31,3 +31,10 @@ scratch/
 # ML Model Weights
 my_model.pt
 *.pt
+my_model.onnx
+*.onnx
+
+# Generated Simulation & Test Reports
+reports_archive/
+backend/data/reports/
+

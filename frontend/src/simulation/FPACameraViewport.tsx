@@ -49,10 +49,9 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
 }) => {
   // Default tab on load is OpenCV Annotated per requirements
   const [viewMode, setViewMode] = useState<'opencv_annotated' | 'opencv_raw'>('opencv_annotated');
-  const [streamTick, setStreamTick] = useState<number>(() => Date.now());
+  const [reconnectKey, setReconnectKey] = useState<number>(0);
   const [hasStreamError, setHasStreamError] = useState(false);
-  const nextTickTimerRef = useRef<any>(null);
-  const lastLoadTimeRef = useRef<number>(Date.now());
+  const reconnectTimerRef = useRef<any>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Manual Satellite Camera POV Image Capture State
@@ -187,42 +186,29 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [viewMode]);
 
-  // Smooth load-gated streaming: only request next frame once current frame finishes loading
+  // Native MJPEG streaming: browser automatically updates video in real time with 0 polling requests
   const handleFrameLoad = () => {
-    lastLoadTimeRef.current = Date.now();
     setHasStreamError(false);
-    if (nextTickTimerRef.current) clearTimeout(nextTickTimerRef.current);
-    nextTickTimerRef.current = setTimeout(() => {
-      setStreamTick(Date.now());
-    }, 40);
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
   };
 
   const handleFrameError = () => {
     setHasStreamError(true);
-    if (nextTickTimerRef.current) clearTimeout(nextTickTimerRef.current);
-    nextTickTimerRef.current = setTimeout(() => {
-      setStreamTick(Date.now());
-    }, 600);
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    reconnectTimerRef.current = setTimeout(() => {
+      setReconnectKey((prev) => prev + 1);
+    }, 1200);
   };
 
   const handleManualRetry = () => {
     setHasStreamError(false);
-    lastLoadTimeRef.current = Date.now();
-    if (nextTickTimerRef.current) clearTimeout(nextTickTimerRef.current);
-    setStreamTick(Date.now());
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    setReconnectKey((prev) => prev + 1);
   };
 
-  // Watchdog timer: if no frame was loaded in the last 1500ms, force trigger next frame
   useEffect(() => {
-    const watchdog = setInterval(() => {
-      if (Date.now() - lastLoadTimeRef.current > 1500) {
-        setStreamTick(Date.now());
-      }
-    }, 1200);
-
     return () => {
-      clearInterval(watchdog);
-      if (nextTickTimerRef.current) clearTimeout(nextTickTimerRef.current);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
   }, []);
 
@@ -599,7 +585,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           <div className="relative w-full h-full bg-[#000000] flex items-center justify-center z-10">
             <img
               ref={imgRef}
-              src={`/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${streamTick}`}
+              src={`/api/simulation/frame/stream?annotated=${viewMode === 'opencv_annotated'}${reconnectKey ? `&retry=${reconnectKey}` : ''}`}
               alt="Live OpenCV Camera Feed"
               crossOrigin="anonymous"
               onLoad={handleFrameLoad}

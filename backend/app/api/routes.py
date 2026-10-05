@@ -1,6 +1,9 @@
+import time
+import asyncio
 import cv2
 import numpy as np
-from fastapi import APIRouter, HTTPException, Response, UploadFile, File
+from fastapi import APIRouter, HTTPException, Response, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Literal, Optional
 
@@ -300,12 +303,85 @@ def get_camera_frame(annotated: bool = False):
     Renders 640x480 FPA frame.
     If annotated=True, includes camera crosshairs, detected bounding box,
     moments centroid, error vector, and HUD telemetry metrics.
+    Caches encoded bytes across multiple subscribers on the same frame.
     """
-    frame = sim_engine.render_fpa_frame(annotated=annotated)
-    success, buffer = cv2.imencode(".jpg", frame)
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to encode frame")
-    return Response(content=buffer.tobytes(), media_type="image/jpeg")
+    try:
+        jpeg_bytes = sim_engine.get_encoded_frame(annotated=annotated)
+        return Response(content=jpeg_bytes, media_type="image/jpeg")
+    except Exception:
+        frame = sim_engine.render_fpa_frame(annotated=annotated)
+        success, buffer = cv2.imencode(".jpg", frame)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to encode frame")
+        return Response(content=buffer.tobytes(), media_type="image/jpeg")
+
+
+@router.get("/simulation/frame/stream")
+@router.get("/simulation/stream")
+async def stream_camera_frames(
+    request: Request,
+    annotated: bool = False,
+    fps: float = 30.0,
+    max_frames: Optional[int] = None,
+):
+    """
+    High-performance native multipart/x-mixed-replace MJPEG video stream.
+    Displays continuously in standard HTML <img> tags with:
+    - 0 HTTP polling requests
+    - 0 React component state updates / re-renders
+    - Continuous 30 FPS video feed with native browser hardware rendering
+    """
+    async def frame_generator():
+        target_fps = max(1.0, min(60.0, fps))
+        frame_interval = 1.0 / target_fps
+        last_frame_number = -1
+        last_bytes = None
+        frames_sent = 0
+
+        while True:
+            if await request.is_disconnected():
+                break
+
+            t0 = time.time()
+            curr_frame_num = sim_engine.frame_number
+
+            # Only re-encode when simulation stepped or on first frame
+            if curr_frame_num != last_frame_number or last_bytes is None:
+                try:
+                    last_bytes = sim_engine.get_encoded_frame(annotated=annotated)
+                    last_frame_number = curr_frame_num
+                except Exception:
+                    frame = sim_engine.render_fpa_frame(annotated=annotated)
+                    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    if ok:
+                        last_bytes = buf.tobytes()
+                        last_frame_number = curr_frame_num
+
+            if last_bytes is not None:
+                header = (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(last_bytes)).encode("ascii") + b"\r\n\r\n"
+                )
+                yield header + last_bytes + b"\r\n"
+                frames_sent += 1
+                if max_frames is not None and frames_sent >= max_frames:
+                    break
+
+            elapsed = time.time() - t0
+            sleep_time = max(0.005, frame_interval - elapsed)
+            await asyncio.sleep(sleep_time)
+
+    return StreamingResponse(
+        frame_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/simulation/detection/intermediates")
@@ -863,6 +939,7 @@ class SyntheticScenarioCommand(BaseModel):
 
 class ProcessVideoCommand(BaseModel):
     max_frames: Optional[int] = Field(None, ge=1, description="Max frames to process (None for entire video)")
+    render_visuals: bool = Field(False, description="Whether to render OpenCV visual annotations on every frame (default False for fast batch)")
 
 
 class BenchmarkConfigCommand(BaseModel):
@@ -1042,6 +1119,8 @@ def control_benchmark_playback(cmd: BenchmarkControlCommand):
         benchmark_engine.is_playing = False
         benchmark_engine.seek(0)
     elif action == "play":
+        if benchmark_engine.metadata and benchmark_engine.current_frame_idx >= benchmark_engine.metadata.total_frames - 1:
+            benchmark_engine.seek(0)
         benchmark_engine.is_playing = True
     elif action == "pause":
         benchmark_engine.is_playing = False
@@ -1080,7 +1159,8 @@ def process_entire_benchmark_video(cmd: Optional[ProcessVideoCommand] = None):
     Returns complete benchmark results summary.
     """
     max_frames = cmd.max_frames if cmd else None
-    results = benchmark_engine.process_entire_video(max_frames=max_frames)
+    render_visuals = cmd.render_visuals if cmd else False
+    results = benchmark_engine.process_entire_video(max_frames=max_frames, render_visuals=render_visuals)
     return {
         "status": "processing_complete",
         "results": results.model_dump(),

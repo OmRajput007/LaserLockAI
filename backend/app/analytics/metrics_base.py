@@ -1,4 +1,5 @@
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Deque
+from collections import deque
 import math
 from backend.app.models.config_model import PerformanceConfig
 from backend.app.models.analytics_model import (
@@ -21,9 +22,9 @@ class AnalyticsEngine:
     Calculates actual non-fabricated performance metrics across simulation & benchmark modes.
     """
 
-    def __init__(self, config: PerformanceConfig):
+    def __init__(self, config: PerformanceConfig, max_history_points: int = 1200):
         self.config = config
-        self.max_history_points = 1200
+        self.max_history_points = max_history_points
         self.reset()
 
     def reset(self):
@@ -37,13 +38,13 @@ class AnalyticsEngine:
         self.frames_locked = 0  # error <= 10 px
         self.target_lost_events = 0
 
-        # Error & Latency lists
-        self.tracking_errors: List[float] = []
-        self.centroid_errors: List[float] = []
-        self.fps_history: List[float] = []
-        self.processing_times_ms: List[float] = []
-        self.confidence_history: List[float] = []
-        self.snr_history: List[float] = []
+        # Error & Latency lists - bounded deques to prevent memory leaks during long runs (Optimization 5.A)
+        self.tracking_errors: Deque[float] = deque(maxlen=self.max_history_points)
+        self.centroid_errors: Deque[float] = deque(maxlen=self.max_history_points)
+        self.fps_history: Deque[float] = deque(maxlen=self.max_history_points)
+        self.processing_times_ms: Deque[float] = deque(maxlen=self.max_history_points)
+        self.confidence_history: Deque[float] = deque(maxlen=self.max_history_points)
+        self.snr_history: Deque[float] = deque(maxlen=self.max_history_points)
 
         # Timers
         self.acquisition_timestamp: Optional[float] = None
@@ -61,10 +62,10 @@ class AnalyticsEngine:
         self.camera_altitude_km: Optional[float] = None
         self.beacon_altitude_km: Optional[float] = None
         self.orbit_presets: Optional[str] = None
-        self.ranges_km: List[float] = []
-        self.beacon_angular_rates: List[float] = []
-        self.atmosphere_path_fractions: List[float] = []
-        self.angular_errors_deg: List[float] = []
+        self.ranges_km: Deque[float] = deque(maxlen=self.max_history_points)
+        self.beacon_angular_rates: Deque[float] = deque(maxlen=self.max_history_points)
+        self.atmosphere_path_fractions: Deque[float] = deque(maxlen=self.max_history_points)
+        self.angular_errors_deg: Deque[float] = deque(maxlen=self.max_history_points)
         self.count_slew_saturated: int = 0
         self.count_gimbal_limit: int = 0
         self.count_link_blocked: int = 0
@@ -77,13 +78,13 @@ class AnalyticsEngine:
         self.no_coverage_events: int = 0
         self.total_no_coverage_s: float = 0.0
 
-        # Time series points for charts
-        self.time_series: List[TelemetryPoint] = []
+        # Time series points for charts (strictly bounded deque)
+        self.time_series: Deque[TelemetryPoint] = deque(maxlen=self.max_history_points)
         self.last_point: Optional[TelemetryPoint] = None
 
     @property
     def telemetry_history(self) -> List[TelemetryPoint]:
-        return self.time_series
+        return list(self.time_series)
 
     def record_step(
         self,
@@ -250,11 +251,6 @@ class AnalyticsEngine:
         )
         self.last_point = point
         self.time_series.append(point)
-
-        # Cap memory buffer
-        if len(self.time_series) > self.max_history_points:
-            # Subsample by dropping every second older point
-            self.time_series = self.time_series[-self.max_history_points :]
 
     def calculate_metrics(self) -> PerformanceMetrics:
         """Computes comprehensive actual performance metrics from recorded steps."""
@@ -528,5 +524,5 @@ class AnalyticsEngine:
     def get_time_series(self, window_points: Optional[int] = None) -> List[TelemetryPoint]:
         """Returns time series points up to window_points limit."""
         if window_points and window_points < len(self.time_series):
-            return self.time_series[-window_points:]
-        return self.time_series
+            return list(self.time_series)[-window_points:]
+        return list(self.time_series)
