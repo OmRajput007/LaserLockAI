@@ -74,6 +74,7 @@ class SimulationEngine:
         self._scratch_float32_color: np.ndarray = np.empty((self.camera.height, self.camera.width, 3), dtype=np.float32)
         self._last_raw_jpeg: Optional[Tuple[int, bytes]] = None
         self._last_annotated_jpeg: Optional[Tuple[int, bytes]] = None
+        self._last_annotated_no_telem_jpeg: Optional[Tuple[int, bytes]] = None
         self.last_tracking_telemetry: Optional[TrackingTelemetry] = None
         self.last_detection_telemetry: Optional[DetectionTelemetry] = None
 
@@ -123,6 +124,7 @@ class SimulationEngine:
         self._current_frame = None
         self._last_raw_jpeg = None
         self._last_annotated_jpeg = None
+        self._last_annotated_no_telem_jpeg = None
         self.last_step_wall_time = time.time()
         self._lost_time = 0.0
         self._adaptive_speed_factor = 1.0
@@ -350,11 +352,12 @@ class SimulationEngine:
         self._current_frame = disturbed_frame
         return disturbed_frame
 
-    def render_fpa_frame(self, annotated: bool = False) -> np.ndarray:
+    def render_fpa_frame(self, annotated: bool = False, show_telemetry: bool = True) -> np.ndarray:
         """
         Returns the camera frame.
         If annotated=True, overlays camera crosshairs, detected bounding box,
         centroid marker, error vector, Kalman predictions, and tracking HUD metrics.
+        If show_telemetry=False, HUD info panel and tracking text readouts are omitted.
         """
         if self._current_frame is None:
             self.generate_raw_fpa_frame()
@@ -364,10 +367,11 @@ class SimulationEngine:
                 self._current_frame,
                 self.detector.last_telemetry,
                 tracking=self.last_tracking_telemetry,
+                show_telemetry=show_telemetry,
             )
         return self._current_frame
 
-    def get_encoded_frame(self, annotated: bool = False, quality: int = 80) -> bytes:
+    def get_encoded_frame(self, annotated: bool = False, quality: int = 80, show_telemetry: bool = True) -> bytes:
         """
         Returns compressed JPEG bytes for the current simulation frame.
         Caches encoded bytes by frame_number to eliminate duplicate cv2.imencode overhead
@@ -375,14 +379,24 @@ class SimulationEngine:
         """
         curr_frame_num = self.frame_number
         if annotated:
-            if self._last_annotated_jpeg is not None and self._last_annotated_jpeg[0] == curr_frame_num:
-                return self._last_annotated_jpeg[1]
-            frame = self.render_fpa_frame(annotated=True)
-            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
-            if ok:
-                b = buf.tobytes()
-                self._last_annotated_jpeg = (curr_frame_num, b)
-                return b
+            if not show_telemetry:
+                if self._last_annotated_no_telem_jpeg is not None and self._last_annotated_no_telem_jpeg[0] == curr_frame_num:
+                    return self._last_annotated_no_telem_jpeg[1]
+                frame = self.render_fpa_frame(annotated=True, show_telemetry=False)
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                if ok:
+                    b = buf.tobytes()
+                    self._last_annotated_no_telem_jpeg = (curr_frame_num, b)
+                    return b
+            else:
+                if self._last_annotated_jpeg is not None and self._last_annotated_jpeg[0] == curr_frame_num:
+                    return self._last_annotated_jpeg[1]
+                frame = self.render_fpa_frame(annotated=True, show_telemetry=True)
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                if ok:
+                    b = buf.tobytes()
+                    self._last_annotated_jpeg = (curr_frame_num, b)
+                    return b
         else:
             if self._last_raw_jpeg is not None and self._last_raw_jpeg[0] == curr_frame_num:
                 return self._last_raw_jpeg[1]

@@ -11,7 +11,7 @@ app = FastAPI(
         "Engineering virtual testbench for AI-based camera tracking and coarse Pointing, "
         "Acquisition and Tracking (PAT) of mobile Free Space Optical Communication terminals."
     ),
-    version="1.0.0-part1",
+    version="1.0.2",
     docs_url="/docs",
     redoc_url="/redoc",
 )

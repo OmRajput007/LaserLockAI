@@ -82,12 +82,24 @@ class AIDetector(BaseDetector):
             return None
 
         candidates = []
+        env_model_path = os.environ.get("LASERLOCKAI_MODEL_PATH")
+        if env_model_path and os.path.isfile(env_model_path):
+            candidates.append(env_model_path)
+
         if os.path.isabs(path_str):
             candidates.append(path_str)
         else:
             candidates.append(os.path.abspath(path_str))
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
             candidates.append(os.path.join(base_dir, path_str))
+            import sys
+            if getattr(sys, "frozen", False):
+                exe_dir = os.path.dirname(sys.executable)
+                candidates.append(os.path.join(exe_dir, path_str))
+                candidates.append(os.path.join(exe_dir, "_internal", path_str))
+                meipass = getattr(sys, "_MEIPASS", None)
+                if meipass:
+                    candidates.append(os.path.join(meipass, path_str))
 
         use_onnx = getattr(self.config, "ai_use_onnx", True)
 

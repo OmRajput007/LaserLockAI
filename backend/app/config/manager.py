@@ -14,8 +14,11 @@ class ConfigManager:
 
     def __init__(self, config_dir: Optional[Path] = None):
         if config_dir is None:
-            # Default to backend/saved_configs
-            self.config_dir = Path(__file__).parent.parent.parent / "saved_configs"
+            env_dir = os.environ.get("LASERLOCKAI_SAVED_CONFIGS") or os.environ.get("LASERLOCKAI_CONFIG_DIR")
+            if env_dir:
+                self.config_dir = Path(env_dir)
+            else:
+                self.config_dir = Path(__file__).parent.parent.parent / "saved_configs"
         else:
             self.config_dir = Path(config_dir)
 

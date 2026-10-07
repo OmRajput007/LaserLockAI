@@ -15,7 +15,9 @@ frontend/dist/
 build/
 dist/
 dist_standalone/
+dist_software/
 release/
+blob_cache.json
 *.exe
 *.blockmap
 

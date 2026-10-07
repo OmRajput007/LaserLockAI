@@ -1,10 +1,10 @@
 param (
     [string]$Repo = "",
     [string]$Token = "",
-    [string]$Tag = "v1.0.0",
-    [string]$Title = "LaserLockAI v1.0.0 Release",
-    [string]$Notes = "Official release installer for LaserLockAI (Windows x64).",
-    [string]$FilePath = "release\LaserLockAI Setup 1.0.0.exe"
+    [string]$Tag = "v1.0.2",
+    [string]$Title = "LaserLockAI v1.0.2 Release",
+    [string]$Notes = "Official release installer for LaserLockAI v1.0.2 (Windows x64).",
+    [string]$FilePath = "dist_software\LaserLockAI Setup 1.0.2.exe"
 )
 
 Write-Host "==========================================================" -ForegroundColor Cyan

@@ -1,6 +1,6 @@
 {
   "name": "laserlockaiapp",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "LaserLockAI — AI-Based Virtual Camera Tracking System for FSOC Coarse Alignment",
   "main": "main.js",
   "author": "LaserLockAI Team",
@@ -22,7 +22,7 @@
     "icon": "assets/icon.ico",
     "directories": {
       "buildResources": "assets",
-      "output": "../release"
+      "output": "../dist_software"
     },
     "extraResources": [
       {
@@ -36,6 +36,12 @@
     "win": {
       "target": [
         {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "nsis",
           "arch": [
             "x64"
@@ -43,6 +49,7 @@
         }
       ],
       "icon": "assets/icon.ico",
+      "executableName": "LaserLockAI",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {

@@ -3,7 +3,7 @@ import asyncio
 import cv2
 import numpy as np
 from fastapi import APIRouter, HTTPException, Response, Request, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Literal, Optional
 
@@ -298,18 +298,19 @@ def set_custom_path(cmd: CustomPathCommand):
 
 
 @router.get("/simulation/frame")
-def get_camera_frame(annotated: bool = False):
+def get_camera_frame(annotated: bool = False, telemetry: bool = True):
     """
     Renders 640x480 FPA frame.
     If annotated=True, includes camera crosshairs, detected bounding box,
     moments centroid, error vector, and HUD telemetry metrics.
+    If telemetry=False, HUD info panel and tracking text readouts are omitted.
     Caches encoded bytes across multiple subscribers on the same frame.
     """
     try:
-        jpeg_bytes = sim_engine.get_encoded_frame(annotated=annotated)
+        jpeg_bytes = sim_engine.get_encoded_frame(annotated=annotated, show_telemetry=telemetry)
         return Response(content=jpeg_bytes, media_type="image/jpeg")
     except Exception:
-        frame = sim_engine.render_fpa_frame(annotated=annotated)
+        frame = sim_engine.render_fpa_frame(annotated=annotated, show_telemetry=telemetry)
         success, buffer = cv2.imencode(".jpg", frame)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to encode frame")
@@ -321,6 +322,7 @@ def get_camera_frame(annotated: bool = False):
 async def stream_camera_frames(
     request: Request,
     annotated: bool = False,
+    telemetry: bool = True,
     fps: float = 30.0,
     max_frames: Optional[int] = None,
 ):
@@ -330,6 +332,7 @@ async def stream_camera_frames(
     - 0 HTTP polling requests
     - 0 React component state updates / re-renders
     - Continuous 30 FPS video feed with native browser hardware rendering
+    - If telemetry=False, returns clean feed without telemetry HUD overlay.
     """
     async def frame_generator():
         target_fps = max(1.0, min(60.0, fps))
@@ -348,10 +351,10 @@ async def stream_camera_frames(
             # Only re-encode when simulation stepped or on first frame
             if curr_frame_num != last_frame_number or last_bytes is None:
                 try:
-                    last_bytes = sim_engine.get_encoded_frame(annotated=annotated)
+                    last_bytes = sim_engine.get_encoded_frame(annotated=annotated, show_telemetry=telemetry)
                     last_frame_number = curr_frame_num
                 except Exception:
-                    frame = sim_engine.render_fpa_frame(annotated=annotated)
+                    frame = sim_engine.render_fpa_frame(annotated=annotated, show_telemetry=telemetry)
                     ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     if ok:
                         last_bytes = buf.tobytes()
@@ -998,6 +1001,30 @@ async def upload_benchmark_video(file: UploadFile = File(...)):
         "status": "video_loaded",
         "metadata": metadata.model_dump(),
     }
+
+
+@router.get("/benchmark/sample-video")
+def download_sample_benchmark_video():
+    """
+    Downloads the sample benchmark video (final.mp4) from the benchmark_videos folder.
+    """
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    candidate_paths = [
+        os.path.join(base_dir, "benchmark_videos", "final.mp4"),
+        os.path.abspath(os.path.join("benchmark_videos", "final.mp4")),
+        os.path.join(base_dir, "frontend", "public", "benchmark_videos", "final.mp4"),
+    ]
+    for p in candidate_paths:
+        if os.path.exists(p) and os.path.isfile(p):
+            return FileResponse(
+                path=p,
+                media_type="video/mp4",
+                filename="final.mp4",
+                headers={
+                    "Content-Disposition": 'attachment; filename="final.mp4"'
+                }
+            )
+    raise HTTPException(status_code=404, detail="Sample benchmark video final.mp4 not found")
 
 
 @router.post("/benchmark/synthetic")

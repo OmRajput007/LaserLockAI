@@ -16,7 +16,9 @@ class ReportGenerator:
     comprehensive user manuals, and multi-format exports (PDF/HTML, CSV, JSON).
     """
 
-    def __init__(self, reports_dir: str = "backend/data/reports"):
+    def __init__(self, reports_dir: Optional[str] = None):
+        if reports_dir is None:
+            reports_dir = os.environ.get("LASERLOCKAI_REPORTS_DIR") or os.environ.get("LASERLOCKAI_REPORTS_ARCHIVE") or "backend/data/reports"
         self.reports_dir = reports_dir
         os.makedirs(self.reports_dir, exist_ok=True)
         self.latest_report: Optional[PerformanceReport] = None

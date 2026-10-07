@@ -395,6 +395,7 @@ class OpenCVBeaconDetector(BaseDetector):
         frame: np.ndarray,
         telemetry: Optional[DetectionTelemetry] = None,
         tracking: Optional[Any] = None,
+        show_telemetry: bool = True,
     ) -> np.ndarray:
         """
         Renders visualization overlays directly onto the camera frame:
@@ -507,67 +508,68 @@ class OpenCVBeaconDetector(BaseDetector):
             vector_color = (0, 120, 255) if (det.total_pixel_error or 0) > 10.0 else (0, 255, 120)
             cv2.line(annotated, (cx_img, cy_img), (bx, by), vector_color, 2)
 
-            # Midpoint error label along vector
-            mid_x = (cx_img + bx) // 2
-            mid_y = (cy_img + by) // 2
-            cv2.putText(
-                annotated,
-                f"E={det.total_pixel_error:.1f}px",
-                (mid_x + 5, mid_y - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.35,
-                vector_color,
-                1,
-            )
+            # Midpoint error label along vector (only when telemetry is enabled)
+            if show_telemetry:
+                mid_x = (cx_img + bx) // 2
+                mid_y = (cy_img + by) // 2
+                cv2.putText(
+                    annotated,
+                    f"E={det.total_pixel_error:.1f}px",
+                    (mid_x + 5, mid_y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.35,
+                    vector_color,
+                    1,
+                )
 
-        # 3. HUD Overlay Information Panel
-        # Top-left status badge
-        hud_bg_color = (15, 20, 30)
-        cv2.rectangle(annotated, (8, 8), (280, 115), hud_bg_color, -1)
-        cv2.rectangle(annotated, (8, 8), (280, 115), (60, 80, 100), 1)
+        # 3. HUD Overlay Information Panel (Telemetry Data)
+        if show_telemetry:
+            hud_bg_color = (15, 20, 30)
+            cv2.rectangle(annotated, (8, 8), (280, 115), hud_bg_color, -1)
+            cv2.rectangle(annotated, (8, 8), (280, 115), (60, 80, 100), 1)
 
-        if is_blocked:
-            status_text = f"STATUS: {pat_state or 'LINK_BLOCKED'} (OCCLUDED)"
-            status_color = (0, 70, 255)
-            centroid_str = "Centroid: NONE (LOS BLOCKED BY EARTH)"
-            err_pixel_str = "Pixel Err: N/A (LINK BLOCKED)"
-            err_ang_str = "Angular: N/A (LINK BLOCKED)"
-            perf_str = f"PAT State: {pat_state or 'LINK_BLOCKED'} | CV: {det.processing_time_ms if det else 0.0:.1f}ms"
-        elif det and det.beacon_detected and det.detected_centroid_x is not None:
-            if is_pri_clutter:
-                status_text = "STATUS: CLUTTER DETECTED [REJECTED]" if (getattr(det, 'rejected_clutter_count', 0) > 0) else f"STATUS: CLUTTER DETECTED [{pat_state or 'TRACKING'}]"
-                status_color = (0, 165, 255)
-            elif is_locked:
-                status_text = "STATUS: BEACON DETECTED [LOCKED]"
-                status_color = (0, 255, 120)
-            elif pat_state:
-                status_text = f"STATUS: BEACON DETECTED [{pat_state}]"
-                status_color = (255, 200, 0) if pat_state in ("TRACKING", "ACQUIRING") else (0, 180, 255)
+            if is_blocked:
+                status_text = f"STATUS: {pat_state or 'LINK_BLOCKED'} (OCCLUDED)"
+                status_color = (0, 70, 255)
+                centroid_str = "Centroid: NONE (LOS BLOCKED BY EARTH)"
+                err_pixel_str = "Pixel Err: N/A (LINK BLOCKED)"
+                err_ang_str = "Angular: N/A (LINK BLOCKED)"
+                perf_str = f"PAT State: {pat_state or 'LINK_BLOCKED'} | CV: {det.processing_time_ms if det else 0.0:.1f}ms"
+            elif det and det.beacon_detected and det.detected_centroid_x is not None:
+                if is_pri_clutter:
+                    status_text = "STATUS: CLUTTER DETECTED [REJECTED]" if (getattr(det, 'rejected_clutter_count', 0) > 0) else f"STATUS: CLUTTER DETECTED [{pat_state or 'TRACKING'}]"
+                    status_color = (0, 165, 255)
+                elif is_locked:
+                    status_text = "STATUS: BEACON DETECTED [LOCKED]"
+                    status_color = (0, 255, 120)
+                elif pat_state:
+                    status_text = f"STATUS: BEACON DETECTED [{pat_state}]"
+                    status_color = (255, 200, 0) if pat_state in ("TRACKING", "ACQUIRING") else (0, 180, 255)
+                else:
+                    is_aligned = (det.total_pixel_error or 999.0) <= 10.0
+                    status_text = "STATUS: BEACON DETECTED [ALIGNED]" if is_aligned else "STATUS: BEACON DETECTED [UNLOCKED]"
+                    status_color = (0, 255, 120) if is_aligned else (0, 180, 255)
+
+                centroid_str = f"Centroid (Bx, By): ({det.detected_centroid_x:.1f}, {det.detected_centroid_y:.1f})"
+                err_pixel_str = f"Pixel Err: Ex={det.pixel_error_x:+.1f} Ey={det.pixel_error_y:+.1f} | E={det.total_pixel_error:.1f}px" if det.pixel_error_x is not None and det.total_pixel_error is not None else "Pixel Err: N/A"
+                err_ang_str = f"Angular: thX={det.angular_error_x_deg:+.2f} deg  thY={det.angular_error_y_deg:+.2f} deg" if det.angular_error_x_deg is not None else "Angular: N/A"
+                perf_str = f"Conf: {det.confidence:.2f} | SNR: {det.snr_db:.1f}dB | CV: {det.processing_time_ms:.1f}ms"
             else:
-                is_aligned = (det.total_pixel_error or 999.0) <= 10.0
-                status_text = "STATUS: BEACON DETECTED [ALIGNED]" if is_aligned else "STATUS: BEACON DETECTED [UNLOCKED]"
-                status_color = (0, 255, 120) if is_aligned else (0, 180, 255)
+                status_text = f"STATUS: {pat_state or 'ACQUIRING'} / NO BEACON"
+                status_color = (0, 70, 255)
+                centroid_str = "Centroid: NONE (TARGET OUT OF FOV)"
+                err_pixel_str = "Pixel Err: N/A"
+                err_ang_str = "Angular: N/A"
+                perf_str = f"Candidates: 0 | CV Latency: {det.processing_time_ms if det else 0.0:.1f}ms"
 
-            centroid_str = f"Centroid (Bx, By): ({det.detected_centroid_x:.1f}, {det.detected_centroid_y:.1f})"
-            err_pixel_str = f"Pixel Err: Ex={det.pixel_error_x:+.1f} Ey={det.pixel_error_y:+.1f} | E={det.total_pixel_error:.1f}px" if det.pixel_error_x is not None and det.total_pixel_error is not None else "Pixel Err: N/A"
-            err_ang_str = f"Angular: thX={det.angular_error_x_deg:+.2f} deg  thY={det.angular_error_y_deg:+.2f} deg" if det.angular_error_x_deg is not None else "Angular: N/A"
-            perf_str = f"Conf: {det.confidence:.2f} | SNR: {det.snr_db:.1f}dB | CV: {det.processing_time_ms:.1f}ms"
-        else:
-            status_text = f"STATUS: {pat_state or 'ACQUIRING'} / NO BEACON"
-            status_color = (0, 70, 255)
-            centroid_str = "Centroid: NONE (TARGET OUT OF FOV)"
-            err_pixel_str = "Pixel Err: N/A"
-            err_ang_str = "Angular: N/A"
-            perf_str = f"Candidates: 0 | CV Latency: {det.processing_time_ms if det else 0.0:.1f}ms"
+            cv2.putText(annotated, status_text, (15, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.42, status_color, 1)
+            cv2.putText(annotated, centroid_str, (15, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (220, 220, 220), 1)
+            cv2.putText(annotated, err_pixel_str, (15, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 220, 255), 1)
+            cv2.putText(annotated, err_ang_str, (15, 86), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 220, 255), 1)
+            cv2.putText(annotated, perf_str, (15, 106), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 180, 180), 1)
 
-        cv2.putText(annotated, status_text, (15, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.42, status_color, 1)
-        cv2.putText(annotated, centroid_str, (15, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (220, 220, 220), 1)
-        cv2.putText(annotated, err_pixel_str, (15, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 220, 255), 1)
-        cv2.putText(annotated, err_ang_str, (15, 86), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 220, 255), 1)
-        cv2.putText(annotated, perf_str, (15, 106), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (180, 180, 180), 1)
-
-        # Bottom-right Optical Specification Overlay
-        spec_text = f"FOV: {self.intrinsics.fov_h_deg:.1f}x{self.intrinsics.fov_v_deg:.1f} deg | FPA: {w}x{h} | fx={self.intrinsics.fx:.1f}px"
-        cv2.putText(annotated, spec_text, (w - 380, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (120, 120, 120), 1)
+            # Bottom-right Optical Specification Overlay
+            spec_text = f"FOV: {self.intrinsics.fov_h_deg:.1f}x{self.intrinsics.fov_v_deg:.1f} deg | FPA: {w}x{h} | fx={self.intrinsics.fx:.1f}px"
+            cv2.putText(annotated, spec_text, (w - 380, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (120, 120, 120), 1)
 
         return annotated

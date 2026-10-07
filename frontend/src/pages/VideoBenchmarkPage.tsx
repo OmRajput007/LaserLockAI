@@ -20,6 +20,7 @@ import {
   Crosshair,
   RefreshCw,
   Sliders,
+  Download,
 } from 'lucide-react';
 import { api } from '../services/api';
 import {
@@ -53,6 +54,8 @@ export const VideoBenchmarkPage: React.FC = () => {
   const [isIsolating, setIsIsolating] = useState<boolean>(false);
   const [isDraggingVideo, setIsDraggingVideo] = useState<boolean>(false);
   const [isDraggingGt, setIsDraggingGt] = useState<boolean>(false);
+  const [downloadingSample, setDownloadingSample] = useState<boolean>(false);
+  const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gtInputRef = useRef<HTMLInputElement>(null);
@@ -245,6 +248,50 @@ export const VideoBenchmarkPage: React.FC = () => {
     }
   };
 
+  const handleDownloadSampleVideo = async () => {
+    try {
+      setDownloadingSample(true);
+      setErrorMsg(null);
+      // Fetch sample benchmark video (final.mp4) and trigger browser download
+      const response = await fetch('/api/benchmark/sample-video');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'final.mp4';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setDownloadNotice('Sample video "final.mp4" downloaded successfully');
+        setTimeout(() => setDownloadNotice(null), 4000);
+      } else {
+        // Fallback to static asset
+        const a = document.createElement('a');
+        a.href = '/benchmark_videos/final.mp4';
+        a.download = 'final.mp4';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setDownloadNotice('Sample video "final.mp4" downloaded successfully');
+        setTimeout(() => setDownloadNotice(null), 4000);
+      }
+    } catch (err: any) {
+      console.warn('Blob download fallback, triggering direct anchor:', err);
+      const a = document.createElement('a');
+      a.href = '/benchmark_videos/final.mp4';
+      a.download = 'final.mp4';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setDownloadNotice('Sample video "final.mp4" downloaded');
+      setTimeout(() => setDownloadNotice(null), 4000);
+    } finally {
+      setTimeout(() => setDownloadingSample(false), 800);
+    }
+  };
+
   const handleControl = async (action: string, frameIdx?: number, speed?: number) => {
     try {
       const res = await api.controlBenchmark(action, frameIdx, speed);
@@ -406,6 +453,19 @@ export const VideoBenchmarkPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Download success notification */}
+      {downloadNotice && (
+        <div className="bg-[#262824] border border-[#00FF78]/50 p-3.5 rounded-xl text-[#00FF78] text-xs flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#00FF78] shrink-0" />
+            <span>{downloadNotice}</span>
+          </div>
+          <button onClick={() => setDownloadNotice(null)} className="text-[#9CA195] hover:text-[#F0FFEA] font-medium ml-4 p-1 cursor-pointer">
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Error alert if any */}
       {errorMsg && (
         <div className="bg-[#262824] border border-[#FF5F40]/50 p-3.5 rounded-xl text-[#FF5F40] text-xs flex items-center justify-between">
@@ -527,6 +587,20 @@ export const VideoBenchmarkPage: React.FC = () => {
                   {isDraggingGt ? 'Drop Reference Data' : 'Load Ground Truth'}
                 </span>
                 <span className="text-[10px] text-[#9CA195]">Optional CSV or JSON</span>
+              </button>
+
+              {/* Download Sample Video (final.mp4) */}
+              <button
+                onClick={handleDownloadSampleVideo}
+                disabled={downloadingSample || loading}
+                title="Download sample benchmark flight video (final.mp4)"
+                className="p-3.5 rounded-lg border transition text-center group cursor-pointer flex flex-col items-center justify-center gap-2 bg-[#262824] hover:bg-[#33362F] border-[#33362F] hover:border-[#FF5F40]/50"
+              >
+                <Download className={`w-5 h-5 transition-transform ${downloadingSample ? 'text-[#FF5F40] animate-bounce' : 'text-[#FF5F40] group-hover:scale-105'}`} />
+                <span className="text-xs font-semibold text-[#F0FFEA]">
+                  {downloadingSample ? 'Downloading Video...' : 'Download Sample Video'}
+                </span>
+                <span className="text-[10px] text-[#9CA195]">final.mp4 (Sample Benchmark)</span>
               </button>
             </div>
           </div>

@@ -1,5 +1,0 @@
-frame_number,timestamp_s,centroid_x,centroid_y,reference_x,reference_y,error_x_px,error_y_px,total_error_px,confidence,detection_status,tracking_state,pan_deg,tilt_deg,fps,processing_time_ms
-1,0.033,432.0,181.5,,,112.0,-58.5,126.36,0.58,DETECTED,ACQUIRING,0.00,0.00,9.0,3.48
-2,0.067,432.07,181.53,,,112.07,-58.47,126.4,0.59,DETECTED,TRACKING,0.01,0.01,10.4,3.21
-3,0.100,432.02,181.54,,,112.02,-58.46,126.38,0.59,DETECTED,TRACKING,0.02,0.01,10.9,3.36
-4,0.133,432.02,181.52,,,112.02,-58.48,126.37,0.59,DETECTED,TRACKING,0.03,0.02,10.9,3.26

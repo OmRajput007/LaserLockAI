@@ -19,10 +19,142 @@ import {
   RefreshCw,
   Camera,
   Download,
+  Film,
+  CircleDot,
+  Square,
+  Clock,
 } from 'lucide-react';
 import { alarmAudio } from '../services/alarmAudio';
 import { SceneLayersControl } from './SceneLayersControl';
 import { useSceneSettings } from '../hooks/useSceneSettings';
+
+/**
+ * Utility to safely draw rounded rectangles across browser canvas implementations.
+ */
+function drawRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  if (typeof (ctx as any).roundRect === 'function') {
+    (ctx as any).roundRect(x, y, w, h, r);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
+}
+
+/**
+ * Patches the EBML Segment Info Duration element in a WebM ArrayBuffer
+ * so media players (such as Windows Media Player / Media Foundation)
+ * know the exact duration and can seek/play without freezing.
+ */
+function patchWebmDuration(buffer: ArrayBuffer, durationMs: number): ArrayBuffer {
+  const bytes = new Uint8Array(buffer);
+
+  function findSubarray(sub: number[], start: number = 0): number {
+    for (let i = start; i <= bytes.length - sub.length; i++) {
+      let match = true;
+      for (let j = 0; j < sub.length; j++) {
+        if (bytes[i + j] !== sub[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) return i;
+    }
+    return -1;
+  }
+
+  // Segment ID: 0x18 0x53 0x80 0x67
+  const segmentIdx = findSubarray([0x18, 0x53, 0x80, 0x67]);
+  if (segmentIdx === -1) return buffer;
+
+  // Info ID: 0x15 0x49 0xA9 0x66
+  const infoIdx = findSubarray([0x15, 0x49, 0xA9, 0x66], segmentIdx);
+  if (infoIdx === -1) return buffer;
+
+  // Search for TimecodeScale: 0x2A 0xD7 0xB1
+  let timecodeScale = 1000000; // default 1,000,000 ns = 1 ms
+  const tcIdx = findSubarray([0x2A, 0xD7, 0xB1], infoIdx);
+  if (tcIdx !== -1 && tcIdx < infoIdx + 200) {
+    const len = bytes[tcIdx + 3] & 0x7f;
+    let scale = 0;
+    for (let i = 0; i < len; i++) {
+      scale = (scale << 8) | bytes[tcIdx + 4 + i];
+    }
+    if (scale > 0) timecodeScale = scale;
+  }
+
+  const durationVal = (durationMs * 1000000) / timecodeScale;
+
+  // Search for existing Duration element: 0x44 0x89
+  const durIdx = findSubarray([0x44, 0x89], infoIdx);
+  if (durIdx !== -1 && durIdx < infoIdx + 300) {
+    const lenByte = bytes[durIdx + 2];
+    const view = new DataView(buffer);
+    if (lenByte === 0x84 || lenByte === 4) {
+      view.setFloat32(durIdx + 3, durationVal, false); // big-endian
+      return buffer;
+    } else if (lenByte === 0x88 || lenByte === 8) {
+      view.setFloat64(durIdx + 3, durationVal, false); // big-endian
+      return buffer;
+    }
+  }
+
+  // If Duration element is absent, inject: [0x44, 0x89, 0x88, ...8 bytes float64...]
+  const durBuf = new Uint8Array(11);
+  durBuf[0] = 0x44;
+  durBuf[1] = 0x89;
+  durBuf[2] = 0x88;
+  const dv = new DataView(durBuf.buffer);
+  dv.setFloat64(3, durationVal, false);
+
+  let insertPos = infoIdx + 4;
+  let infoLenBytes = 1;
+  let mask = 0x80;
+  while (infoLenBytes <= 8 && (bytes[insertPos] & mask) === 0) {
+    infoLenBytes++;
+    mask >>= 1;
+  }
+  insertPos += infoLenBytes;
+
+  const newBuffer = new ArrayBuffer(bytes.length + durBuf.length);
+  const newBytes = new Uint8Array(newBuffer);
+  newBytes.set(bytes.subarray(0, insertPos), 0);
+  newBytes.set(durBuf, insertPos);
+  newBytes.set(bytes.subarray(insertPos), insertPos + durBuf.length);
+
+  return newBuffer;
+}
+
+async function finalizeVideoBlob(
+  chunks: Blob[],
+  mimeType: string,
+  durationMs: number
+): Promise<{ blob: Blob; ext: string }> {
+  const isMp4 = mimeType.toLowerCase().includes('mp4');
+  const baseBlob = new Blob(chunks, { type: mimeType });
+
+  if (isMp4) {
+    return { blob: baseBlob, ext: 'mp4' };
+  }
+
+  // If WebM, patch the EBML header with exact duration
+  try {
+    const buffer = await baseBlob.arrayBuffer();
+    const patchedBuffer = patchWebmDuration(buffer, durationMs);
+    return {
+      blob: new Blob([patchedBuffer], { type: mimeType || 'video/webm' }),
+      ext: 'webm',
+    };
+  } catch (err) {
+    console.warn('WebM duration patch failed, returning raw blob:', err);
+    return { blob: baseBlob, ext: 'webm' };
+  }
+}
 
 interface FPACameraViewportProps {
   target: TargetState | null;
@@ -53,17 +185,31 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
   const [hasStreamError, setHasStreamError] = useState(false);
   const reconnectTimerRef = useRef<any>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const recordImgRef = useRef<HTMLImageElement | null>(null);
 
-  // Manual Satellite Camera POV Image Capture State
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [shutterFlash, setShutterFlash] = useState(false);
-  const [lastCapturedImage, setLastCapturedImage] = useState<{ url: string; filename: string; time: string } | null>(null);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [captureNotice, setCaptureNotice] = useState<string | null>(null);
+  // Manual Satellite Camera POV Video Recording State
+  const [recordDuration, setRecordDuration] = useState<number>(5); // default: 5s, capped at 20s
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordElapsed, setRecordElapsed] = useState<number>(0);
+  const [lastRecordedVideo, setLastRecordedVideo] = useState<{
+    url: string;
+    filename: string;
+    duration: number;
+    time: string;
+  } | null>(null);
+  const [showVideoModal, setShowVideoModal] = useState<boolean>(false);
+  const [recordNotice, setRecordNotice] = useState<string | null>(null);
   const noticeTimerRef = useRef<any>(null);
 
-  // Synthesize camera shutter audio click
-  const playShutterSound = () => {
+  // References for MediaRecorder and canvas stream
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<any>(null);
+  const isRecordingRef = useRef<boolean>(false);
+  const recordingStartTimeRef = useRef<number>(0);
+  const targetDurationMsRef = useRef<number>(5000);
+
+  // Synthesize sound effects for video recording start/complete
+  const playRecordingSound = (isStop = false) => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
@@ -71,120 +217,29 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.06);
-      gain.gain.setValueAtTime(0.35, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.06);
+      if (!isStop) {
+        // Start recording chime: 520Hz -> 880Hz
+        osc.frequency.setValueAtTime(520, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.13);
+      } else {
+        // Stop & auto-download chime: upbeat double pulse
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1174, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.16);
+      }
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.07);
     } catch {
       // Audio autoplay policy
     }
   };
-
-  // Capture satellite camera POV image manually
-  const handleCaptureImage = async () => {
-    setIsCapturing(true);
-    setShutterFlash(true);
-    playShutterSound();
-    setTimeout(() => setShutterFlash(false), 200);
-
-    try {
-      const now = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      const filename = `satellite_pov_${timestamp}.jpg`;
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-      // Create high-resolution 640x480 canvas for satellite camera POV snapshot
-      const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 480;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas 2D context unavailable');
-
-      let imageDrawn = false;
-      try {
-        const res = await fetch(`/api/simulation/frame?annotated=${viewMode === 'opencv_annotated'}&t=${Date.now()}`);
-        if (res.ok) {
-          const blob = await res.blob();
-          const imgBitmap = await createImageBitmap(blob);
-          ctx.drawImage(imgBitmap, 0, 0, 640, 480);
-          imageDrawn = true;
-        }
-      } catch {
-        imageDrawn = false;
-      }
-
-      if (!imageDrawn && imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
-        try {
-          ctx.drawImage(imgRef.current, 0, 0, 640, 480);
-          imageDrawn = true;
-        } catch {
-          // If crossOrigin tainted, fallback
-        }
-      }
-
-      if (!imageDrawn) {
-        ctx.fillStyle = '#0B0D0F';
-        ctx.fillRect(0, 0, 640, 480);
-        ctx.strokeStyle = '#33362F';
-        ctx.strokeRect(10, 10, 620, 460);
-      }
-
-      // Burn-in technical aerospace watermark
-      ctx.save();
-      ctx.font = '10px monospace';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(8, 456, 380, 18);
-      ctx.fillStyle = '#F0FFEA';
-      ctx.fillText(`SAT-POV | UTC: ${now.toISOString()} | 640×480 px | FOV 4°×3°`, 14, 469);
-      ctx.restore();
-
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const blobUrl = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setLastCapturedImage({ url: blobUrl, filename, time: timeStr });
-        setCaptureNotice(`✓ Saved: ${filename}`);
-
-        if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
-        noticeTimerRef.current = setTimeout(() => {
-          setCaptureNotice(null);
-        }, 3500);
-      }, 'image/jpeg', 0.95);
-    } catch (err) {
-      console.error('Failed to capture satellite POV image:', err);
-      setCaptureNotice('✕ Capture failed');
-      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
-      noticeTimerRef.current = setTimeout(() => {
-        setCaptureNotice(null);
-      }, 3000);
-    } finally {
-      setIsCapturing(false);
-    }
-  };
-
-  // Keyboard shortcut listener ('c' or 'C') to trigger image capture
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === 'c' || e.key === 'C') {
-        handleCaptureImage();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewMode]);
 
   // Native MJPEG streaming: browser automatically updates video in real time with 0 polling requests
   const handleFrameLoad = () => {
@@ -449,107 +504,538 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
     spotV = THREE.MathUtils.clamp(240.0 - deltaElDeg * 160.0, 10, 470);
   }
 
+  // Ref tracking the latest live telemetry and viewport states for frame-by-frame video recording
+  const liveStateRef = useRef({
+    isEffectiveOccluded,
+    isChannelOccluded,
+    isLocked,
+    isPovLocked,
+    isBeaconLost,
+    hasOrbitalSpot,
+    spotU,
+    spotV,
+    viewMode,
+    target,
+    tracking,
+    detection,
+    camera,
+    hasStreamError,
+    povState,
+  });
+  liveStateRef.current = {
+    isEffectiveOccluded,
+    isChannelOccluded,
+    isLocked,
+    isPovLocked,
+    isBeaconLost,
+    hasOrbitalSpot,
+    spotU,
+    spotV,
+    viewMode,
+    target,
+    tracking,
+    detection,
+    camera,
+    hasStreamError,
+    povState,
+  };
+
+  // Stop video recording early or on timer completion
+  const handleStopRecording = () => {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.error('Error stopping MediaRecorder:', err);
+      }
+    }
+  };
+
+  // Start recording satellite camera POV clip with full viewport compositing
+  const handleStartRecording = () => {
+    if (isRecordingRef.current) {
+      handleStopRecording();
+      return;
+    }
+
+    const durationSec = Math.max(1, Math.min(20, isNaN(recordDuration) ? 5 : recordDuration));
+    targetDurationMsRef.current = durationSec * 1000;
+
+    // Create 640x480 recording canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      setRecordNotice('✕ Canvas context unavailable');
+      return;
+    }
+
+    // Capture initial frame onto canvas from clean recording stream
+    const initImg = (recordImgRef.current && recordImgRef.current.complete && recordImgRef.current.naturalWidth > 0)
+      ? recordImgRef.current
+      : imgRef.current;
+    if (initImg && initImg.complete && initImg.naturalWidth > 0) {
+      try {
+        ctx.drawImage(initImg, 0, 0, 640, 480);
+      } catch {
+        ctx.fillStyle = '#0B0D0F';
+        ctx.fillRect(0, 0, 640, 480);
+      }
+    }
+
+    // Capture 30 FPS stream from canvas
+    const stream = (canvas as any).captureStream ? (canvas as any).captureStream(30) : null;
+    if (!stream) {
+      setRecordNotice('✕ Canvas captureStream unsupported');
+      return;
+    }
+
+    // Prioritize MP4 (H.264) for native, flawless Windows Media Player playback and seeking
+    const mimeCandidates = [
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=h264',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    const chosenMime = mimeCandidates.find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) || '';
+
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, chosenMime ? { mimeType: chosenMime } : {});
+    } catch (err) {
+      console.error('Failed to initialize MediaRecorder:', err);
+      setRecordNotice('✕ MediaRecorder unsupported');
+      return;
+    }
+
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        chunks.push(e.data);
+      }
+    };
+
+    recorder.onstop = async () => {
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      const elapsedTotalMs = Math.max(500, Date.now() - recordingStartTimeRef.current);
+      const elapsedTotalSec = Math.min(durationSec, elapsedTotalMs / 1000);
+      setRecordElapsed(0);
+
+      // Stop canvas stream tracks
+      stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+
+      if (chunks.length === 0) {
+        setRecordNotice('✕ No video data captured');
+        return;
+      }
+
+      const { blob: videoBlob, ext } = await finalizeVideoBlob(chunks, chosenMime || 'video/mp4', elapsedTotalMs);
+      const blobUrl = URL.createObjectURL(videoBlob);
+
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const filename = `satellite_pov_${timestamp}_${elapsedTotalSec.toFixed(1)}s.${ext}`;
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      // Automatic download after completion of recording
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      setLastRecordedVideo({
+        url: blobUrl,
+        filename,
+        duration: elapsedTotalSec,
+        time: timeStr,
+      });
+      setRecordNotice(`✓ Auto-downloaded: ${filename}`);
+      playRecordingSound(true);
+
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = setTimeout(() => {
+        setRecordNotice(null);
+      }, 4500);
+    };
+
+    mediaRecorderRef.current = recorder;
+    recordingStartTimeRef.current = Date.now();
+    isRecordingRef.current = true;
+    setIsRecording(true);
+    setRecordElapsed(0);
+    playRecordingSound(false);
+
+    recorder.start(100); // 100ms timeslices for smooth capture
+
+    // Frame drawing loop at steady 30 FPS with full viewport compositing
+    const drawFrame = () => {
+      if (!isRecordingRef.current) return;
+      const nowMs = Date.now();
+      const elapsedMs = nowMs - recordingStartTimeRef.current;
+      const elapsedSec = elapsedMs / 1000;
+      setRecordElapsed(Math.min(durationSec, elapsedSec));
+
+      const s = liveStateRef.current;
+
+      // 1. Draw base camera image from clean recording stream (or fallback)
+      let drewImage = false;
+      const sourceImg = (recordImgRef.current && recordImgRef.current.complete && recordImgRef.current.naturalWidth > 0)
+        ? recordImgRef.current
+        : imgRef.current;
+
+      if (sourceImg && sourceImg.complete && sourceImg.naturalWidth > 0 && !s.hasStreamError) {
+        try {
+          ctx.drawImage(sourceImg, 0, 0, 640, 480);
+          drewImage = true;
+        } catch {
+          drewImage = false;
+        }
+      }
+
+      if (!drewImage) {
+        // Deep space background
+        ctx.fillStyle = '#07090B';
+        ctx.fillRect(0, 0, 640, 480);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        for (let i = 0; i < 60; i++) {
+          const sx = (i * 97) % 640;
+          const sy = (i * 139) % 480;
+          ctx.fillRect(sx, sy, 1, 1);
+        }
+      }
+
+      // If effective occlusion is active, dim or clear any stale beacon drawn by backend 2D stream
+      if (s.isEffectiveOccluded) {
+        ctx.fillStyle = 'rgba(7, 9, 11, 0.45)';
+        ctx.fillRect(0, 0, 640, 480);
+      }
+
+      // 2. Center Boresight Reticle (320, 240)
+      ctx.save();
+      const cx = 320;
+      const cy = 240;
+
+      // Cyan crosshairs
+      ctx.strokeStyle = 'rgba(0, 229, 255, 0.75)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 24, cy);
+      ctx.lineTo(cx + 24, cy);
+      ctx.moveTo(cx, cy - 24);
+      ctx.lineTo(cx, cy + 24);
+      ctx.stroke();
+
+      // Inner green ring (10px)
+      ctx.strokeStyle = 'rgba(0, 255, 120, 0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Outer amber ring (20px)
+      ctx.strokeStyle = 'rgba(255, 180, 0, 0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. Occlusion Alert Banner (Top-Center)
+      if (s.isEffectiveOccluded) {
+        ctx.save();
+        const bannerW = 390;
+        const bannerH = 26;
+        const bannerX = 320 - bannerW / 2;
+        const bannerY = 14;
+
+        ctx.fillStyle = 'rgba(27, 29, 26, 0.95)';
+        ctx.strokeStyle = '#FF5F40';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        drawRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Pulsing red dot
+        const pulse = (Math.sin(nowMs / 180) + 1) / 2;
+        ctx.fillStyle = '#FF5F40';
+        ctx.beginPath();
+        ctx.arc(bannerX + 16, bannerY + 13, 3.5 + pulse * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.font = 'bold 9.5px monospace';
+        ctx.fillStyle = '#FF5F40';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const occText = s.isChannelOccluded
+          ? '! OPTICAL CHANNEL OCCLUDED (CLOUD / OBSTACLE)'
+          : '! GROUND BEACON OCCLUDED BY EARTH LIMB';
+        ctx.fillText(occText, bannerX + 28, bannerY + 13);
+        ctx.restore();
+      }
+
+      // 4. Beacon Lost Banner (Bottom-Center)
+      if (!s.isEffectiveOccluded && s.isBeaconLost) {
+        ctx.save();
+        const bannerW = 200;
+        const bannerH = 24;
+        const bannerX = 320 - bannerW / 2;
+        const bannerY = 425;
+
+        ctx.fillStyle = 'rgba(27, 29, 26, 0.95)';
+        ctx.strokeStyle = '#FF5F40';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        drawRoundRect(ctx, bannerX, bannerY, bannerW, bannerH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = '#FF5F40';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('! BEACON OUT OF SIGHT', 320, bannerY + 12);
+        ctx.restore();
+      }
+
+      // 5. Optical Beacon Spot & Tactical Annotations
+      const u = s.spotU;
+      const v = s.spotV;
+      const distToBoresight = Math.hypot(u - 320, v - 240);
+      const isVisible = !s.isEffectiveOccluded && (s.hasOrbitalSpot || s.isPovLocked || (!s.isBeaconLost));
+
+      if (isVisible) {
+        ctx.save();
+        // Radial bloom glow
+        const glowGrad = ctx.createRadialGradient(u, v, 0, u, v, 16);
+        glowGrad.addColorStop(0, 'rgba(240, 255, 234, 0.9)');
+        glowGrad.addColorStop(0.3, 'rgba(255, 95, 64, 0.45)');
+        glowGrad.addColorStop(0.7, 'rgba(255, 95, 64, 0.15)');
+        glowGrad.addColorStop(1, 'rgba(255, 95, 64, 0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(u, v, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core 10x10 px beacon spot
+        ctx.fillStyle = '#F0FFEA';
+        ctx.shadowColor = '#FF5F40';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(u, v, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
+      }
+
+      if (elapsedMs >= targetDurationMsRef.current) {
+        handleStopRecording();
+      }
+    };
+
+    recordingIntervalRef.current = setInterval(drawFrame, 33);
+  };
+
+  // Keyboard shortcut listener ('r', 'R' or 'c', 'C') to trigger video recording
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'r' || e.key === 'R' || e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        if (isRecordingRef.current) {
+          handleStopRecording();
+        } else {
+          handleStartRecording();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewMode, recordDuration]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (isRecordingRef.current) {
+        isRecordingRef.current = false;
+        if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          try {
+            mediaRecorderRef.current.stop();
+          } catch {}
+        }
+      }
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col bg-[#1B1D1A] border border-[#33362F] rounded-lg overflow-hidden shadow-2xl">
       {/* Telemetry band */}
       <div className="flex flex-col px-3.5 py-2.5 bg-[#1B1D1A] border-b border-[#33362F] text-xs font-mono gap-2.5">
-        {/* Row 1: Header title on left, "Click image" button in green region on right */}
+        {/* Row 1: Header title on left, Video Recording Controls on right */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-[#FF5F40]">
             <Video className="w-4 h-4 text-[#FF5F40]" />
             <span className="font-semibold tracking-wider text-xs text-[#F0FFEA]">FPA CAMERA VIEWPORT [640 × 480]</span>
           </div>
 
-          {/* "Click image" button - added on the green region in the FPA camera viewport area */}
-          <div className="flex items-center gap-1.5">
-            <button
-              id="btn-click-image"
-              onClick={handleCaptureImage}
-              disabled={isCapturing}
-              className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] active:bg-[#1B1D1A] text-[#FF5F40] border border-[#FF5F40] hover:border-[#FF7459] rounded font-mono text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(255,95,64,0.3)] shrink-0"
-              title="Takes images of the satellite camera POV manually (Shortcut: C)"
+          {/* Video Recording Controls for Satellite Camera POV */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Recording Duration Parameter Input (Capped at 20s, default 5s) */}
+            <div
+              className="flex items-center bg-[#262824] border border-[#33362F] hover:border-[#FF5F40] px-2.5 py-1 rounded text-xs font-mono gap-1.5 transition"
+              title="Clip recording duration in seconds (1 - 20s, default: 5s)"
             >
-              <Camera className="w-3.5 h-3.5 text-[#FF5F40]" />
-              <span>{isCapturing ? 'Capturing...' : 'Click image'}</span>
-              <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">C</kbd>
-            </button>
-            {lastCapturedImage && (
+              <Clock className="w-3.5 h-3.5 text-[#8E9388]" />
+              <input
+                id="input-record-duration"
+                type="number"
+                min={1}
+                max={20}
+                step={1}
+                value={recordDuration}
+                disabled={isRecording}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (isNaN(val)) {
+                    setRecordDuration(5);
+                  } else {
+                    setRecordDuration(Math.max(1, Math.min(20, val)));
+                  }
+                }}
+                className="w-6 bg-transparent text-[#F0FFEA] font-semibold text-center outline-none focus:text-[#FF5F40]"
+              />
+              <span className="text-[#8E9388] text-[11px]">s</span>
+            </div>
+
+            {/* Record / Stop Button */}
+            {!isRecording ? (
               <button
-                onClick={() => setShowPreviewModal(true)}
-                className="px-2 py-1 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] rounded text-[11px] font-mono flex items-center gap-1 transition cursor-pointer"
-                title="View last captured satellite POV image"
+                id="btn-record-clip"
+                onClick={handleStartRecording}
+                className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] active:bg-[#1B1D1A] text-[#FF5F40] border border-[#FF5F40] hover:border-[#FF7459] rounded font-mono text-xs font-semibold flex items-center justify-between gap-2.5 transition cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(255,95,64,0.3)] shrink-0 min-w-[130px]"
+                title={`Record a ${recordDuration}s video clip of the satellite camera POV (Shortcut: R)`}
               >
-                <Eye className="w-3 h-3 text-[#FF5F40]" />
-                <span>View</span>
+                <div className="flex items-center gap-1.5">
+                  <CircleDot className="w-3.5 h-3.5 text-[#FF5F40]" />
+                  <span>Record clip</span>
+                </div>
+                <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">R</kbd>
+              </button>
+            ) : (
+              <button
+                id="btn-stop-recording"
+                onClick={handleStopRecording}
+                className="px-3 py-1 bg-[#FF5F40]/25 hover:bg-[#FF5F40]/35 text-[#FF5F40] border border-[#FF5F40] rounded font-mono text-xs font-bold flex items-center justify-between gap-2 transition cursor-pointer shadow-[0_0_12px_rgba(255,95,64,0.4)] shrink-0 min-w-[130px]"
+                title="Stop recording early and auto-download clip"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#FF5F40] animate-ping" />
+                  <span>REC {recordElapsed.toFixed(1)}s / {recordDuration}s</span>
+                </div>
+                <Square className="w-2.5 h-2.5 fill-[#FF5F40] text-[#FF5F40]" />
+              </button>
+            )}
+
+            {/* View Last Recorded Video Button */}
+            {lastRecordedVideo && !isRecording && (
+              <button
+                id="btn-view-last-video"
+                onClick={() => setShowVideoModal(true)}
+                className="px-2 py-1 bg-[#262824] hover:bg-[#33362F] text-[#9CA195] hover:text-[#F0FFEA] border border-[#33362F] rounded text-[11px] font-mono flex items-center gap-1 transition cursor-pointer"
+                title="Watch last recorded satellite POV video clip"
+              >
+                <Film className="w-3 h-3 text-[#FF5F40]" />
+                <span>Play</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Row 2: View Mode Selector: OpenCV Annotated, OpenCV Raw Feed, Jump to Sat */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-          <button
-            onClick={() => setViewMode('opencv_annotated')}
-            className={`px-3 py-1.5 rounded text-xs font-mono transition border text-center font-medium ${
-              viewMode === 'opencv_annotated'
-                ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
-                : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
-            }`}
-          >
-            OpenCV Annotated
-          </button>
-          <button
-            onClick={() => setViewMode('opencv_raw')}
-            className={`px-3 py-1.5 rounded text-xs font-mono transition border text-center font-medium ${
-              viewMode === 'opencv_raw'
-                ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
-                : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
-            }`}
-          >
-            OpenCV Raw Feed
-          </button>
+        {/* Row 2: View Mode Selector: OpenCV Annotated, OpenCV Raw Feed on left, Locate Sat on right */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1">
+            <button
+              onClick={() => setViewMode('opencv_annotated')}
+              className={`flex-1 py-1.5 px-3 rounded text-xs font-mono transition border text-center font-medium ${
+                viewMode === 'opencv_annotated'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
+              }`}
+            >
+              OpenCV Annotated
+            </button>
+            <button
+              onClick={() => setViewMode('opencv_raw')}
+              className={`flex-1 py-1.5 px-3 rounded text-xs font-mono transition border text-center font-medium ${
+                viewMode === 'opencv_raw'
+                  ? 'bg-[#FF5F40] text-[#0A0A0A] font-semibold border-[#FF5F40]'
+                  : 'bg-[#262824] text-[#9CA195] border-[#33362F] hover:text-[#F0FFEA] hover:border-[#FF5F40]'
+              }`}
+            >
+              OpenCV Raw Feed
+            </button>
+          </div>
+
           <button
             onClick={() => {
               window.dispatchEvent(new CustomEvent('fsoc:jump-to-sat'));
             }}
-            className="px-2.5 py-1.5 rounded text-xs font-mono font-semibold transition flex items-center justify-center gap-1.5 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] cursor-pointer"
+            className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] text-[#FF5F40] border border-[#FF5F40] rounded font-mono text-xs font-semibold flex items-center justify-between gap-2.5 transition cursor-pointer shrink-0 min-w-[130px]"
             title="Locate Satellite in 3D view (Shortcut: S or F)"
           >
-            <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
-            <span>Locate sat</span>
+            <div className="flex items-center gap-1.5">
+              <Crosshair className="w-3.5 h-3.5 text-[#FF5F40]" />
+              <span>Locate sat</span>
+            </div>
             <kbd className="px-1 py-0.2 bg-[#000000] text-[9px] rounded text-[#F0FFEA] font-mono border border-[#33362F]">S</kbd>
           </button>
         </div>
 
-        {/* 4 Status Box Chips in a grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        {/* Row 3: 4 Status Box Chips in a grid */}
+        <div className="grid grid-cols-4 gap-2 text-xs">
           {/* Auto LOS */}
           <button
             onClick={handleToggleAutoLOS}
             title="Automatically slew the camera boresight to align with Line of Sight"
             className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40] transition text-center"
           >
-            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">Auto LOS:</span>
-            <span className={autoLOS ? 'text-[#FF5F40] font-bold' : 'text-[#F0FFEA] font-semibold'}>
+            <span className="text-[10px] text-[#8E9388] font-medium uppercase tracking-wider mb-0.5">AUTO LOS:</span>
+            <span className={autoLOS ? 'text-[#FF5F40] font-bold text-xs' : 'text-[#F0FFEA] font-semibold text-xs'}>
               {autoLOS ? 'ON' : 'OFF'}
             </span>
           </button>
 
           {/* FOV */}
           <div className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] border border-[#33362F] text-center">
-            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">FOV:</span>
-            <span className="text-[#F0FFEA] font-semibold">
+            <span className="text-[10px] text-[#8E9388] font-medium uppercase tracking-wider mb-0.5">FOV:</span>
+            <span className="text-[#F0FFEA] font-bold text-xs">
               {camera?.fov_horizontal_deg ? `${camera.fov_horizontal_deg.toFixed(1)}° × ${camera.fov_vertical_deg.toFixed(1)}°` : '4.0° × 3.0°'}
             </span>
           </div>
 
           {/* Target */}
           <div className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] border border-[#33362F] text-center">
-            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">Target:</span>
-            <span className="font-semibold text-[11px] text-[#FF5F40]">
+            <span className="text-[10px] text-[#8E9388] font-medium uppercase tracking-wider mb-0.5">TARGET:</span>
+            <span className="font-bold text-xs text-[#FF5F40]">
               {(() => {
                 if (isEffectiveOccluded) {
-                  return isChannelOccluded ? 'OCCLUDED' : 'OCCLUDED';
+                  return 'OCCLUDED';
                 }
                 if (isLocked) {
                   return '✓ LOCKED IN FOV';
@@ -571,8 +1057,8 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
             title={isAlarmMuted ? 'Alarm Muted (Click to Unmute)' : 'Alarm Armed (Click to Mute)'}
             className="flex flex-col items-center justify-center p-2 rounded bg-[#262824] hover:bg-[#33362F] border border-[#33362F] hover:border-[#FF5F40] transition text-center"
           >
-            <span className="text-[10px] text-[#9CA195] font-medium uppercase tracking-wider">Alarm:</span>
-            <span className={isAlarmMuted ? 'text-[#5E625A] font-semibold' : isAlarmActive ? 'text-[#FF5F40] font-bold animate-pulse' : 'text-[#F0FFEA] font-semibold'}>
+            <span className="text-[10px] text-[#8E9388] font-medium uppercase tracking-wider mb-0.5">ALARM:</span>
+            <span className={isAlarmMuted ? 'text-[#6B7264] font-medium text-xs' : isAlarmActive ? 'text-[#FF5F40] font-bold text-xs animate-pulse' : 'text-[#F0FFEA] font-semibold text-xs'}>
               {isAlarmMuted ? 'Muted' : isAlarmActive ? 'Beeping' : 'Armed'}
             </span>
           </button>
@@ -585,7 +1071,7 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
           <div className="relative w-full h-full bg-[#000000] flex items-center justify-center z-10">
             <img
               ref={imgRef}
-              src={`/api/simulation/frame/stream?annotated=${viewMode === 'opencv_annotated'}${reconnectKey ? `&retry=${reconnectKey}` : ''}`}
+              src={`/api/simulation/frame/stream?annotated=${viewMode === 'opencv_annotated'}&telemetry=true${reconnectKey ? `&retry=${reconnectKey}` : ''}`}
               alt="Live OpenCV Camera Feed"
               crossOrigin="anonymous"
               onLoad={handleFrameLoad}
@@ -593,22 +1079,40 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
               className="w-full h-full object-contain"
             />
 
-            {/* Camera Shutter Flash Effect */}
-            {shutterFlash && (
-              <div className="absolute inset-0 bg-white/70 z-50 pointer-events-none transition-opacity duration-150 animate-pulse" />
+            {/* Dedicated video recording stream without telemetry data */}
+            <img
+              ref={recordImgRef}
+              src={`/api/simulation/frame/stream?annotated=${viewMode === 'opencv_annotated'}&telemetry=false${reconnectKey ? `&retry=${reconnectKey}` : ''}`}
+              alt="Recording Feed (Clean without Telemetry)"
+              crossOrigin="anonymous"
+              className="absolute pointer-events-none opacity-0 select-none"
+              style={{ width: '640px', height: '480px', top: '-9999px', left: '-9999px' }}
+            />
+
+            {/* Active Video Recording Frame Border */}
+            {isRecording && (
+              <div className="absolute inset-0 border-2 border-[#FF5F40]/60 pointer-events-none z-30 animate-pulse" />
             )}
 
-            {/* Notification Badge when an image is clicked/saved */}
-            {captureNotice && (
+            {/* Live Recording HUD Indicator */}
+            {isRecording && (
+              <div className="absolute top-3 left-3 z-40 px-2.5 py-1 bg-black/85 border border-[#FF5F40] text-[#FF5F40] rounded text-[11px] font-mono font-bold flex items-center gap-2 shadow-lg backdrop-blur-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F40] inline-block animate-ping" />
+                <span>REC ● 00:{recordElapsed < 10 ? `0${recordElapsed.toFixed(1)}` : recordElapsed.toFixed(1)} / {recordDuration}.0s</span>
+              </div>
+            )}
+
+            {/* Notification Badge when a video clip is recorded/saved */}
+            {recordNotice && (
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 bg-[#1B1D1A]/95 border border-[#FF5F40] text-[#FF5F40] rounded shadow-lg text-[11px] font-mono font-semibold flex items-center gap-2 backdrop-blur-sm">
-                <Camera className="w-3.5 h-3.5 text-[#FF5F40]" />
-                <span>{captureNotice}</span>
-                {lastCapturedImage && (
+                <Film className="w-3.5 h-3.5 text-[#FF5F40]" />
+                <span>{recordNotice}</span>
+                {lastRecordedVideo && (
                   <button
-                    onClick={() => setShowPreviewModal(true)}
+                    onClick={() => setShowVideoModal(true)}
                     className="underline text-[#F0FFEA] hover:text-white cursor-pointer ml-1 text-[10px]"
                   >
-                    View
+                    Play
                   </button>
                 )}
               </div>
@@ -956,19 +1460,19 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
         <SceneLayersControl />
       )}
 
-      {/* Captured Image Preview Modal */}
-      {showPreviewModal && lastCapturedImage && (
+      {/* Recorded Video Clip Preview Modal */}
+      {showVideoModal && lastRecordedVideo && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1B1D1A] border border-[#33362F] rounded-xl max-w-xl w-full p-4 shadow-2xl flex flex-col gap-3 font-mono">
             <div className="flex items-center justify-between border-b border-[#33362F] pb-2.5">
               <div className="flex items-center gap-2">
-                <Camera className="w-4 h-4 text-[#FF5F40]" />
+                <Film className="w-4 h-4 text-[#FF5F40]" />
                 <span className="text-xs font-semibold text-[#F0FFEA] uppercase tracking-wider">
-                  Satellite Camera POV Snapshot
+                  Satellite Camera POV Clip ({lastRecordedVideo.duration.toFixed(1)}s)
                 </span>
               </div>
               <button
-                onClick={() => setShowPreviewModal(false)}
+                onClick={() => setShowVideoModal(false)}
                 className="text-[#9CA195] hover:text-[#F0FFEA] text-sm p-1 cursor-pointer"
               >
                 ✕
@@ -976,29 +1480,33 @@ export const FPACameraViewport: React.FC<FPACameraViewportProps> = ({
             </div>
 
             <div className="relative w-full aspect-[4/3] bg-black rounded border border-[#33362F] overflow-hidden flex items-center justify-center">
-              <img
-                src={lastCapturedImage.url}
-                alt="Captured Satellite POV"
+              <video
+                src={lastRecordedVideo.url}
+                controls
+                autoPlay
+                loop
                 className="w-full h-full object-contain"
               />
             </div>
 
             <div className="flex items-center justify-between text-xs text-[#9CA195] pt-1">
               <div>
-                <span className="text-[#F0FFEA] font-semibold">{lastCapturedImage.filename}</span>
-                <span className="text-[10px] text-[#5E625A] block">Captured at {lastCapturedImage.time} &bull; 640 × 480 px</span>
+                <span className="text-[#F0FFEA] font-semibold">{lastRecordedVideo.filename}</span>
+                <span className="text-[10px] text-[#5E625A] block">
+                  Recorded at {lastRecordedVideo.time} &bull; 640 × 480 px &bull; {lastRecordedVideo.duration.toFixed(1)}s
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={lastCapturedImage.url}
-                  download={lastCapturedImage.filename}
+                  href={lastRecordedVideo.url}
+                  download={lastRecordedVideo.filename}
                   className="px-3 py-1 bg-[#FF5F40] hover:bg-[#FF7459] text-[#0A0A0A] font-bold text-xs rounded flex items-center gap-1.5 transition"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Download</span>
                 </a>
                 <button
-                  onClick={() => setShowPreviewModal(false)}
+                  onClick={() => setShowVideoModal(false)}
                   className="px-3 py-1 bg-[#262824] hover:bg-[#33362F] text-[#F0FFEA] border border-[#33362F] text-xs rounded transition cursor-pointer"
                 >
                   Close

@@ -204,9 +204,15 @@ class DetectionManager(BaseDetector):
         frame: np.ndarray,
         telemetry: Optional[DetectionTelemetry] = None,
         tracking: Optional[Any] = None,
+        show_telemetry: bool = True,
     ) -> np.ndarray:
         """Renders HUD visualization including Kalman predictions and Target Identification tags."""
-        annotated = self.classical_detector.annotate_frame(frame, telemetry or self.last_telemetry, tracking=tracking)
+        annotated = self.classical_detector.annotate_frame(
+            frame,
+            telemetry or self.last_telemetry,
+            tracking=tracking,
+            show_telemetry=show_telemetry,
+        )
         det = telemetry or self.last_telemetry
         if not det:
             return annotated
@@ -216,10 +222,11 @@ class DetectionManager(BaseDetector):
             pat_state = getattr(tracking, "state", getattr(tracking, "mode", None))
             is_blocked = bool(getattr(tracking, "is_link_blocked", False) or pat_state in ("LINK_BLOCKED", "NO_COVERAGE"))
 
-        # Additional Part 4 Overlays:
-        # 1. Active Method Badge in HUD
-        method_str = f"METHOD: {det.active_method.upper()}"
-        cv2.putText(annotated, method_str, (15, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 180, 50), 1)
+        if show_telemetry:
+            # Additional Part 4 Overlays:
+            # 1. Active Method Badge in HUD
+            method_str = f"METHOD: {det.active_method.upper()}"
+            cv2.putText(annotated, method_str, (15, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 180, 50), 1)
 
         # 2. Kalman Filter Predict Crosshair & Velocity Vector (if active and not blocked)
         if not is_blocked and det.kalman_active and det.kalman_predicted_x is not None and det.kalman_predicted_y is not None:
@@ -237,41 +244,42 @@ class DetectionManager(BaseDetector):
                 end_y = int(round(kpy + vy * 0.2))
                 cv2.arrowedLine(annotated, (kpx, kpy), (end_x, end_y), (255, 100, 255), 1, tipLength=0.3)
 
-        # 3. Clutter Rejection Count indicator
-        if not is_blocked and det.rejected_clutter_count > 0:
-            clutter_str = f"CLUTTER REJECTED: {det.rejected_clutter_count}"
-            cv2.putText(annotated, clutter_str, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (100, 150, 255), 1)
+        if show_telemetry:
+            # 3. Clutter Rejection Count indicator
+            if not is_blocked and det.rejected_clutter_count > 0:
+                clutter_str = f"CLUTTER REJECTED: {det.rejected_clutter_count}"
+                cv2.putText(annotated, clutter_str, (15, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (100, 150, 255), 1)
 
-        # 4. Part 5 Tracking State & PID Overlays (if tracking telemetry provided)
-        if tracking is not None:
-            state = getattr(tracking, "state", getattr(tracking, "mode", "SEARCHING"))
-            state_colors = {
-                "LOCKED": (50, 220, 50),       # Vibrant Green
-                "TRACKING": (255, 200, 0),     # Cyan/Blue
-                "ACQUIRING": (0, 200, 255),    # Amber
-                "REACQUIRING": (0, 165, 255),  # Orange
-                "SEARCHING": (255, 100, 255),  # Purple
-                "LOST": (50, 50, 255),         # Red
-                "LINK_BLOCKED": (50, 50, 255), # Red
-                "NO_COVERAGE": (50, 50, 255),  # Red
-            }
-            color = state_colors.get(state, (200, 200, 200))
-            cv2.putText(annotated, f"PAT STATE: {state}", (15, 155), cv2.FONT_HERSHEY_SIMPLEX, 0.38, color, 1)
+            # 4. Part 5 Tracking State & PID Overlays (if tracking telemetry provided)
+            if tracking is not None:
+                state = getattr(tracking, "state", getattr(tracking, "mode", "SEARCHING"))
+                state_colors = {
+                    "LOCKED": (50, 220, 50),       # Vibrant Green
+                    "TRACKING": (255, 200, 0),     # Cyan/Blue
+                    "ACQUIRING": (0, 200, 255),    # Amber
+                    "REACQUIRING": (0, 165, 255),  # Orange
+                    "SEARCHING": (255, 100, 255),  # Purple
+                    "LOST": (50, 50, 255),         # Red
+                    "LINK_BLOCKED": (50, 50, 255), # Red
+                    "NO_COVERAGE": (50, 50, 255),  # Red
+                }
+                color = state_colors.get(state, (200, 200, 200))
+                cv2.putText(annotated, f"PAT STATE: {state}", (15, 155), cv2.FONT_HERSHEY_SIMPLEX, 0.38, color, 1)
 
-            # Filtered centroid marker (only when not blocked)
-            filt_x = getattr(tracking, "filtered_x", None)
-            filt_y = getattr(tracking, "filtered_y", None)
-            if not is_blocked and filt_x is not None and filt_y is not None:
-                fx = int(round(filt_x))
-                fy = int(round(filt_y))
-                cv2.circle(annotated, (fx, fy), 8, (0, 255, 255), 1)
-                cv2.drawMarker(annotated, (fx, fy), (0, 255, 255), cv2.MARKER_TILTED_CROSS, 8, 1)
+                # Filtered centroid marker (only when not blocked)
+                filt_x = getattr(tracking, "filtered_x", None)
+                filt_y = getattr(tracking, "filtered_y", None)
+                if not is_blocked and filt_x is not None and filt_y is not None:
+                    fx = int(round(filt_x))
+                    fy = int(round(filt_y))
+                    cv2.circle(annotated, (fx, fy), 8, (0, 255, 255), 1)
+                    cv2.drawMarker(annotated, (fx, fy), (0, 255, 255), cv2.MARKER_TILTED_CROSS, 8, 1)
 
-            # PID command readout
-            pan_cmd = getattr(tracking, "pan_cmd_deg_s", 0.0)
-            tilt_cmd = getattr(tracking, "tilt_cmd_deg_s", 0.0)
-            if abs(pan_cmd) > 0.01 or abs(tilt_cmd) > 0.01:
-                pid_str = f"PID CMD: Pan={pan_cmd:+.2f}d/s Tilt={tilt_cmd:+.2f}d/s"
-                cv2.putText(annotated, pid_str, (15, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (150, 255, 200), 1)
+                # PID command readout
+                pan_cmd = getattr(tracking, "pan_cmd_deg_s", 0.0)
+                tilt_cmd = getattr(tracking, "tilt_cmd_deg_s", 0.0)
+                if abs(pan_cmd) > 0.01 or abs(tilt_cmd) > 0.01:
+                    pid_str = f"PID CMD: Pan={pan_cmd:+.2f}d/s Tilt={tilt_cmd:+.2f}d/s"
+                    cv2.putText(annotated, pid_str, (15, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (150, 255, 200), 1)
 
         return annotated

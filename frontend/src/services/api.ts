@@ -298,6 +298,10 @@ export const api = {
     return res.json();
   },
 
+  getSampleBenchmarkVideoUrl(): string {
+    return `${API_BASE}/benchmark/sample-video`;
+  },
+
   async getBenchmarkState(): Promise<any> {
     const res = await fetch(`${API_BASE}/benchmark/state`);
     if (!res.ok) throw new Error(`Failed to get benchmark state: ${res.statusText}`);

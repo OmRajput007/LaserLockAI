@@ -108,13 +108,13 @@
   },
   "disturbance": {
     "noise_type": "None",
-    "gaussian_noise_enabled": true,
-    "salt_pepper_enabled": true,
-    "poisson_noise_enabled": true,
-    "noise_std_dev": 12.0,
+    "gaussian_noise_enabled": false,
+    "salt_pepper_enabled": false,
+    "poisson_noise_enabled": false,
+    "noise_std_dev": 3.0,
     "salt_pepper_ratio": 0.04,
     "camera_jitter_enabled": false,
-    "camera_jitter_max_px": 10.0,
+    "camera_jitter_max_px": 0.0,
     "camera_jitter_frequency_hz": 15.0,
     "atmospheric_condition": "Clear",
     "atmospheric_extinction_coeff": 0.05,
@@ -138,7 +138,7 @@
     "brightness_fluctuation_enabled": false,
     "brightness_fluctuation_amplitude": 15.0,
     "snr_reduction_db": 0.0,
-    "preset_scenario": "High Noise"
+    "preset_scenario": "Normal"
   },
   "performance": {
     "max_acquisition_time_s": 2.0,
