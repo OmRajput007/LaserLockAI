@@ -1,0 +1,422 @@
+[
+  {
+    "frame": 0,
+    "timestamp_s": 0.0,
+    "x": 140.0,
+    "y": 240.0,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 1,
+    "timestamp_s": 0.0333,
+    "x": 141.17,
+    "y": 240.84,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 2,
+    "timestamp_s": 0.0667,
+    "x": 142.33,
+    "y": 241.67,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 3,
+    "timestamp_s": 0.1,
+    "x": 143.5,
+    "y": 242.49,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 4,
+    "timestamp_s": 0.1333,
+    "x": 144.67,
+    "y": 243.29,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 5,
+    "timestamp_s": 0.1667,
+    "x": 145.83,
+    "y": 244.07,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 6,
+    "timestamp_s": 0.2,
+    "x": 147.0,
+    "y": 244.82,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 7,
+    "timestamp_s": 0.2333,
+    "x": 148.17,
+    "y": 245.53,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 8,
+    "timestamp_s": 0.2667,
+    "x": 149.33,
+    "y": 246.21,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 9,
+    "timestamp_s": 0.3,
+    "x": 150.5,
+    "y": 246.85,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 10,
+    "timestamp_s": 0.3333,
+    "x": 151.67,
+    "y": 247.43,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 11,
+    "timestamp_s": 0.3667,
+    "x": 152.83,
+    "y": 247.97,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 12,
+    "timestamp_s": 0.4,
+    "x": 154.0,
+    "y": 248.44,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 13,
+    "timestamp_s": 0.4333,
+    "x": 155.17,
+    "y": 248.86,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 14,
+    "timestamp_s": 0.4667,
+    "x": 156.33,
+    "y": 249.22,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 15,
+    "timestamp_s": 0.5,
+    "x": 157.5,
+    "y": 249.51,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 16,
+    "timestamp_s": 0.5333,
+    "x": 158.67,
+    "y": 249.74,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 17,
+    "timestamp_s": 0.5667,
+    "x": 159.83,
+    "y": 249.89,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 18,
+    "timestamp_s": 0.6,
+    "x": 161.0,
+    "y": 249.98,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 19,
+    "timestamp_s": 0.6333,
+    "x": 162.17,
+    "y": 250.0,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 20,
+    "timestamp_s": 0.6667,
+    "x": 163.33,
+    "y": 249.95,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 21,
+    "timestamp_s": 0.7,
+    "x": 164.5,
+    "y": 249.82,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 22,
+    "timestamp_s": 0.7333,
+    "x": 165.67,
+    "y": 249.63,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 23,
+    "timestamp_s": 0.7667,
+    "x": 166.83,
+    "y": 249.37,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 24,
+    "timestamp_s": 0.8,
+    "x": 168.0,
+    "y": 249.05,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 25,
+    "timestamp_s": 0.8333,
+    "x": 169.17,
+    "y": 248.66,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 26,
+    "timestamp_s": 0.8667,
+    "x": 170.33,
+    "y": 248.21,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 27,
+    "timestamp_s": 0.9,
+    "x": 171.5,
+    "y": 247.71,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 28,
+    "timestamp_s": 0.9333,
+    "x": 172.67,
+    "y": 247.14,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 29,
+    "timestamp_s": 0.9667,
+    "x": 173.83,
+    "y": 246.53,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 30,
+    "timestamp_s": 1.0,
+    "x": 175.0,
+    "y": 245.88,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 31,
+    "timestamp_s": 1.0333,
+    "x": 176.17,
+    "y": 245.18,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 32,
+    "timestamp_s": 1.0667,
+    "x": 177.33,
+    "y": 244.45,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 33,
+    "timestamp_s": 1.1,
+    "x": 178.5,
+    "y": 243.68,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 34,
+    "timestamp_s": 1.1333,
+    "x": 179.67,
+    "y": 242.89,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 35,
+    "timestamp_s": 1.1667,
+    "x": 180.83,
+    "y": 242.08,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 36,
+    "timestamp_s": 1.2,
+    "x": 182.0,
+    "y": 241.25,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 37,
+    "timestamp_s": 1.2333,
+    "x": 183.17,
+    "y": 240.42,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 38,
+    "timestamp_s": 1.2667,
+    "x": 184.33,
+    "y": 239.58,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 39,
+    "timestamp_s": 1.3,
+    "x": 185.5,
+    "y": 238.75,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 40,
+    "timestamp_s": 1.3333,
+    "x": 186.67,
+    "y": 237.92,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 41,
+    "timestamp_s": 1.3667,
+    "x": 187.83,
+    "y": 237.11,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 42,
+    "timestamp_s": 1.4,
+    "x": 189.0,
+    "y": 236.32,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 43,
+    "timestamp_s": 1.4333,
+    "x": 190.17,
+    "y": 235.55,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 44,
+    "timestamp_s": 1.4667,
+    "x": 191.33,
+    "y": 234.82,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 45,
+    "timestamp_s": 1.5,
+    "x": 192.5,
+    "y": 234.12,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 46,
+    "timestamp_s": 1.5333,
+    "x": 193.67,
+    "y": 233.47,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 47,
+    "timestamp_s": 1.5667,
+    "x": 194.83,
+    "y": 232.86,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 48,
+    "timestamp_s": 1.6,
+    "x": 196.0,
+    "y": 232.29,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 49,
+    "timestamp_s": 1.6333,
+    "x": 197.17,
+    "y": 231.79,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 50,
+    "timestamp_s": 1.6667,
+    "x": 198.33,
+    "y": 231.34,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 51,
+    "timestamp_s": 1.7,
+    "x": 199.5,
+    "y": 230.95,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 52,
+    "timestamp_s": 1.7333,
+    "x": 200.67,
+    "y": 230.63,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 53,
+    "timestamp_s": 1.7667,
+    "x": 201.83,
+    "y": 230.37,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 54,
+    "timestamp_s": 1.8,
+    "x": 203.0,
+    "y": 230.18,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 55,
+    "timestamp_s": 1.8333,
+    "x": 204.17,
+    "y": 230.05,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 56,
+    "timestamp_s": 1.8667,
+    "x": 205.33,
+    "y": 230.0,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 57,
+    "timestamp_s": 1.9,
+    "x": 206.5,
+    "y": 230.02,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 58,
+    "timestamp_s": 1.9333,
+    "x": 207.67,
+    "y": 230.11,
+    "radius_px": 6.0
+  },
+  {
+    "frame": 59,
+    "timestamp_s": 1.9667,
+    "x": 208.83,
+    "y": 230.26,
+    "radius_px": 6.0
+  }
+]
