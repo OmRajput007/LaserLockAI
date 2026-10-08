@@ -1,0 +1,24 @@
+# Git Attributes Configuration for LaserLockAI
+
+# Treat all multimedia and binary files strictly as binary (no CRLF/LF line ending modification)
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.onnx binary
+*.pt binary
+*.zip binary
+*.tar.gz binary
+
+# Treat text files as text with automatic normalization
+*.py text
+*.ts text
+*.tsx text
+*.js text
+*.json text
+*.md text
+*.txt text
+*.csv text
+*.css text
+*.html text
